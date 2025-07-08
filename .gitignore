@@ -1,0 +1,13 @@
+__pycache__/
+.DS_Store
+.env
+.mypy_cache/
+.pytest_cache/
+.ruff_cache/
+.venv-poetry/
+.venv-uv/
+.vscode/
+*.pyc
+dev/
+node_modules/
+package-lock.json

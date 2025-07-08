@@ -1,0 +1,44 @@
+[build-system]
+requires      = ["hatchling>=1.26"]
+build-backend = "hatchling.build"
+
+[project]
+name            = "apache-trusted-releases"
+version         = "0.20250708.1819"
+description     = "ATR CLI and Python API"
+readme          = "README.md"
+requires-python = ">=3.13"
+license         = {file = "LICENSE"}
+authors         = [{name = "ASF Tooling", email = "dev@tooling.apache.org"}]
+classifiers     = [
+  "Programming Language :: Python :: 3 :: Only",
+  "Programming Language :: Python :: 3.13",
+  "License :: OSI Approved :: Apache Software License",
+  "Operating System :: OS Independent",
+]
+
+dependencies = [
+  "aiohttp",
+  "cyclopts",
+  "filelock",
+  "platformdirs",
+  "pyjwt",
+  "strictyaml",
+]
+
+[dependency-groups]
+dev = [
+  "pytest>=8.4.1",
+  "pytest-asyncio",
+  "aioresponses",
+  "pre-commit",
+]
+
+[project.scripts]
+atr = "atrclient.cli:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/atrclient"]
+
+[tool.uv]
+exclude-newer = "2025-07-08T18:19:00Z"
