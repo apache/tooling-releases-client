@@ -1,0 +1,11 @@
+- Use `import A`, not `from A import ...`, except for `from typing`
+- Group constants, types, and functions, then order alphabetically
+- Name functions in object oriented style, noun first and verb last
+- Do not use an underscore at the start of any interface names
+- Use modern types such as `list`, `| None`, etc.
+- Use match and case, and the walrus operator, where appropriate
+- Never use `case _` with exhaustive types
+- Keep functions very short, and avoid indentation
+- Always group binary subexpressions in boolean expressions
+- Never ignore or silence errors from linters or type checkers
+- Do not add any comments, except for important TODO items
