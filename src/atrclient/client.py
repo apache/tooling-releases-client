@@ -23,13 +23,13 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import datetime
+import importlib.metadata as metadata
 import json
 import logging
 import os
 import pathlib
 import re
 import signal
-import subprocess
 import sys
 from typing import TYPE_CHECKING, Annotated, Any, Literal
 
@@ -173,22 +173,31 @@ def app_config_path() -> None:
     print(config_path())
 
 
-@DEV.command(name="lock", help="Regenerate uv lockfile.")
-def app_dev_lock() -> None:
-    subprocess.check_call(["uv", "lock", "--script", str(pathlib.Path(__file__))])
-
-
-@DEV.command(name="stamp", help="Update date stamp in header.")
+@DEV.command(name="stamp", help="Update version and exclude-newer in pyproject.toml.")
 def app_dev_stamp() -> None:
-    path = pathlib.Path(__file__)
-    text = path.read_text()
-    ts = datetime.datetime.now(datetime.UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
-    new_text = re.sub(r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z", ts, text)
-    if text == new_text:
-        LOGGER.info("No stamp updated.")
-        return
-    path.write_text(new_text, "utf-8")
-    LOGGER.info(f"Stamp updated to {ts}.")
+    path = pathlib.Path("pyproject.toml")
+    if not path.exists():
+        LOGGER.error("pyproject.toml not found.")
+        sys.exit(1)
+
+    text_v1 = path.read_text()
+
+    v = datetime.datetime.now(datetime.UTC).strftime("0.%Y%m%d.%H%M")
+    text_v2 = re.sub(r"0\.\d{8}\.\d{4}", v, text_v1)
+    version_updated = not (text_v1 == text_v2)
+
+    ts = datetime.datetime.now(datetime.UTC).strftime("%Y-%m-%dT%H:%M:00Z")
+    text_v3 = re.sub(r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z", ts, text_v2)
+    exclude_newer_updated = not (text_v2 == text_v3)
+
+    if version_updated or exclude_newer_updated:
+        path.write_text(text_v3, "utf-8")
+    LOGGER.info(
+        "Updated exclude-newer."
+        if exclude_newer_updated
+        else "Did not update exclude-newer."
+    )
+    LOGGER.info("Updated version." if version_updated else "Did not update version.")
 
 
 @APP.command(name="drop", help="Remove a configuration key using dot notation.")
@@ -326,6 +335,12 @@ def app_show(path: str) -> None:
         sys.exit(1)
 
     print(value)
+
+
+@APP.command(name="version", help="Show the version of the client.")
+def app_version() -> None:
+    version = metadata.version("apache-trusted-releases")
+    print(version)
 
 
 def checks_display(results: list[dict[str, Any]], verbose: bool = False) -> None:

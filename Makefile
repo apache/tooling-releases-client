@@ -1,5 +1,8 @@
 .PHONY: sync
 
+bump: install
+	uv run atr dev stamp
+
 check:
 	git add -A
 	uv run pre-commit run --all-files
@@ -14,6 +17,8 @@ commit:
 	git push
 
 install:
+	rm -f uv.lock
+	uv lock
 	uv pip install -e .
 
 sync:
