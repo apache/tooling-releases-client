@@ -31,6 +31,7 @@ import pathlib
 import re
 import signal
 import sys
+import time
 from typing import TYPE_CHECKING, Annotated, Any, Literal
 
 import aiohttp
@@ -83,7 +84,7 @@ def app_checks_exceptions(
     *,
     members: Annotated[bool, cyclopts.Parameter(alias="-m", name="--members")] = False,
 ) -> None:
-    jwt_value = config_jwt_get()
+    jwt_value = config_jwt_usable()
     host, verify_ssl = config_host_get()
     url = f"https://{host}/api/checks/{project}/{version}/{revision}"
     results = asyncio.run(web_get(url, jwt_value, verify_ssl))
@@ -98,7 +99,7 @@ def app_checks_failures(
     *,
     members: Annotated[bool, cyclopts.Parameter(alias="-m", name="--members")] = False,
 ) -> None:
-    jwt_value = config_jwt_get()
+    jwt_value = config_jwt_usable()
     host, verify_ssl = config_host_get()
     url = f"https://{host}/api/checks/{project}/{version}/{revision}"
     results = asyncio.run(web_get(url, jwt_value, verify_ssl))
@@ -113,7 +114,7 @@ def app_checks_status(
     *,
     verbose: Annotated[bool, cyclopts.Parameter(alias="-v", name="--verbose")] = False,
 ) -> None:
-    jwt_value = config_jwt_get()
+    jwt_value = config_jwt_usable()
     host, verify_ssl = config_host_get()
 
     release_url = f"https://{host}/api/releases/{project}"
@@ -149,7 +150,7 @@ def app_checks_warnings(
     *,
     members: Annotated[bool, cyclopts.Parameter(alias="-m", name="--members")] = False,
 ) -> None:
-    jwt_value = config_jwt_get()
+    jwt_value = config_jwt_usable()
     host, verify_ssl = config_host_get()
     url = f"https://{host}/api/checks/{project}/{version}/{revision}"
     results = asyncio.run(web_get(url, jwt_value, verify_ssl))
@@ -236,13 +237,7 @@ def app_jwt_dump() -> None:
 
 @JWT.command(name="info", help="Show JWT payload in human-readable form.")
 def app_jwt_info() -> None:
-    jwt_value = config_jwt_get()
-
-    try:
-        payload = jwt.decode(jwt_value, options={"verify_signature": False})
-    except jwt.PyJWTError as e:
-        LOGGER.error(f"Failed to decode JWT: {e}")
-        sys.exit(1)
+    _jwt_value, payload = config_jwt_payload()
 
     lines: list[str] = []
     for key, val in payload.items():
@@ -257,29 +252,8 @@ def app_jwt_info() -> None:
     name="refresh", help="Fetch a JWT using the stored PAT and store it in config."
 )
 def app_jwt_refresh(asf_uid: str | None = None) -> None:
-    with config_lock() as config:
-        pat_value = config_get(config, ["tokens", "pat"])
-
-    if pat_value is None:
-        LOGGER.error("No Personal Access Token stored.")
-        sys.exit(1)
-
-    host, verify_ssl = config_host_get()
-    url = f"https://{host}/api/jwt"
-
-    if asf_uid is None:
-        asf_uid = config.get("asf", {}).get("uid")
-
-    if asf_uid is None:
-        LOGGER.error("No ASF UID provided and asf.uid not configured.")
-        sys.exit(1)
-
-    jwt_token = asyncio.run(web_fetch(url, asf_uid, pat_value, verify_ssl))
-
-    with config_lock(write=True) as config:
-        config_set(config, ["tokens", "jwt"], jwt_token)
-
-    print(jwt_token)
+    jwt_value = config_jwt_refresh(asf_uid)
+    print(jwt_value)
 
 
 @JWT.command(name="show", help="Show stored JWT token.")
@@ -297,7 +271,7 @@ def app_release_list(project: str) -> None:
 
 @RELEASE.command(name="start", help="Start a release.")
 def app_release_start(project: str, version: str) -> None:
-    jwt_value = config_jwt_get()
+    jwt_value = config_jwt_usable()
     host, verify_ssl = config_host_get()
     url = f"https://{host}/api/releases/create"
 
@@ -448,6 +422,57 @@ def config_jwt_get() -> str:
         LOGGER.error("No JWT stored in configuration.")
         sys.exit(1)
 
+    return jwt_value
+
+
+def config_jwt_payload() -> tuple[str, dict[str, Any]]:
+    jwt_value = config_jwt_get()
+    if jwt_value == "dummy_jwt_token":
+        # TODO: Use a better test JWT
+        return jwt_value, {"exp": time.time() + 90 * 60, "sub": "test_asf_uid"}
+
+    try:
+        payload = jwt.decode(jwt_value, options={"verify_signature": False})
+    except jwt.PyJWTError as e:
+        LOGGER.error(f"Failed to decode JWT: {e}")
+        sys.exit(1)
+    if not isinstance(payload, dict):
+        LOGGER.error("Invalid JWT payload.")
+        sys.exit(1)
+    return jwt_value, payload
+
+
+def config_jwt_refresh(asf_uid: str | None = None) -> str:
+    with config_lock() as config:
+        pat_value = config_get(config, ["tokens", "pat"])
+
+    if pat_value is None:
+        LOGGER.error("No Personal Access Token stored.")
+        sys.exit(1)
+
+    host, verify_ssl = config_host_get()
+    url = f"https://{host}/api/jwt"
+
+    if asf_uid is None:
+        asf_uid = config.get("asf", {}).get("uid")
+
+    if asf_uid is None:
+        LOGGER.error("No ASF UID provided and asf.uid not configured.")
+        sys.exit(1)
+
+    jwt_token = asyncio.run(web_fetch(url, asf_uid, pat_value, verify_ssl))
+
+    with config_lock(write=True) as config:
+        config_set(config, ["tokens", "jwt"], jwt_token)
+
+    return jwt_token
+
+
+def config_jwt_usable() -> str:
+    jwt_value, payload = config_jwt_payload()
+    if (payload.get("exp") or 0) < time.time():
+        asf_uid = payload.get("sub")
+        jwt_value = config_jwt_refresh(asf_uid)
     return jwt_value
 
 
