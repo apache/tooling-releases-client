@@ -1,4 +1,7 @@
-.PHONY: sync
+.PHONY: build bump check commit install sync
+
+build:
+	uv build
 
 bump: install
 	@# We install above to ensure that dev stamp is up to date
