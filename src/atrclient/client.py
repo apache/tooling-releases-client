@@ -31,16 +31,13 @@ import re
 import signal
 import subprocess
 import sys
-import tempfile
 from typing import TYPE_CHECKING, Annotated, Any, Literal
 
 import aiohttp
-import aioresponses
 import cyclopts
 import filelock
 import jwt
 import platformdirs
-import pytest
 import strictyaml
 
 if TYPE_CHECKING:
@@ -331,28 +328,6 @@ def app_show(path: str) -> None:
     print(value)
 
 
-@APP.command(name="test", help="Run tests.")
-def app_test(
-    q: Annotated[bool, cyclopts.Parameter(alias="-q")] = False, *pytest_args: str
-) -> None:
-    cwd = os.getcwd()
-    with tempfile.TemporaryDirectory() as td:
-        p = pathlib.Path(td, "atr_api_client.py")
-        p.write_bytes(pathlib.Path(__file__).read_bytes())
-        os.chdir(td)
-        prev = os.environ.get("ATR_CLIENT_CONFIG_PATH")
-        os.environ["ATR_CLIENT_CONFIG_PATH"] = str(pathlib.Path(td, "atr_test.yaml"))
-        try:
-            args = (["-q"] if q else []) + list(pytest_args) + [str(p)]
-            sys.exit(pytest.main(args))
-        finally:
-            if prev is None:
-                os.environ.pop("ATR_CLIENT_CONFIG_PATH", None)
-            else:
-                os.environ["ATR_CLIENT_CONFIG_PATH"] = prev
-            os.chdir(cwd)
-
-
 def checks_display(results: list[dict[str, Any]], verbose: bool = False) -> None:
     if not results:
         print("No check results found for this revision.")
@@ -544,15 +519,6 @@ def config_write(data: dict[str, Any]) -> None:
     os.replace(tmp, path)
 
 
-@pytest.fixture
-def fixture_config_env(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: pathlib.Path
-) -> pathlib.Path:
-    path = tmp_path / "atr.yaml"
-    monkeypatch.setenv("ATR_CLIENT_CONFIG_PATH", str(path))
-    return path
-
-
 def iso_to_human(ts: str) -> str:
     dt = datetime.datetime.fromisoformat(ts.rstrip("Z"))
     if dt.tzinfo is None:
@@ -593,198 +559,6 @@ def releases_display(result: dict[str, Any]) -> None:
         created_formatted = iso_to_human(created) if created else "Unknown"
         latest = release.get("latest_revision_number") or "-"
         print(f"  {version:<24} {latest:<7} {phase_short:<11} {created_formatted}")
-
-
-def test_app_checks_status_non_draft_phase(
-    capsys: pytest.CaptureFixture[str], fixture_config_env: pathlib.Path
-) -> None:
-    app_set("atr.host", "example.invalid")
-    app_set("tokens.jwt", "dummy_jwt_token")
-
-    releases_url = "https://example.invalid/api/releases/test-project"
-
-    with aioresponses.aioresponses() as mock:
-        mock.get(
-            releases_url,
-            status=200,
-            payload={
-                "data": [
-                    {
-                        "version": "2.3.0",
-                        "phase": "release",
-                        "created": "2024-07-04T00:00:00.000000Z",
-                        "latest_revision_number": "00001",
-                    }
-                ],
-                "count": 1,
-            },
-        )
-
-        app_checks_status("test-project", "2.3.0", "00001")
-
-        captured = capsys.readouterr()
-        assert "Checks are not applicable for this release phase." in captured.out
-        assert "Checks are only performed during the draft phase." in captured.out
-
-
-def test_app_checks_status_verbose(
-    capsys: pytest.CaptureFixture[str], fixture_config_env: pathlib.Path
-) -> None:
-    app_set("atr.host", "example.invalid")
-    app_set("tokens.jwt", "dummy_jwt_token")
-
-    release_url = "https://example.invalid/api/releases/test-project"
-    checks_url = "https://example.invalid/api/checks/test-project/2.3.1/00003"
-
-    release_payload = {
-        "data": [
-            {
-                "version": "2.3.1",
-                "phase": "release_candidate_draft",
-                "created": "2025-01-01T00:00:00.000000Z",
-                "latest_revision_number": "00003",
-            }
-        ],
-        "count": 1,
-    }
-
-    checks_payload = [
-        {
-            "status": "FAILURE",
-            "checker": "test_checker1",
-            "primary_rel_path": "file1.txt",
-            "member_rel_path": None,
-            "message": "Test failure 1",
-        },
-        {
-            "status": "FAILURE",
-            "checker": "test_checker2",
-            "primary_rel_path": "file2.txt",
-            "member_rel_path": "inner.txt",
-            "message": "Test failure 2",
-        },
-        {
-            "status": "SUCCESS",
-            "checker": "test_checker3",
-            "primary_rel_path": "file3.txt",
-            "member_rel_path": None,
-            "message": "Test success",
-        },
-    ]
-
-    with aioresponses.aioresponses() as mock:
-        mock.get(release_url, status=200, payload=release_payload)
-        mock.get(checks_url, status=200, payload=checks_payload)
-
-        app_checks_status("test-project", "2.3.1", "00003", verbose=True)
-
-        captured = capsys.readouterr()
-        assert "(top-level" in captured.out
-        assert "FAILURE: 2 (top-level 1, inner 1)" in captured.out
-        assert "test_checker1 → file1.txt : Test failure 1" in captured.out
-
-
-def test_app_release_list_not_found(
-    capsys: pytest.CaptureFixture[str], fixture_config_env: pathlib.Path
-) -> None:
-    app_set("atr.host", "example.invalid")
-
-    releases_url = "https://example.invalid/api/releases/nonexistent-project"
-
-    with aioresponses.aioresponses() as mock:
-        mock.get(releases_url, status=404, body="Not Found")
-
-        with pytest.raises(SystemExit):
-            app_release_list("nonexistent-project")
-
-
-def test_app_release_list_success(
-    capsys: pytest.CaptureFixture[str], fixture_config_env: pathlib.Path
-) -> None:
-    app_set("atr.host", "example.invalid")
-
-    releases_url = "https://example.invalid/api/releases/test-project"
-
-    payload = {
-        "data": [
-            {
-                "version": "2.3.1",
-                "phase": "release_candidate_draft",
-                "created": "2025-01-01T00:00:00.000000Z",
-                "latest_revision_number": "00003",
-            },
-            {
-                "version": "2.3.0",
-                "phase": "release",
-                "created": "2024-07-04T00:00:00.000000Z",
-                "latest_revision_number": "00001",
-            },
-        ],
-        "count": 2,
-    }
-
-    with aioresponses.aioresponses() as mock:
-        mock.get(releases_url, status=200, payload=payload)
-
-        app_release_list("test-project")
-
-        captured = capsys.readouterr()
-        assert "Total releases: 2" in captured.out
-        assert "2.3.1" in captured.out
-        assert "2.3.0" in captured.out
-
-
-def test_app_set_show(
-    capsys: pytest.CaptureFixture[str], fixture_config_env: pathlib.Path
-) -> None:
-    app_set("atr.host", "example.invalid")
-    app_show("atr.host")
-    assert capsys.readouterr().out == "example.invalid\n"
-
-
-def test_config_set_get_roundtrip() -> None:
-    config: dict[str, Any] = {}
-    config_set(config, ["abc", "pqr"], 123)
-    assert config_get(config, ["abc", "pqr"]) == 123
-
-
-def test_config_walk_drop() -> None:
-    config: dict[str, Any] = {"a": {"b": 1}}
-    changed, _ = config_walk(config, ["a", "b"], "drop")
-    assert changed is True
-    assert config == {}
-
-
-def test_config_write_delete(fixture_config_env: pathlib.Path) -> None:
-    config_write({"atr": {"host": "example.invalid"}})
-    config_path_obj = config_path()
-    assert config_path_obj.exists() is True
-    config_write({})
-    assert config_path_obj.exists() is False
-
-
-def test_config_write_empty_dict_filter(fixture_config_env: pathlib.Path) -> None:
-    config_write({"atr": {}, "asf": {"uid": ""}})
-    config = config_read()
-    assert "atr" not in config
-    assert config_get(config, ["asf", "uid"]) == ""
-
-
-def test_timestamp_format_epoch() -> None:
-    assert timestamp_format(0) == "01 Jan 1970 at 00:00:00 UTC"
-
-
-def test_timestamp_format_none_and_bad() -> None:
-    assert timestamp_format(None) is None
-    assert timestamp_format("bad") == "bad"
-
-
-@pytest.mark.asyncio
-async def test_web_fetch_failure() -> None:
-    with aioresponses.aioresponses() as mock, pytest.raises(SystemExit):
-        mock.post("https://error.invalid", status=500, body="error")
-        await web_fetch("https://error.invalid", "uid", "pat", verify_ssl=False)
-    assert (len(mock.requests)) == 1
 
 
 def timestamp_format(ts: int | str | None) -> str | None:

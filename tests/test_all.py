@@ -1,0 +1,228 @@
+# Licensed to the Apache Software Foundation (ASF) under one
+# or more contributor license agreements.  See the NOTICE file
+# distributed with this work for additional information
+# regarding copyright ownership.  The ASF licenses this file
+# to you under the Apache License, Version 2.0 (the
+# "License"); you may not use this file except in compliance
+# with the License.  You may obtain a copy of the License at
+#
+#   http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing,
+# software distributed under the License is distributed on an
+# "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+# KIND, either express or implied.  See the License for the
+# specific language governing permissions and limitations
+# under the License.
+
+# TODO: Use transcript style script testing
+
+from __future__ import annotations
+
+import atrclient.client as client
+import pathlib
+from typing import Any
+
+import aioresponses
+import pytest
+
+
+@pytest.fixture
+def fixture_config_env(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: pathlib.Path
+) -> pathlib.Path:
+    path = tmp_path / "atr.yaml"
+    monkeypatch.setenv("ATR_CLIENT_CONFIG_PATH", str(path))
+    return path
+
+
+def test_app_checks_status_non_draft_phase(
+    capsys: pytest.CaptureFixture[str], fixture_config_env: pathlib.Path
+) -> None:
+    client.app_set("atr.host", "example.invalid")
+    client.app_set("tokens.jwt", "dummy_jwt_token")
+
+    releases_url = "https://example.invalid/api/releases/test-project"
+
+    with aioresponses.aioresponses() as mock:
+        mock.get(
+            releases_url,
+            status=200,
+            payload={
+                "data": [
+                    {
+                        "version": "2.3.0",
+                        "phase": "release",
+                        "created": "2024-07-04T00:00:00.000000Z",
+                        "latest_revision_number": "00001",
+                    }
+                ],
+                "count": 1,
+            },
+        )
+
+        client.app_checks_status("test-project", "2.3.0", "00001")
+
+        captured = capsys.readouterr()
+        assert "Checks are not applicable for this release phase." in captured.out
+        assert "Checks are only performed during the draft phase." in captured.out
+
+
+def test_app_checks_status_verbose(
+    capsys: pytest.CaptureFixture[str], fixture_config_env: pathlib.Path
+) -> None:
+    client.app_set("atr.host", "example.invalid")
+    client.app_set("tokens.jwt", "dummy_jwt_token")
+
+    release_url = "https://example.invalid/api/releases/test-project"
+    checks_url = "https://example.invalid/api/checks/test-project/2.3.1/00003"
+
+    release_payload = {
+        "data": [
+            {
+                "version": "2.3.1",
+                "phase": "release_candidate_draft",
+                "created": "2025-01-01T00:00:00.000000Z",
+                "latest_revision_number": "00003",
+            }
+        ],
+        "count": 1,
+    }
+
+    checks_payload = [
+        {
+            "status": "FAILURE",
+            "checker": "test_checker1",
+            "primary_rel_path": "file1.txt",
+            "member_rel_path": None,
+            "message": "Test failure 1",
+        },
+        {
+            "status": "FAILURE",
+            "checker": "test_checker2",
+            "primary_rel_path": "file2.txt",
+            "member_rel_path": "inner.txt",
+            "message": "Test failure 2",
+        },
+        {
+            "status": "SUCCESS",
+            "checker": "test_checker3",
+            "primary_rel_path": "file3.txt",
+            "member_rel_path": None,
+            "message": "Test success",
+        },
+    ]
+
+    with aioresponses.aioresponses() as mock:
+        mock.get(release_url, status=200, payload=release_payload)
+        mock.get(checks_url, status=200, payload=checks_payload)
+
+        client.app_checks_status("test-project", "2.3.1", "00003", verbose=True)
+
+        captured = capsys.readouterr()
+        assert "(top-level" in captured.out
+        assert "FAILURE: 2 (top-level 1, inner 1)" in captured.out
+        assert "test_checker1 → file1.txt : Test failure 1" in captured.out
+
+
+def test_app_release_list_not_found(
+    capsys: pytest.CaptureFixture[str], fixture_config_env: pathlib.Path
+) -> None:
+    client.app_set("atr.host", "example.invalid")
+
+    releases_url = "https://example.invalid/api/releases/nonexistent-project"
+
+    with aioresponses.aioresponses() as mock:
+        mock.get(releases_url, status=404, body="Not Found")
+
+        with pytest.raises(SystemExit):
+            client.app_release_list("nonexistent-project")
+
+
+def test_app_release_list_success(
+    capsys: pytest.CaptureFixture[str], fixture_config_env: pathlib.Path
+) -> None:
+    client.app_set("atr.host", "example.invalid")
+
+    releases_url = "https://example.invalid/api/releases/test-project"
+
+    payload = {
+        "data": [
+            {
+                "version": "2.3.1",
+                "phase": "release_candidate_draft",
+                "created": "2025-01-01T00:00:00.000000Z",
+                "latest_revision_number": "00003",
+            },
+            {
+                "version": "2.3.0",
+                "phase": "release",
+                "created": "2024-07-04T00:00:00.000000Z",
+                "latest_revision_number": "00001",
+            },
+        ],
+        "count": 2,
+    }
+
+    with aioresponses.aioresponses() as mock:
+        mock.get(releases_url, status=200, payload=payload)
+
+        client.app_release_list("test-project")
+
+        captured = capsys.readouterr()
+        assert "Total releases: 2" in captured.out
+        assert "2.3.1" in captured.out
+        assert "2.3.0" in captured.out
+
+
+def test_app_set_show(
+    capsys: pytest.CaptureFixture[str], fixture_config_env: pathlib.Path
+) -> None:
+    client.app_set("atr.host", "example.invalid")
+    client.app_show("atr.host")
+    assert capsys.readouterr().out == "example.invalid\n"
+
+
+def test_config_set_get_roundtrip() -> None:
+    config: dict[str, Any] = {}
+    client.config_set(config, ["abc", "pqr"], 123)
+    assert client.config_get(config, ["abc", "pqr"]) == 123
+
+
+def test_config_walk_drop() -> None:
+    config: dict[str, Any] = {"a": {"b": 1}}
+    changed, _ = client.config_walk(config, ["a", "b"], "drop")
+    assert changed is True
+    assert config == {}
+
+
+def test_config_write_delete(fixture_config_env: pathlib.Path) -> None:
+    client.config_write({"atr": {"host": "example.invalid"}})
+    config_path_obj = client.config_path()
+    assert config_path_obj.exists() is True
+    client.config_write({})
+    assert config_path_obj.exists() is False
+
+
+def test_config_write_empty_dict_filter(fixture_config_env: pathlib.Path) -> None:
+    client.config_write({"atr": {}, "asf": {"uid": ""}})
+    config = client.config_read()
+    assert "atr" not in config
+    assert client.config_get(config, ["asf", "uid"]) == ""
+
+
+def test_timestamp_format_epoch() -> None:
+    assert client.timestamp_format(0) == "01 Jan 1970 at 00:00:00 UTC"
+
+
+def test_timestamp_format_none_and_bad() -> None:
+    assert client.timestamp_format(None) is None
+    assert client.timestamp_format("bad") == "bad"
+
+
+@pytest.mark.asyncio
+async def test_web_fetch_failure() -> None:
+    with aioresponses.aioresponses() as mock, pytest.raises(SystemExit):
+        mock.post("https://error.invalid", status=500, body="error")
+        await client.web_fetch("https://error.invalid", "uid", "pat", verify_ssl=False)
+    assert (len(mock.requests)) == 1
