@@ -1,7 +1,10 @@
 .PHONY: sync
 
 bump: install
+	@# We install above to ensure that dev stamp is up to date
 	uv run atr dev stamp
+	rm -f uv.lock
+	uv lock
 
 check:
 	git add -A
@@ -17,8 +20,6 @@ commit:
 	git push
 
 install:
-	rm -f uv.lock
-	uv lock
 	uv pip install -e .
 
 sync:

@@ -27,15 +27,6 @@ import aioresponses
 import pytest
 
 
-@pytest.fixture
-def fixture_config_env(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: pathlib.Path
-) -> pathlib.Path:
-    path = tmp_path / "atr.yaml"
-    monkeypatch.setenv("ATR_CLIENT_CONFIG_PATH", str(path))
-    return path
-
-
 def test_app_checks_status_non_draft_phase(
     capsys: pytest.CaptureFixture[str], fixture_config_env: pathlib.Path
 ) -> None:
