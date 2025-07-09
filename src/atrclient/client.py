@@ -21,6 +21,7 @@
 from __future__ import annotations
 
 import asyncio
+import base64
 import contextlib
 import datetime
 import importlib.metadata as metadata
@@ -51,6 +52,7 @@ DEV: cyclopts.App = cyclopts.App(name="dev", help="Developer operations.")
 JWT: cyclopts.App = cyclopts.App(name="jwt", help="JWT operations.")
 LOGGER = logging.getLogger(__name__)
 RELEASE: cyclopts.App = cyclopts.App(name="release", help="Release operations.")
+VOTE: cyclopts.App = cyclopts.App(name="vote", help="Vote operations.")
 YAML_DEFAULTS: dict[str, Any] = {"asf": {}, "atr": {}, "tokens": {}}
 YAML_SCHEMA: strictyaml.Map = strictyaml.Map(
     {
@@ -74,6 +76,7 @@ APP.command(CONFIG)
 APP.command(DEV)
 APP.command(JWT)
 APP.command(RELEASE)
+APP.command(VOTE)
 
 
 @CHECKS.command(name="exceptions", help="Get check exceptions for a release revision.")
@@ -261,7 +264,26 @@ def app_jwt_show() -> None:
     return app_show("tokens.jwt")
 
 
-@RELEASE.command(name="list", help="List releases for PROJECT.")
+@APP.command(name="list", help="List all files within a release.")
+def app_list(project: str, version: str, revision: str | None = None) -> None:
+    jwt_value = config_jwt_usable()
+    host, verify_ssl = config_host_get()
+    url = f"https://{host}/api/list/{project}/{version}"
+    if revision:
+        url += f"/{revision}"
+    result = asyncio.run(web_get(url, jwt_value, verify_ssl))
+    print(result)
+
+
+@RELEASE.command(name="info", help="Show information about a release.")
+def app_release_info(project: str, version: str) -> None:
+    host, verify_ssl = config_host_get()
+    url = f"https://{host}/api/releases/{project}/{version}"
+    result = asyncio.run(web_get_public(url, verify_ssl))
+    print(result)
+
+
+@RELEASE.command(name="list", help="List releases for a project.")
 def app_release_list(project: str) -> None:
     host, verify_ssl = config_host_get()
     url = f"https://{host}/api/releases/{project}"
@@ -279,6 +301,15 @@ def app_release_start(project: str, version: str) -> None:
 
     result = asyncio.run(web_post(url, payload, jwt_value, verify_ssl))
     print(result)
+
+
+@APP.command(name="revisions", help="List all revisions for a release.")
+def app_revisions(project: str, version: str) -> None:
+    host, verify_ssl = config_host_get()
+    url = f"https://{host}/api/revisions/{project}/{version}"
+    result = asyncio.run(web_get_public(url, verify_ssl))
+    for revision in result.get("revisions", []):
+        print(revision)
 
 
 @APP.command(name="set", help="Set a configuration value using dot notation.")
@@ -311,10 +342,63 @@ def app_show(path: str) -> None:
     print(value)
 
 
+@APP.command(name="upload", help="Upload a file to a release.")
+def app_upload(project: str, version: str, path: str, filepath: str) -> None:
+    jwt_value = config_jwt_usable()
+    host, verify_ssl = config_host_get()
+    url = f"https://{host}/api/upload"
+
+    with open(filepath, "rb") as f:
+        content = f.read()
+
+    payload: dict[str, str] = {
+        "project_name": project,
+        "version": version,
+        "rel_path": path,
+        "content": base64.b64encode(content).decode("utf-8"),
+    }
+
+    result = asyncio.run(web_post(url, payload, jwt_value, verify_ssl))
+    print(result)
+
+
 @APP.command(name="version", help="Show the version of the client.")
 def app_version() -> None:
     version = metadata.version("apache-trusted-releases")
     print(version)
+
+
+@VOTE.command(name="start", help="Start a vote.")
+def app_vote_start(
+    project: str,
+    version: str,
+    revision: str,
+    *,
+    mailing_list: str,
+    duration: Annotated[int, cyclopts.Parameter(alias="-d", name="--duration")] = 72,
+    subject: Annotated[
+        str | None, cyclopts.Parameter(alias="-s", name="--subject")
+    ] = None,
+    body: Annotated[str | None, cyclopts.Parameter(alias="-b", name="--body")] = None,
+) -> None:
+    jwt_value = config_jwt_usable()
+    host, verify_ssl = config_host_get()
+    url = f"https://{host}/api/vote/start"
+    body_text = None
+    if body:
+        with open(body, "r", encoding="utf-8") as f:
+            body_text = f.read()
+    payload: dict[str, Any] = {
+        "project_name": project,
+        "version": version,
+        "revision": revision,
+        "email_to": mailing_list,
+        "vote_duration": duration,
+        "subject": subject or f"[VOTE] Release {project} {version}",
+        "body": body_text or f"Release {project} {version} is ready for voting.",
+    }
+    result = asyncio.run(web_post(url, payload, jwt_value, verify_ssl))
+    print(result)
 
 
 def checks_display(results: list[dict[str, Any]], verbose: bool = False) -> None:
