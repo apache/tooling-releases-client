@@ -23,17 +23,17 @@ from __future__ import annotations
 import asyncio
 import base64
 import contextlib
+import copy
 import datetime
 import importlib.metadata as metadata
 import json
-import logging
 import os
 import pathlib
 import re
 import signal
 import sys
 import time
-from typing import TYPE_CHECKING, Annotated, Any, Literal
+from typing import TYPE_CHECKING, Annotated, Any, Literal, NoReturn
 
 import aiohttp
 import cyclopts
@@ -50,7 +50,6 @@ CHECKS: cyclopts.App = cyclopts.App(name="checks", help="Check result operations
 CONFIG: cyclopts.App = cyclopts.App(name="config", help="Configuration operations.")
 DEV: cyclopts.App = cyclopts.App(name="dev", help="Developer operations.")
 JWT: cyclopts.App = cyclopts.App(name="jwt", help="JWT operations.")
-LOGGER = logging.getLogger(__name__)
 RELEASE: cyclopts.App = cyclopts.App(name="release", help="Release operations.")
 VERSION: str = metadata.version("apache-trusted-releases")
 VOTE: cyclopts.App = cyclopts.App(name="vote", help="Vote operations.")
@@ -124,8 +123,7 @@ def app_checks_status(
             break
 
     if target_release is None:
-        LOGGER.error(f"Release {project}-{version} not found.")
-        sys.exit(1)
+        show_error_and_exit(f"Release {project}-{version} not found.")
 
     phase = target_release.get("phase")
     if phase != "release_candidate_draft":
@@ -158,8 +156,7 @@ def app_checks_warnings(
 def app_config_file() -> None:
     path = config_path()
     if not path.exists():
-        LOGGER.error("No configuration file found.")
-        sys.exit(1)
+        show_error_and_exit("No configuration file found.")
 
     with path.open("r", encoding="utf-8") as fh:
         for chunk in fh:
@@ -186,8 +183,7 @@ def app_dev_env() -> None:
 def app_dev_stamp() -> None:
     path = pathlib.Path("pyproject.toml")
     if not path.exists():
-        LOGGER.error("pyproject.toml not found.")
-        sys.exit(1)
+        show_error_and_exit("pyproject.toml not found.")
 
     text_v1 = path.read_text()
 
@@ -201,23 +197,23 @@ def app_dev_stamp() -> None:
 
     if version_updated or exclude_newer_updated:
         path.write_text(text_v3, "utf-8")
-    LOGGER.info(
+    print(
         "Updated exclude-newer."
         if exclude_newer_updated
         else "Did not update exclude-newer."
     )
-    LOGGER.info("Updated version." if version_updated else "Did not update version.")
+    print("Updated version." if version_updated else "Did not update version.")
 
     path = pathlib.Path("tests/cli_version.t")
     if not path.exists():
-        LOGGER.warning("tests/cli_version.t not found.")
+        show_warning("tests/cli_version.t not found.")
         return
     text_v1 = path.read_text(encoding="utf-8")
     text_v2 = re.sub(r"0\.\d{8}\.\d{4}", v, text_v1)
     version_updated = not (text_v1 == text_v2)
     if version_updated:
         path.write_text(text_v2, "utf-8")
-        LOGGER.info("Updated tests/cli_version.t.")
+        print("Updated tests/cli_version.t.")
 
 
 @APP.command(name="docs", help="Show comprehensive CLI documentation in Markdown.")
@@ -233,16 +229,14 @@ def app_docs() -> None:
 def app_drop(path: str) -> None:
     parts = path.split(".")
     if not parts:
-        LOGGER.error("Not a valid configuration key")
-        sys.exit(1)
+        show_error_and_exit("Not a valid configuration key")
 
     with config_lock(write=True) as config:
         present, _ = config_walk(config, parts, "drop")
         if not present:
-            LOGGER.error(f"Could not find {path} in the configuration file")
-            sys.exit(1)
+            show_error_and_exit(f"Could not find {path} in the configuration file")
 
-    LOGGER.info(f"Removed {path}.")
+    print(f"Removed {path}.")
 
 
 @JWT.command(name="dump", help="Show decoded JWT payload from stored config.")
@@ -251,14 +245,12 @@ def app_jwt_dump() -> None:
 
     header = jwt.get_unverified_header(jwt_value)
     if header != {"alg": "HS256", "typ": "JWT"}:
-        LOGGER.error("Invalid JWT header.")
-        sys.exit(1)
+        show_error_and_exit("Invalid JWT header.")
 
     try:
         payload = jwt.decode(jwt_value, options={"verify_signature": False})
     except jwt.PyJWTError as e:
-        LOGGER.error(f"Failed to decode JWT: {e}")
-        sys.exit(1)
+        show_error_and_exit(f"Failed to decode JWT: {e}")
 
     print(json.dumps(payload, indent=None))
 
@@ -341,28 +333,25 @@ def app_revisions(project: str, version: str) -> None:
 def app_set(path: str, value: str) -> None:
     parts = path.split(".")
     if not parts:
-        LOGGER.error("Not a valid configuration key.")
-        sys.exit(1)
+        show_error_and_exit("Not a valid configuration key.")
 
     with config_lock(write=True) as config:
         config_set(config, path.split("."), value)
 
-    LOGGER.info(f"Set {path} to {value}.")
+    print(f"Set {path} to {json.dumps(value, indent=None)}.")
 
 
 @APP.command(name="show", help="Show a configuration value using dot notation.")
 def app_show(path: str) -> None:
     parts = path.split(".")
     if not parts:
-        LOGGER.error("Not a valid configuration key.")
-        sys.exit(1)
+        show_error_and_exit("Not a valid configuration key.")
 
     with config_lock() as config:
         value = config_get(config, parts)
 
     if value is None:
-        LOGGER.error(f"Could not find {path} in the configuration file.")
-        sys.exit(1)
+        show_error_and_exit(f"Could not find {path} in the configuration file.")
 
     print(value)
 
@@ -522,8 +511,7 @@ def config_jwt_get() -> str:
         jwt_value = config_get(config, ["tokens", "jwt"])
 
     if jwt_value is None:
-        LOGGER.error("No JWT stored in configuration.")
-        sys.exit(1)
+        show_error_and_exit("No JWT stored in configuration.")
 
     return jwt_value
 
@@ -537,11 +525,9 @@ def config_jwt_payload() -> tuple[str, dict[str, Any]]:
     try:
         payload = jwt.decode(jwt_value, options={"verify_signature": False})
     except jwt.PyJWTError as e:
-        LOGGER.error(f"Failed to decode JWT: {e}")
-        sys.exit(1)
+        show_error_and_exit(f"Failed to decode JWT: {e}")
     if not isinstance(payload, dict):
-        LOGGER.error("Invalid JWT payload.")
-        sys.exit(1)
+        show_error_and_exit("Invalid JWT payload.")
     return jwt_value, payload
 
 
@@ -550,8 +536,7 @@ def config_jwt_refresh(asf_uid: str | None = None) -> str:
         pat_value = config_get(config, ["tokens", "pat"])
 
     if pat_value is None:
-        LOGGER.error("No Personal Access Token stored.")
-        sys.exit(1)
+        show_error_and_exit("No Personal Access Token stored.")
 
     host, verify_ssl = config_host_get()
     url = f"https://{host}/api/jwt"
@@ -560,8 +545,7 @@ def config_jwt_refresh(asf_uid: str | None = None) -> str:
         asf_uid = config.get("asf", {}).get("uid")
 
     if asf_uid is None:
-        LOGGER.error("No ASF UID provided and asf.uid not configured.")
-        sys.exit(1)
+        show_error_and_exit("No ASF UID provided and asf.uid not configured.")
 
     jwt_token = asyncio.run(web_fetch(url, asf_uid, pat_value, verify_ssl))
 
@@ -605,7 +589,7 @@ def config_read() -> dict[str, Any]:
             return data
         except strictyaml.YAMLValidationError as e:
             raise RuntimeError(f"Invalid atr.yaml: {e}") from e
-    return YAML_DEFAULTS.copy()
+    return copy.deepcopy(YAML_DEFAULTS)
 
 
 def config_set(config: dict[str, Any], parts: list[str], val: Any) -> None:
@@ -709,7 +693,6 @@ def initialise() -> None:
     # We do this because pytest_console_scripts.ScriptRunner invokes main multiple times
     APP.version = VERSION
     signal.signal(signal.SIGPIPE, signal.SIG_DFL)
-    logging.basicConfig(level=logging.INFO, format="%(message)s")
     subcommands_register(APP)
 
 
@@ -735,8 +718,7 @@ def main() -> None:
 
 def releases_display(result: dict[str, Any]) -> None:
     if ("data" not in result) or ("count" not in result):
-        LOGGER.error("Invalid response format")
-        sys.exit(1)
+        show_error_and_exit("Invalid response format")
 
     releases = result["data"]
     count = result["count"]
@@ -760,6 +742,17 @@ def releases_display(result: dict[str, Any]) -> None:
         created_formatted = iso_to_human(created) if created else "Unknown"
         latest = release.get("latest_revision_number") or "-"
         print(f"  {version:<24} {latest:<7} {phase_short:<11} {created_formatted}")
+
+
+def show_error_and_exit(message: str, code: int = 1) -> NoReturn:
+    sys.stderr.write(f"atr: error: {message}\n")
+    sys.stderr.flush()
+    raise SystemExit(code)
+
+
+def show_warning(message: str) -> None:
+    sys.stderr.write(f"atr: warning: {message}\n")
+    sys.stderr.flush()
 
 
 def subcommands_register(app: cyclopts.App) -> None:
@@ -793,8 +786,7 @@ async def web_fetch(
         async with session.post(url, json=payload) as resp:
             if resp.status != 200:
                 text = await resp.text()
-                LOGGER.error(f"JWT fetch failed: {resp.status} {text}")
-                sys.exit(1)
+                show_error_and_exit(f"JWT fetch failed: {resp.status} {text}")
 
             data: dict[str, Any] = await resp.json()
             if "jwt" in data:
@@ -812,12 +804,11 @@ async def web_get(url: str, jwt_token: str, verify_ssl: bool = True) -> Any:
                 try:
                     error_data = json.loads(text)
                     if isinstance(error_data, dict) and "error" in error_data:
-                        LOGGER.error(error_data["error"])
+                        show_error_and_exit(error_data["error"])
                     else:
-                        LOGGER.error(f"Request failed: {resp.status} {text}")
+                        show_error_and_exit(f"Request failed: {resp.status} {text}")
                 except json.JSONDecodeError:
-                    LOGGER.error(f"Request failed: {resp.status} {text}")
-                sys.exit(1)
+                    show_error_and_exit(f"Request failed: {resp.status} {text}")
             return await resp.json()
 
 
@@ -830,12 +821,11 @@ async def web_get_public(url: str, verify_ssl: bool = True) -> Any:
                 try:
                     error_data = json.loads(text)
                     if isinstance(error_data, dict) and "error" in error_data:
-                        LOGGER.error(error_data["error"])
+                        show_error_and_exit(error_data["error"])
                     else:
-                        LOGGER.error(f"Request failed: {resp.status} {text}")
+                        show_error_and_exit(f"Request failed: {resp.status} {text}")
                 except json.JSONDecodeError:
-                    LOGGER.error(f"Request failed: {resp.status} {text}")
-                sys.exit(1)
+                    show_error_and_exit(f"Request failed: {resp.status} {text}")
             return await resp.json()
 
 
@@ -848,8 +838,7 @@ async def web_post(
         async with session.post(url, json=payload) as resp:
             if resp.status not in (200, 201):
                 text = await resp.text()
-                LOGGER.error(f"Release add failed: {resp.status} {text}")
-                sys.exit(1)
+                show_error_and_exit(f"Release add failed: {resp.status} {text}")
 
             try:
                 return await resp.json()

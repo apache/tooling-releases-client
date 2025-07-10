@@ -181,7 +181,10 @@ def test_app_set_show(
 ) -> None:
     client.app_set("atr.host", "example.invalid")
     client.app_show("atr.host")
-    assert capsys.readouterr().out == "example.invalid\n"
+    assert (
+        capsys.readouterr().out
+        == 'Set atr.host to "example.invalid".\nexample.invalid\n'
+    )
 
 
 def test_cli_version(script_runner: pytest_console_scripts.ScriptRunner) -> None:
@@ -200,6 +203,12 @@ def test_cli_transcripts(
     fixture_config_env: pathlib.Path,
 ) -> None:
     r_variable = re.compile(r"<!([A-Z_]+)!>")
+    env = os.environ.copy()
+    transcript_config_path = fixture_config_env
+    # transcript_config_path = fixture_config_env.with_suffix(f".{transcript_path.name}")
+    # if transcript_config_path.exists():
+    #     pytest.fail(f"Transcript config file already exists: {transcript_config_path}")
+    env["ATR_CLIENT_CONFIG_PATH"] = str(transcript_config_path)
     with open(transcript_path, "r", encoding="utf-8") as f:
         actual_output = []
         for line in f:
@@ -210,8 +219,6 @@ def test_cli_transcripts(
                 if not command.startswith("atr"):
                     pytest.fail(f"Command does not start with 'atr': {command}")
                     return
-                env = os.environ.copy()
-                env["ATR_CLIENT_CONFIG_PATH"] = str(fixture_config_env)
                 result = script_runner.run(shlex.split(command), env=env)
                 assert result.returncode == expected_code
                 actual_output[:] = result.stdout.splitlines()
