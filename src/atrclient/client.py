@@ -46,14 +46,14 @@ if TYPE_CHECKING:
     from collections.abc import Generator
 
 APP: cyclopts.App = cyclopts.App()
-CHECKS: cyclopts.App = cyclopts.App(name="checks", help="Check result operations.")
-CONFIG: cyclopts.App = cyclopts.App(name="config", help="Configuration operations.")
-DEV: cyclopts.App = cyclopts.App(name="dev", help="Developer operations.")
-DRAFT: cyclopts.App = cyclopts.App(name="draft", help="Draft operations.")
-JWT: cyclopts.App = cyclopts.App(name="jwt", help="JWT operations.")
-RELEASE: cyclopts.App = cyclopts.App(name="release", help="Release operations.")
+APP_CHECKS: cyclopts.App = cyclopts.App(name="checks", help="Check result operations.")
+APP_CONFIG: cyclopts.App = cyclopts.App(name="config", help="Configuration operations.")
+APP_DEV: cyclopts.App = cyclopts.App(name="dev", help="Developer operations.")
+APP_DRAFT: cyclopts.App = cyclopts.App(name="draft", help="Draft operations.")
+APP_JWT: cyclopts.App = cyclopts.App(name="jwt", help="JWT operations.")
+APP_RELEASE: cyclopts.App = cyclopts.App(name="release", help="Release operations.")
+APP_VOTE: cyclopts.App = cyclopts.App(name="vote", help="Vote operations.")
 VERSION: str = metadata.version("apache-trusted-releases")
-VOTE: cyclopts.App = cyclopts.App(name="vote", help="Vote operations.")
 YAML_DEFAULTS: dict[str, Any] = {"asf": {}, "atr": {}, "tokens": {}}
 YAML_SCHEMA: strictyaml.Map = strictyaml.Map(
     {
@@ -73,7 +73,9 @@ YAML_SCHEMA: strictyaml.Map = strictyaml.Map(
 )
 
 
-@CHECKS.command(name="exceptions", help="Get check exceptions for a release revision.")
+@APP_CHECKS.command(
+    name="exceptions", help="Get check exceptions for a release revision."
+)
 def app_checks_exceptions(
     project: str,
     version: str,
@@ -88,7 +90,7 @@ def app_checks_exceptions(
     checks_display_status("exception", results, members=members)
 
 
-@CHECKS.command(name="failures", help="Get check failures for a release revision.")
+@APP_CHECKS.command(name="failures", help="Get check failures for a release revision.")
 def app_checks_failures(
     project: str,
     version: str,
@@ -103,7 +105,7 @@ def app_checks_failures(
     checks_display_status("failure", results, members=members)
 
 
-@CHECKS.command(name="status", help="Get check status for a release revision.")
+@APP_CHECKS.command(name="status", help="Get check status for a release revision.")
 def app_checks_status(
     project: str,
     version: str,
@@ -138,7 +140,7 @@ def app_checks_status(
     checks_display(results, verbose)
 
 
-@CHECKS.command(name="warnings", help="Get check warnings for a release revision.")
+@APP_CHECKS.command(name="warnings", help="Get check warnings for a release revision.")
 def app_checks_warnings(
     project: str,
     version: str,
@@ -153,7 +155,7 @@ def app_checks_warnings(
     checks_display_status("warning", results, members=members)
 
 
-@CONFIG.command(name="file", help="Display the configuration file contents.")
+@APP_CONFIG.command(name="file", help="Display the configuration file contents.")
 def app_config_file() -> None:
     path = config_path()
     if not path.exists():
@@ -164,12 +166,12 @@ def app_config_file() -> None:
             print(chunk, end="")
 
 
-@CONFIG.command(name="path", help="Show the configuration file path.")
+@APP_CONFIG.command(name="path", help="Show the configuration file path.")
 def app_config_path() -> None:
     print(config_path())
 
 
-@DEV.command(name="env", help="Show the environment variables.")
+@APP_DEV.command(name="env", help="Show the environment variables.")
 def app_dev_env() -> None:
     total = 0
     for key, value in sorted(os.environ.items()):
@@ -180,7 +182,9 @@ def app_dev_env() -> None:
     print(f"There are {total} ATR_* environment variables.")
 
 
-@DEV.command(name="stamp", help="Update version and exclude-newer in pyproject.toml.")
+@APP_DEV.command(
+    name="stamp", help="Update version and exclude-newer in pyproject.toml."
+)
 def app_dev_stamp() -> None:
     path = pathlib.Path("pyproject.toml")
     if not path.exists():
@@ -217,6 +221,16 @@ def app_dev_stamp() -> None:
         print("Updated tests/cli_version.t.")
 
 
+@APP_DRAFT.command(name="delete", help="Delete a draft release.")
+def app_draft_delete(project: str, version: str, /) -> None:
+    jwt_value = config_jwt_usable()
+    host, verify_ssl = config_host_get()
+    payload: dict[str, str] = {"project_name": project, "version": version}
+    url = f"https://{host}/api/draft/delete"
+    result = asyncio.run(web_post(url, payload, jwt_value, verify_ssl))
+    print(result)
+
+
 @APP.command(name="docs", help="Show comprehensive CLI documentation in Markdown.")
 def app_docs() -> None:
     old_help_format = APP.help_format
@@ -240,7 +254,7 @@ def app_drop(path: str, /) -> None:
     print(f"Removed {path}.")
 
 
-@JWT.command(name="dump", help="Show decoded JWT payload from stored config.")
+@APP_JWT.command(name="dump", help="Show decoded JWT payload from stored config.")
 def app_jwt_dump() -> None:
     jwt_value = config_jwt_get()
 
@@ -256,7 +270,7 @@ def app_jwt_dump() -> None:
     print(json.dumps(payload, indent=None))
 
 
-@JWT.command(name="info", help="Show JWT payload in human-readable form.")
+@APP_JWT.command(name="info", help="Show JWT payload in human-readable form.")
 def app_jwt_info() -> None:
     _jwt_value, payload = config_jwt_payload()
 
@@ -269,7 +283,7 @@ def app_jwt_info() -> None:
     print("\n".join(lines))
 
 
-@JWT.command(
+@APP_JWT.command(
     name="refresh", help="Fetch a JWT using the stored PAT and store it in config."
 )
 def app_jwt_refresh(asf_uid: str | None = None) -> None:
@@ -277,7 +291,7 @@ def app_jwt_refresh(asf_uid: str | None = None) -> None:
     print(jwt_value)
 
 
-@JWT.command(name="show", help="Show stored JWT token.")
+@APP_JWT.command(name="show", help="Show stored JWT token.")
 def app_jwt_show() -> None:
     return app_show("tokens.jwt")
 
@@ -293,7 +307,7 @@ def app_list(project: str, version: str, revision: str | None = None, /) -> None
     print(result)
 
 
-@RELEASE.command(name="info", help="Show information about a release.")
+@APP_RELEASE.command(name="info", help="Show information about a release.")
 def app_release_info(project: str, version: str, /) -> None:
     host, verify_ssl = config_host_get()
     url = f"https://{host}/api/releases/{project}/{version}"
@@ -301,7 +315,7 @@ def app_release_info(project: str, version: str, /) -> None:
     print(result)
 
 
-@RELEASE.command(name="list", help="List releases for a project.")
+@APP_RELEASE.command(name="list", help="List releases for a project.")
 def app_release_list(project: str, /) -> None:
     # TODO: Support showing all of a user's releases if no project is provided
     host, verify_ssl = config_host_get()
@@ -310,7 +324,7 @@ def app_release_list(project: str, /) -> None:
     releases_display(result)
 
 
-@RELEASE.command(name="start", help="Start a release.")
+@APP_RELEASE.command(name="start", help="Start a release.")
 def app_release_start(project: str, version: str, /) -> None:
     jwt_value = config_jwt_usable()
     host, verify_ssl = config_host_get()
@@ -378,7 +392,7 @@ def app_upload(project: str, version: str, path: str, filepath: str, /) -> None:
     print(result)
 
 
-@VOTE.command(name="start", help="Start a vote.")
+@APP_VOTE.command(name="start", help="Start a vote.")
 def app_vote_start(
     project: str,
     version: str,
@@ -407,16 +421,6 @@ def app_vote_start(
         "subject": subject or f"[VOTE] Release {project} {version}",
         "body": body_text or f"Release {project} {version} is ready for voting.",
     }
-    result = asyncio.run(web_post(url, payload, jwt_value, verify_ssl))
-    print(result)
-
-
-@DRAFT.command(name="delete", help="Delete a draft release.")
-def app_draft_delete(project: str, version: str, /) -> None:
-    jwt_value = config_jwt_usable()
-    host, verify_ssl = config_host_get()
-    payload: dict[str, str] = {"project_name": project, "version": version}
-    url = f"https://{host}/api/draft/delete"
     result = asyncio.run(web_post(url, payload, jwt_value, verify_ssl))
     print(result)
 
@@ -768,13 +772,13 @@ def show_warning(message: str) -> None:
 
 
 def subcommands_register(app: cyclopts.App) -> None:
-    app.command(CHECKS)
-    app.command(CONFIG)
-    app.command(DEV)
-    app.command(DRAFT)
-    app.command(JWT)
-    app.command(RELEASE)
-    app.command(VOTE)
+    app.command(APP_CHECKS)
+    app.command(APP_CONFIG)
+    app.command(APP_DEV)
+    app.command(APP_DRAFT)
+    app.command(APP_JWT)
+    app.command(APP_RELEASE)
+    app.command(APP_VOTE)
 
 
 def timestamp_format(ts: int | str | None) -> str | None:
