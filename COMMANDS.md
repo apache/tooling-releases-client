@@ -7,7 +7,7 @@ Usage: atr docs
 Show comprehensive CLI documentation in Markdown.
 ```
 
-## checks
+## atr checks
 
 ```
 Usage: checks COMMAND
@@ -22,7 +22,7 @@ Check result operations.
 ╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
 ```
 
-### exceptions
+### atr checks exceptions
 
 ```
 Usage: exceptions [ARGS] [OPTIONS]
@@ -37,7 +37,7 @@ Get check exceptions for a release revision.
 ╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
 ```
 
-### failures
+### atr checks failures
 
 ```
 Usage: failures [ARGS] [OPTIONS]
@@ -52,7 +52,7 @@ Get check failures for a release revision.
 ╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
 ```
 
-### status
+### atr checks status
 
 ```
 Usage: status [ARGS] [OPTIONS]
@@ -67,7 +67,7 @@ Get check status for a release revision.
 ╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
 ```
 
-### warnings
+### atr checks warnings
 
 ```
 Usage: warnings [ARGS] [OPTIONS]
@@ -82,7 +82,7 @@ Get check warnings for a release revision.
 ╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
 ```
 
-## config
+## atr config
 
 ```
 Usage: config COMMAND
@@ -95,7 +95,7 @@ Configuration operations.
 ╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
 ```
 
-### file
+### atr config file
 
 ```
 Usage: file
@@ -103,7 +103,7 @@ Usage: file
 Display the configuration file contents.
 ```
 
-### path
+### atr config path
 
 ```
 Usage: path
@@ -111,7 +111,7 @@ Usage: path
 Show the configuration file path.
 ```
 
-## dev
+## atr dev
 
 ```
 Usage: dev COMMAND
@@ -123,7 +123,7 @@ Developer operations.
 ╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
 ```
 
-### stamp
+### atr dev stamp
 
 ```
 Usage: stamp
@@ -131,7 +131,7 @@ Usage: stamp
 Update version and exclude-newer in pyproject.toml.
 ```
 
-## docs
+## atr docs
 
 ```
 Usage: docs
@@ -139,7 +139,7 @@ Usage: docs
 Show comprehensive CLI documentation in Markdown.
 ```
 
-## drop
+## atr drop
 
 ```
 Usage: drop [ARGS] [OPTIONS]
@@ -151,7 +151,7 @@ Remove a configuration key using dot notation.
 ╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
 ```
 
-## jwt
+## atr jwt
 
 ```
 Usage: jwt COMMAND
@@ -166,7 +166,7 @@ JWT operations.
 ╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
 ```
 
-### dump
+### atr jwt dump
 
 ```
 Usage: dump
@@ -174,7 +174,7 @@ Usage: dump
 Show decoded JWT payload from stored config.
 ```
 
-### info
+### atr jwt info
 
 ```
 Usage: info
@@ -182,7 +182,7 @@ Usage: info
 Show JWT payload in human-readable form.
 ```
 
-### refresh
+### atr jwt refresh
 
 ```
 Usage: refresh [ARGS] [OPTIONS]
@@ -194,7 +194,7 @@ Fetch a JWT using the stored PAT and store it in config.
 ╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
 ```
 
-### show
+### atr jwt show
 
 ```
 Usage: show
@@ -202,7 +202,7 @@ Usage: show
 Show stored JWT token.
 ```
 
-## list
+## atr list
 
 ```
 Usage: list [ARGS] [OPTIONS]
@@ -216,7 +216,7 @@ List all files within a release.
 ╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
 ```
 
-## release
+## atr release
 
 ```
 Usage: release COMMAND
@@ -230,7 +230,7 @@ Release operations.
 ╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
 ```
 
-### start
+### atr release start
 
 ```
 Usage: start [ARGS] [OPTIONS]
@@ -243,7 +243,7 @@ Start a release.
 ╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
 ```
 
-## revisions
+## atr revisions
 
 ```
 Usage: revisions [ARGS] [OPTIONS]
@@ -256,7 +256,7 @@ List all revisions for a release.
 ╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
 ```
 
-## set
+## atr set
 
 ```
 Usage: set [ARGS] [OPTIONS]
@@ -269,7 +269,7 @@ Set a configuration value using dot notation.
 ╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
 ```
 
-## upload
+## atr upload
 
 ```
 Usage: upload [ARGS] [OPTIONS]
@@ -284,7 +284,7 @@ Upload a file to a release.
 ╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
 ```
 
-## version
+## atr version
 
 ```
 Usage: version
@@ -292,7 +292,7 @@ Usage: version
 Show the version of the client.
 ```
 
-## vote
+## atr vote
 
 ```
 Usage: vote COMMAND

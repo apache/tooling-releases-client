@@ -653,7 +653,9 @@ def config_write(data: dict[str, Any]) -> None:
 
 
 def documentation_to_markdown(
-    app: cyclopts.App, level: int = 1, seen: set[str] | None = None
+    app: cyclopts.App,
+    subcommands: list[str] | None = None,
+    seen: set[str] | None = None,
 ) -> str:
     import io
     import rich.console as console
@@ -666,14 +668,17 @@ def documentation_to_markdown(
     with contextlib.redirect_stdout(string_io):
         app.help_print()
     app.console = original_console
-    title = (
-        " ".join(app.name)
-        if isinstance(app.name, (list, tuple))
-        else (app.name or "atr")
-    )
+
     exported_text = rich_console.export_text()
+    if not subcommands:
+        subcommands = [
+            " ".join(app.name)
+            if isinstance(app.name, (list, tuple))
+            else (app.name or "atr")
+        ]
+    level = len(subcommands)
     markdown = f"""
-{"#" * level} {title}
+{"#" * level} {" ".join(subcommands)}
 
 ```
 {exported_text.rstrip()}
@@ -686,7 +691,7 @@ def documentation_to_markdown(
         sub = app[cmd]
         if isinstance(sub, cyclopts.App):
             seen.add(cmd)
-            markdown += documentation_to_markdown(sub, level + 1, seen)
+            markdown += documentation_to_markdown(sub, [*subcommands, cmd], seen)
     return markdown
 
 
