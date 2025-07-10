@@ -197,6 +197,17 @@ def app_dev_stamp() -> None:
     )
     LOGGER.info("Updated version." if version_updated else "Did not update version.")
 
+    path = pathlib.Path("tests/cli_version.t")
+    if not path.exists():
+        LOGGER.warning("tests/cli_version.t not found.")
+        return
+    text_v1 = path.read_text(encoding="utf-8")
+    text_v2 = re.sub(r"0\.\d{8}\.\d{4}", v, text_v1)
+    version_updated = not (text_v1 == text_v2)
+    if version_updated:
+        path.write_text(text_v2, "utf-8")
+        LOGGER.info("Updated tests/cli_version.t.")
+
 
 @APP.command(name="docs", help="Show comprehensive CLI documentation in Markdown.")
 def app_docs() -> None:
@@ -683,6 +694,18 @@ def documentation_to_markdown(
     return markdown
 
 
+def initialise() -> None:
+    # We do this because pytest_console_scripts.ScriptRunner invokes main multiple times
+    APP.version = VERSION
+    signal.signal(signal.SIGPIPE, signal.SIG_DFL)
+    logging.basicConfig(level=logging.INFO, format="%(message)s")
+    subcommands_register(APP)
+
+
+def initialised() -> bool:
+    return APP.version == VERSION
+
+
 def iso_to_human(ts: str) -> str:
     dt = datetime.datetime.fromisoformat(ts.rstrip("Z"))
     if dt.tzinfo is None:
@@ -691,10 +714,8 @@ def iso_to_human(ts: str) -> str:
 
 
 def main() -> None:
-    signal.signal(signal.SIGPIPE, signal.SIG_DFL)
-    logging.basicConfig(level=logging.INFO, format="%(message)s")
-    subcommands_register(APP)
-    APP.version = VERSION
+    if not initialised():
+        initialise()
     # if "PYTEST_CURRENT_TEST" in os.environ:
     #     # "Cyclopts application invoked without tokens"
     #     pass

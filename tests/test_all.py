@@ -18,6 +18,7 @@
 # TODO: Use transcript style script testing
 
 from __future__ import annotations
+import shlex
 
 import atrclient.client as client
 import pathlib
@@ -26,6 +27,12 @@ from typing import Any
 import aioresponses
 import pytest
 import pytest_console_scripts
+
+
+def decorator_transcript_file_paths() -> list[pathlib.Path]:
+    parent = pathlib.Path(__file__).parent
+    paths = list(parent.glob("*.t"))
+    return paths
 
 
 def test_app_checks_status_non_draft_phase(
@@ -180,6 +187,36 @@ def test_cli_version(script_runner: pytest_console_scripts.ScriptRunner) -> None
     assert result.returncode == 0
     assert result.stdout == f"{client.VERSION}\n"
     assert result.stderr == ""
+
+
+@pytest.mark.parametrize(
+    "transcript_path", decorator_transcript_file_paths(), ids=lambda p: p.name
+)
+def test_cli_transcripts(
+    transcript_path: pathlib.Path, script_runner: pytest_console_scripts.ScriptRunner
+) -> None:
+    with open(transcript_path, "r", encoding="utf-8") as f:
+        actual_stdout = []
+        for line in f:
+            line = line.rstrip("\n")
+            if line.startswith("$ ") or line.startswith("! "):
+                expected_code = 0 if line.startswith("$ ") else 1
+                command = line[2:]
+                if not command.startswith("atr"):
+                    pytest.fail(f"Command does not start with 'atr': {command}")
+                    return
+                result = script_runner.run(shlex.split(command))
+                assert result.returncode == expected_code
+                actual_stdout[:] = result.stdout.splitlines()
+            elif actual_stdout:
+                actual_stdout_line = actual_stdout.pop(0)
+                if actual_stdout_line != line:
+                    pytest.fail(f"Expected {line!r} but got {actual_stdout_line!r}")
+                    return
+            elif line:
+                pytest.fail(f"Unexpected line: {line!r}")
+                return
+        assert not actual_stdout
 
 
 def test_config_set_get_roundtrip() -> None:
