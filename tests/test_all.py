@@ -18,6 +18,8 @@
 # TODO: Use transcript style script testing
 
 from __future__ import annotations
+import os
+import re
 import shlex
 
 import atrclient.client as client
@@ -193,10 +195,13 @@ def test_cli_version(script_runner: pytest_console_scripts.ScriptRunner) -> None
     "transcript_path", decorator_transcript_file_paths(), ids=lambda p: p.name
 )
 def test_cli_transcripts(
-    transcript_path: pathlib.Path, script_runner: pytest_console_scripts.ScriptRunner
+    transcript_path: pathlib.Path,
+    script_runner: pytest_console_scripts.ScriptRunner,
+    fixture_config_env: pathlib.Path,
 ) -> None:
+    r_variable = re.compile(r"<!([A-Z_]+)!>")
     with open(transcript_path, "r", encoding="utf-8") as f:
-        actual_stdout = []
+        actual_output = []
         for line in f:
             line = line.rstrip("\n")
             if line.startswith("$ ") or line.startswith("! "):
@@ -205,18 +210,38 @@ def test_cli_transcripts(
                 if not command.startswith("atr"):
                     pytest.fail(f"Command does not start with 'atr': {command}")
                     return
-                result = script_runner.run(shlex.split(command))
+                env = os.environ.copy()
+                env["ATR_CLIENT_CONFIG_PATH"] = str(fixture_config_env)
+                result = script_runner.run(shlex.split(command), env=env)
                 assert result.returncode == expected_code
-                actual_stdout[:] = result.stdout.splitlines()
-            elif actual_stdout:
-                actual_stdout_line = actual_stdout.pop(0)
-                if actual_stdout_line != line:
-                    pytest.fail(f"Expected {line!r} but got {actual_stdout_line!r}")
+                actual_output[:] = result.stdout.splitlines()
+                if result.stderr:
+                    actual_output.append("<!stderr!>")
+                    actual_output.extend(result.stderr.splitlines())
+            elif actual_output:
+                if line == "<!...!>":
+                    actual_output[:] = []
+                    continue
+                actual_output_line = actual_output.pop(0)
+                # Replace variables with (?P<variable>.*?)
+                line_pattern = r_variable.sub(r"(?P<\1>.*?)", line)
+                if line_pattern != line:
+                    success = re.match(line_pattern, actual_output_line)
+                else:
+                    success = actual_output_line == line
+                if not success:
+                    # TODO: Improve this
+                    got = f"{actual_output_line!r}"
+                    if actual_output:
+                        got += f", {actual_output[:10]}"
+                        if len(actual_output) > 10:
+                            got += "..."
+                    pytest.fail(f"Expected {line!r} but got {got}")
                     return
             elif line:
                 pytest.fail(f"Unexpected line: {line!r}")
                 return
-        assert not actual_stdout
+        assert not actual_output
 
 
 def test_config_set_get_roundtrip() -> None:

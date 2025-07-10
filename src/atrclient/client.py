@@ -171,6 +171,17 @@ def app_config_path() -> None:
     print(config_path())
 
 
+@DEV.command(name="env", help="Show the environment variables.")
+def app_dev_env() -> None:
+    total = 0
+    for key, value in sorted(os.environ.items()):
+        if not key.startswith("ATR_"):
+            continue
+        print(f"{key}={json.dumps(value, indent=None)}")
+        total += 1
+    print(f"There are {total} ATR_* environment variables.")
+
+
 @DEV.command(name="stamp", help="Update version and exclude-newer in pyproject.toml.")
 def app_dev_stamp() -> None:
     path = pathlib.Path("pyproject.toml")
