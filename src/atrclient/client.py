@@ -204,6 +204,15 @@ def app_dev_stamp() -> None:
     LOGGER.info("Updated version." if version_updated else "Did not update version.")
 
 
+@APP.command(name="docs", help="Show comprehensive CLI documentation in Markdown.")
+def app_docs() -> None:
+    old_help_format = APP.help_format
+    APP.help_format = "markdown"
+    markdown = documentation_to_markdown(APP)
+    APP.help_format = old_help_format
+    print(markdown.rstrip())
+
+
 @APP.command(name="drop", help="Remove a configuration key using dot notation.")
 def app_drop(path: str) -> None:
     parts = path.split(".")
@@ -641,6 +650,44 @@ def config_write(data: dict[str, Any]) -> None:
         encoding="utf-8",
     )
     os.replace(tmp, path)
+
+
+def documentation_to_markdown(
+    app: cyclopts.App, level: int = 1, seen: set[str] | None = None
+) -> str:
+    import io
+    import rich.console as console
+
+    seen = seen or set()
+    string_io = io.StringIO()
+    rich_console = console.Console(record=True, width=120, file=string_io)
+    original_console = app.console
+    app.console = rich_console
+    with contextlib.redirect_stdout(string_io):
+        app.help_print()
+    app.console = original_console
+    title = (
+        " ".join(app.name)
+        if isinstance(app.name, (list, tuple))
+        else (app.name or "atr")
+    )
+    exported_text = rich_console.export_text()
+    markdown = f"""
+{"#" * level} {title}
+
+```
+{exported_text.rstrip()}
+```
+"""
+    commands = sorted(app)
+    for cmd in commands:
+        if cmd in seen or cmd.startswith("-"):
+            continue
+        sub = app[cmd]
+        if isinstance(sub, cyclopts.App):
+            seen.add(cmd)
+            markdown += documentation_to_markdown(sub, level + 1, seen)
+    return markdown
 
 
 def iso_to_human(ts: str) -> str:
