@@ -52,6 +52,7 @@ DEV: cyclopts.App = cyclopts.App(name="dev", help="Developer operations.")
 JWT: cyclopts.App = cyclopts.App(name="jwt", help="JWT operations.")
 LOGGER = logging.getLogger(__name__)
 RELEASE: cyclopts.App = cyclopts.App(name="release", help="Release operations.")
+VERSION: str = metadata.version("apache-trusted-releases")
 VOTE: cyclopts.App = cyclopts.App(name="vote", help="Vote operations.")
 YAML_DEFAULTS: dict[str, Any] = {"asf": {}, "atr": {}, "tokens": {}}
 YAML_SCHEMA: strictyaml.Map = strictyaml.Map(
@@ -70,13 +71,6 @@ YAML_SCHEMA: strictyaml.Map = strictyaml.Map(
         ),
     }
 )
-
-APP.command(CHECKS)
-APP.command(CONFIG)
-APP.command(DEV)
-APP.command(JWT)
-APP.command(RELEASE)
-APP.command(VOTE)
 
 
 @CHECKS.command(name="exceptions", help="Get check exceptions for a release revision.")
@@ -369,12 +363,6 @@ def app_upload(project: str, version: str, path: str, filepath: str) -> None:
 
     result = asyncio.run(web_post(url, payload, jwt_value, verify_ssl))
     print(result)
-
-
-@APP.command(name="version", help="Show the version of the client.")
-def app_version() -> None:
-    version = metadata.version("apache-trusted-releases")
-    print(version)
 
 
 @VOTE.command(name="start", help="Start a vote.")
@@ -705,7 +693,12 @@ def iso_to_human(ts: str) -> str:
 def main() -> None:
     signal.signal(signal.SIGPIPE, signal.SIG_DFL)
     logging.basicConfig(level=logging.INFO, format="%(message)s")
-    APP()
+    subcommands_register(APP)
+    APP.version = VERSION
+    # if "PYTEST_CURRENT_TEST" in os.environ:
+    #     # "Cyclopts application invoked without tokens"
+    #     pass
+    APP(sys.argv[1:])
 
 
 def releases_display(result: dict[str, Any]) -> None:
@@ -735,6 +728,15 @@ def releases_display(result: dict[str, Any]) -> None:
         created_formatted = iso_to_human(created) if created else "Unknown"
         latest = release.get("latest_revision_number") or "-"
         print(f"  {version:<24} {latest:<7} {phase_short:<11} {created_formatted}")
+
+
+def subcommands_register(app: cyclopts.App) -> None:
+    app.command(CHECKS)
+    app.command(CONFIG)
+    app.command(DEV)
+    app.command(JWT)
+    app.command(RELEASE)
+    app.command(VOTE)
 
 
 def timestamp_format(ts: int | str | None) -> str | None:

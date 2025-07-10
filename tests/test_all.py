@@ -25,6 +25,7 @@ from typing import Any
 
 import aioresponses
 import pytest
+import pytest_console_scripts
 
 
 def test_app_checks_status_non_draft_phase(
@@ -172,6 +173,13 @@ def test_app_set_show(
     client.app_set("atr.host", "example.invalid")
     client.app_show("atr.host")
     assert capsys.readouterr().out == "example.invalid\n"
+
+
+def test_cli_version(script_runner: pytest_console_scripts.ScriptRunner) -> None:
+    result = script_runner.run(["atr", "--version"])
+    assert result.returncode == 0
+    assert result.stdout == f"{client.VERSION}\n"
+    assert result.stderr == ""
 
 
 def test_config_set_get_roundtrip() -> None:
