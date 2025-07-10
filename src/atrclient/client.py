@@ -49,6 +49,7 @@ APP: cyclopts.App = cyclopts.App()
 CHECKS: cyclopts.App = cyclopts.App(name="checks", help="Check result operations.")
 CONFIG: cyclopts.App = cyclopts.App(name="config", help="Configuration operations.")
 DEV: cyclopts.App = cyclopts.App(name="dev", help="Developer operations.")
+DRAFT: cyclopts.App = cyclopts.App(name="draft", help="Draft operations.")
 JWT: cyclopts.App = cyclopts.App(name="jwt", help="JWT operations.")
 RELEASE: cyclopts.App = cyclopts.App(name="release", help="Release operations.")
 VERSION: str = metadata.version("apache-trusted-releases")
@@ -302,6 +303,7 @@ def app_release_info(project: str, version: str, /) -> None:
 
 @RELEASE.command(name="list", help="List releases for a project.")
 def app_release_list(project: str, /) -> None:
+    # TODO: Support showing all of a user's releases if no project is provided
     host, verify_ssl = config_host_get()
     url = f"https://{host}/api/releases/{project}"
     result = asyncio.run(web_get_public(url, verify_ssl))
@@ -405,6 +407,16 @@ def app_vote_start(
         "subject": subject or f"[VOTE] Release {project} {version}",
         "body": body_text or f"Release {project} {version} is ready for voting.",
     }
+    result = asyncio.run(web_post(url, payload, jwt_value, verify_ssl))
+    print(result)
+
+
+@DRAFT.command(name="delete", help="Delete a draft release.")
+def app_draft_delete(project: str, version: str, /) -> None:
+    jwt_value = config_jwt_usable()
+    host, verify_ssl = config_host_get()
+    payload: dict[str, str] = {"project_name": project, "version": version}
+    url = f"https://{host}/api/draft/delete"
     result = asyncio.run(web_post(url, payload, jwt_value, verify_ssl))
     print(result)
 
@@ -759,6 +771,7 @@ def subcommands_register(app: cyclopts.App) -> None:
     app.command(CHECKS)
     app.command(CONFIG)
     app.command(DEV)
+    app.command(DRAFT)
     app.command(JWT)
     app.command(RELEASE)
     app.command(VOTE)
@@ -838,7 +851,9 @@ async def web_post(
         async with session.post(url, json=payload) as resp:
             if resp.status not in (200, 201):
                 text = await resp.text()
-                show_error_and_exit(f"Release add failed: {resp.status} {text}")
+                show_error_and_exit(
+                    f"Error message from the API:\n{resp.status} {url}\n{text}"
+                )
 
             try:
                 return await resp.json()
