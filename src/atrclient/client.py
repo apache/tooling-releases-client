@@ -77,7 +77,7 @@ def app_checks_exceptions(
     project: str,
     version: str,
     revision: str,
-    *,
+    /,
     members: Annotated[bool, cyclopts.Parameter(alias="-m", name="--members")] = False,
 ) -> None:
     jwt_value = config_jwt_usable()
@@ -92,7 +92,7 @@ def app_checks_failures(
     project: str,
     version: str,
     revision: str,
-    *,
+    /,
     members: Annotated[bool, cyclopts.Parameter(alias="-m", name="--members")] = False,
 ) -> None:
     jwt_value = config_jwt_usable()
@@ -107,7 +107,7 @@ def app_checks_status(
     project: str,
     version: str,
     revision: str,
-    *,
+    /,
     verbose: Annotated[bool, cyclopts.Parameter(alias="-v", name="--verbose")] = False,
 ) -> None:
     jwt_value = config_jwt_usable()
@@ -142,7 +142,7 @@ def app_checks_warnings(
     project: str,
     version: str,
     revision: str,
-    *,
+    /,
     members: Annotated[bool, cyclopts.Parameter(alias="-m", name="--members")] = False,
 ) -> None:
     jwt_value = config_jwt_usable()
@@ -226,7 +226,7 @@ def app_docs() -> None:
 
 
 @APP.command(name="drop", help="Remove a configuration key using dot notation.")
-def app_drop(path: str) -> None:
+def app_drop(path: str, /) -> None:
     parts = path.split(".")
     if not parts:
         show_error_and_exit("Not a valid configuration key")
@@ -282,7 +282,7 @@ def app_jwt_show() -> None:
 
 
 @APP.command(name="list", help="List all files within a release.")
-def app_list(project: str, version: str, revision: str | None = None) -> None:
+def app_list(project: str, version: str, revision: str | None = None, /) -> None:
     jwt_value = config_jwt_usable()
     host, verify_ssl = config_host_get()
     url = f"https://{host}/api/list/{project}/{version}"
@@ -293,7 +293,7 @@ def app_list(project: str, version: str, revision: str | None = None) -> None:
 
 
 @RELEASE.command(name="info", help="Show information about a release.")
-def app_release_info(project: str, version: str) -> None:
+def app_release_info(project: str, version: str, /) -> None:
     host, verify_ssl = config_host_get()
     url = f"https://{host}/api/releases/{project}/{version}"
     result = asyncio.run(web_get_public(url, verify_ssl))
@@ -301,7 +301,7 @@ def app_release_info(project: str, version: str) -> None:
 
 
 @RELEASE.command(name="list", help="List releases for a project.")
-def app_release_list(project: str) -> None:
+def app_release_list(project: str, /) -> None:
     host, verify_ssl = config_host_get()
     url = f"https://{host}/api/releases/{project}"
     result = asyncio.run(web_get_public(url, verify_ssl))
@@ -309,7 +309,7 @@ def app_release_list(project: str) -> None:
 
 
 @RELEASE.command(name="start", help="Start a release.")
-def app_release_start(project: str, version: str) -> None:
+def app_release_start(project: str, version: str, /) -> None:
     jwt_value = config_jwt_usable()
     host, verify_ssl = config_host_get()
     url = f"https://{host}/api/releases/create"
@@ -321,7 +321,7 @@ def app_release_start(project: str, version: str) -> None:
 
 
 @APP.command(name="revisions", help="List all revisions for a release.")
-def app_revisions(project: str, version: str) -> None:
+def app_revisions(project: str, version: str, /) -> None:
     host, verify_ssl = config_host_get()
     url = f"https://{host}/api/revisions/{project}/{version}"
     result = asyncio.run(web_get_public(url, verify_ssl))
@@ -330,7 +330,7 @@ def app_revisions(project: str, version: str) -> None:
 
 
 @APP.command(name="set", help="Set a configuration value using dot notation.")
-def app_set(path: str, value: str) -> None:
+def app_set(path: str, value: str, /) -> None:
     parts = path.split(".")
     if not parts:
         show_error_and_exit("Not a valid configuration key.")
@@ -342,7 +342,7 @@ def app_set(path: str, value: str) -> None:
 
 
 @APP.command(name="show", help="Show a configuration value using dot notation.")
-def app_show(path: str) -> None:
+def app_show(path: str, /) -> None:
     parts = path.split(".")
     if not parts:
         show_error_and_exit("Not a valid configuration key.")
@@ -357,7 +357,7 @@ def app_show(path: str) -> None:
 
 
 @APP.command(name="upload", help="Upload a file to a release.")
-def app_upload(project: str, version: str, path: str, filepath: str) -> None:
+def app_upload(project: str, version: str, path: str, filepath: str, /) -> None:
     jwt_value = config_jwt_usable()
     host, verify_ssl = config_host_get()
     url = f"https://{host}/api/upload"
@@ -381,7 +381,7 @@ def app_vote_start(
     project: str,
     version: str,
     revision: str,
-    *,
+    /,
     mailing_list: str,
     duration: Annotated[int, cyclopts.Parameter(alias="-d", name="--duration")] = 72,
     subject: Annotated[

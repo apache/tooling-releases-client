@@ -29,11 +29,13 @@ Usage: exceptions [ARGS] [OPTIONS]
 
 Get check exceptions for a release revision.
 
+╭─ Arguments ──────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│ *  PROJECT   [required]                                                                                              │
+│ *  VERSION   [required]                                                                                              │
+│ *  REVISION  [required]                                                                                              │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
 ╭─ Parameters ─────────────────────────────────────────────────────────────────────────────────────────────────────────╮
-│ *  PROJECT --project           [required]                                                                            │
-│ *  VERSION --version           [required]                                                                            │
-│ *  REVISION --revision         [required]                                                                            │
-│    --members --no-members  -m  [default: False]                                                                      │
+│ MEMBERS --members --no-members  -m  [default: False]                                                                 │
 ╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
 ```
 
@@ -44,11 +46,13 @@ Usage: failures [ARGS] [OPTIONS]
 
 Get check failures for a release revision.
 
+╭─ Arguments ──────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│ *  PROJECT   [required]                                                                                              │
+│ *  VERSION   [required]                                                                                              │
+│ *  REVISION  [required]                                                                                              │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
 ╭─ Parameters ─────────────────────────────────────────────────────────────────────────────────────────────────────────╮
-│ *  PROJECT --project           [required]                                                                            │
-│ *  VERSION --version           [required]                                                                            │
-│ *  REVISION --revision         [required]                                                                            │
-│    --members --no-members  -m  [default: False]                                                                      │
+│ MEMBERS --members --no-members  -m  [default: False]                                                                 │
 ╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
 ```
 
@@ -59,11 +63,13 @@ Usage: status [ARGS] [OPTIONS]
 
 Get check status for a release revision.
 
+╭─ Arguments ──────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│ *  PROJECT   [required]                                                                                              │
+│ *  VERSION   [required]                                                                                              │
+│ *  REVISION  [required]                                                                                              │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
 ╭─ Parameters ─────────────────────────────────────────────────────────────────────────────────────────────────────────╮
-│ *  PROJECT --project           [required]                                                                            │
-│ *  VERSION --version           [required]                                                                            │
-│ *  REVISION --revision         [required]                                                                            │
-│    --verbose --no-verbose  -v  [default: False]                                                                      │
+│ VERBOSE --verbose --no-verbose  -v  [default: False]                                                                 │
 ╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
 ```
 
@@ -74,11 +80,13 @@ Usage: warnings [ARGS] [OPTIONS]
 
 Get check warnings for a release revision.
 
+╭─ Arguments ──────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│ *  PROJECT   [required]                                                                                              │
+│ *  VERSION   [required]                                                                                              │
+│ *  REVISION  [required]                                                                                              │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
 ╭─ Parameters ─────────────────────────────────────────────────────────────────────────────────────────────────────────╮
-│ *  PROJECT --project           [required]                                                                            │
-│ *  VERSION --version           [required]                                                                            │
-│ *  REVISION --revision         [required]                                                                            │
-│    --members --no-members  -m  [default: False]                                                                      │
+│ MEMBERS --members --no-members  -m  [default: False]                                                                 │
 ╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
 ```
 
@@ -119,8 +127,17 @@ Usage: dev COMMAND
 Developer operations.
 
 ╭─ Commands ───────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│ env    Show the environment variables.                                                                               │
 │ stamp  Update version and exclude-newer in pyproject.toml.                                                           │
 ╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+```
+
+### atr dev env
+
+```
+Usage: env
+
+Show the environment variables.
 ```
 
 ### atr dev stamp
@@ -142,12 +159,12 @@ Show comprehensive CLI documentation in Markdown.
 ## atr drop
 
 ```
-Usage: drop [ARGS] [OPTIONS]
+Usage: drop [ARGS]
 
 Remove a configuration key using dot notation.
 
-╭─ Parameters ─────────────────────────────────────────────────────────────────────────────────────────────────────────╮
-│ *  PATH --path  [required]                                                                                           │
+╭─ Arguments ──────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│ *  PATH  [required]                                                                                                  │
 ╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
 ```
 
@@ -205,14 +222,14 @@ Show stored JWT token.
 ## atr list
 
 ```
-Usage: list [ARGS] [OPTIONS]
+Usage: list [ARGS]
 
 List all files within a release.
 
-╭─ Parameters ─────────────────────────────────────────────────────────────────────────────────────────────────────────╮
-│ *  PROJECT --project    [required]                                                                                   │
-│ *  VERSION --version    [required]                                                                                   │
-│    REVISION --revision                                                                                               │
+╭─ Arguments ──────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│ *  PROJECT   [required]                                                                                              │
+│ *  VERSION   [required]                                                                                              │
+│    REVISION                                                                                                          │
 ╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
 ```
 
@@ -233,63 +250,55 @@ Release operations.
 ### atr release start
 
 ```
-Usage: start [ARGS] [OPTIONS]
+Usage: start [ARGS]
 
 Start a release.
 
-╭─ Parameters ─────────────────────────────────────────────────────────────────────────────────────────────────────────╮
-│ *  PROJECT --project  [required]                                                                                     │
-│ *  VERSION --version  [required]                                                                                     │
+╭─ Arguments ──────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│ *  PROJECT  [required]                                                                                               │
+│ *  VERSION  [required]                                                                                               │
 ╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
 ```
 
 ## atr revisions
 
 ```
-Usage: revisions [ARGS] [OPTIONS]
+Usage: revisions [ARGS]
 
 List all revisions for a release.
 
-╭─ Parameters ─────────────────────────────────────────────────────────────────────────────────────────────────────────╮
-│ *  PROJECT --project  [required]                                                                                     │
-│ *  VERSION --version  [required]                                                                                     │
+╭─ Arguments ──────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│ *  PROJECT  [required]                                                                                               │
+│ *  VERSION  [required]                                                                                               │
 ╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
 ```
 
 ## atr set
 
 ```
-Usage: set [ARGS] [OPTIONS]
+Usage: set [ARGS]
 
 Set a configuration value using dot notation.
 
-╭─ Parameters ─────────────────────────────────────────────────────────────────────────────────────────────────────────╮
-│ *  PATH --path    [required]                                                                                         │
-│ *  VALUE --value  [required]                                                                                         │
+╭─ Arguments ──────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│ *  PATH   [required]                                                                                                 │
+│ *  VALUE  [required]                                                                                                 │
 ╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
 ```
 
 ## atr upload
 
 ```
-Usage: upload [ARGS] [OPTIONS]
+Usage: upload [ARGS]
 
 Upload a file to a release.
 
-╭─ Parameters ─────────────────────────────────────────────────────────────────────────────────────────────────────────╮
-│ *  PROJECT --project    [required]                                                                                   │
-│ *  VERSION --version    [required]                                                                                   │
-│ *  PATH --path          [required]                                                                                   │
-│ *  FILEPATH --filepath  [required]                                                                                   │
+╭─ Arguments ──────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│ *  PROJECT   [required]                                                                                              │
+│ *  VERSION   [required]                                                                                              │
+│ *  PATH      [required]                                                                                              │
+│ *  FILEPATH  [required]                                                                                              │
 ╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
-```
-
-## atr version
-
-```
-Usage: version
-
-Show the version of the client.
 ```
 
 ## atr vote
