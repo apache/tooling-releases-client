@@ -221,6 +221,20 @@ def app_dev_stamp() -> None:
         print("Updated tests/cli_version.t.")
 
 
+@APP_DEV.command(name="token", help="Generate a random alphabetical token.")
+def app_dev_token() -> None:
+    import secrets
+
+    label = ""
+    # int(math.log2(26 ** 16)) == 75
+    while len(label) < 16:
+        i = secrets.randbits(5)
+        # Do not use modulo here
+        if i < 26:
+            label += chr(i + 97)
+    print(label)
+
+
 @APP_DRAFT.command(name="delete", help="Delete a draft release.")
 def app_draft_delete(project: str, version: str, /) -> None:
     jwt_value = config_jwt_usable()

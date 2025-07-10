@@ -1,13 +1,13 @@
 $ atr dev env
-ATR_CLIENT_CONFIG_PATH="<!CONFIG_PATH!>"
-<!...!>
+ATR_CLIENT_CONFIG_PATH="<.skip.>"
+<.etc.>
 
 ! atr config file
-<!stderr!>
+<.stderr.>
 atr: error: No configuration file found.
 
 $ atr config path
-/<!ROOT_REL_PATH!>
+/<.skip.>
 
 $ atr set asf.uid example
 Set asf.uid to "example".
@@ -17,13 +17,13 @@ asf:
   uid: example
 
 ! atr drop --path asf.uid
-╭─ Error ──────────────────────────────────────────────────────────────────────╮
-│ Unknown option: "--path".                                                    │
-╰──────────────────────────────────────────────────────────────────────────────╯
+<.skip.>
+<.skip.>Unknown option: "--path"<.skip.>
+<.etc.>
 
 $ atr drop asf.uid
 Removed asf.uid.
 
 ! atr config file
-<!stderr!>
+<.stderr.>
 atr: error: No configuration file found.

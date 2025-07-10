@@ -202,38 +202,63 @@ def test_cli_transcripts(
     script_runner: pytest_console_scripts.ScriptRunner,
     fixture_config_env: pathlib.Path,
 ) -> None:
-    r_variable = re.compile(r"<!([A-Z_]+)!>")
+    captures = {}
+    r_capture = re.compile(r"<\?([A-Za-z_]+)\?>|<.(skip).>|(.+?)")
+    r_use = re.compile(r"<!([A-Za-z_]+)!>")
     env = os.environ.copy()
     transcript_config_path = fixture_config_env
+
     # transcript_config_path = fixture_config_env.with_suffix(f".{transcript_path.name}")
     # if transcript_config_path.exists():
     #     pytest.fail(f"Transcript config file already exists: {transcript_config_path}")
+    def substitute_uses(captures: dict[str, str], line: str) -> str:
+        return r_use.sub(lambda m: captures[m.group(1)], line)
+
     env["ATR_CLIENT_CONFIG_PATH"] = str(transcript_config_path)
     with open(transcript_path, "r", encoding="utf-8") as f:
         actual_output = []
         for line in f:
             line = line.rstrip("\n")
+            if captures:
+                line = substitute_uses(captures, line)
             if line.startswith("$ ") or line.startswith("! "):
                 expected_code = 0 if line.startswith("$ ") else 1
                 command = line[2:]
                 if not command.startswith("atr"):
                     pytest.fail(f"Command does not start with 'atr': {command}")
                     return
+                print(f"Running: {command}")
                 result = script_runner.run(shlex.split(command), env=env)
-                assert result.returncode == expected_code
+                assert result.returncode == expected_code, (
+                    f"Command {command!r} returned {result.returncode}"
+                )
                 actual_output[:] = result.stdout.splitlines()
                 if result.stderr:
-                    actual_output.append("<!stderr!>")
+                    actual_output.append("<.stderr.>")
                     actual_output.extend(result.stderr.splitlines())
             elif actual_output:
-                if line == "<!...!>":
+                if line == "<.etc.>":
                     actual_output[:] = []
                     continue
                 actual_output_line = actual_output.pop(0)
-                # Replace variables with (?P<variable>.*?)
-                line_pattern = r_variable.sub(r"(?P<\1>.*?)", line)
-                if line_pattern != line:
+                # Replace captures with (?P<name>.*?)
+                use_regex = False
+
+                def capture_sub(m: re.Match[str]) -> str:
+                    nonlocal use_regex
+                    if m.group(1):
+                        use_regex = True
+                        return f"(?P<{m.group(1)}>.*?)"
+                    if m.group(2) == "skip":
+                        use_regex = True
+                        return "(.*?)"
+                    return re.escape(m.group(3))
+
+                line_pattern = r"^" + r_capture.sub(capture_sub, line) + r"$"
+                if use_regex:
                     success = re.match(line_pattern, actual_output_line)
+                    if success:
+                        captures.update(success.groupdict())
                 else:
                     success = actual_output_line == line
                 if not success:
