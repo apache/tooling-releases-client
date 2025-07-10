@@ -221,17 +221,27 @@ def test_cli_transcripts(
             line = line.rstrip("\n")
             if captures:
                 line = substitute_uses(captures, line)
-            if line.startswith("$ ") or line.startswith("! "):
-                expected_code = 0 if line.startswith("$ ") else 1
+            if line.startswith("$ ") or line.startswith("! ") or line.startswith("* "):
+                match line[:1]:
+                    case "$":
+                        expected_code = 0
+                    case "!":
+                        expected_code = 1
+                    case "*":
+                        expected_code = None
+                    case _:
+                        pytest.fail(f"Unknown line prefix: {line[:1]!r}")
+                        return
                 command = line[2:]
                 if not command.startswith("atr"):
                     pytest.fail(f"Command does not start with 'atr': {command}")
                     return
                 print(f"Running: {command}")
                 result = script_runner.run(shlex.split(command), env=env)
-                assert result.returncode == expected_code, (
-                    f"Command {command!r} returned {result.returncode}"
-                )
+                if expected_code is not None:
+                    assert result.returncode == expected_code, (
+                        f"Command {command!r} returned {result.returncode}"
+                    )
                 actual_output[:] = result.stdout.splitlines()
                 if result.stderr:
                     actual_output.append("<.stderr.>")

@@ -182,6 +182,15 @@ def app_dev_env() -> None:
     print(f"There are {total} ATR_* environment variables.")
 
 
+@APP_DEV.command(name="pat", help="Read a PAT from development configuration.")
+def app_dev_pat() -> None:
+    atr_pat_path = pathlib.Path.home() / ".atr-pat"
+    if not atr_pat_path.exists():
+        show_error_and_exit("~/.atr-pat not found.")
+    text = atr_pat_path.read_text(encoding="utf-8").removesuffix("\n")
+    print(text)
+
+
 @APP_DEV.command(
     name="stamp", help="Update version and exclude-newer in pyproject.toml."
 )
@@ -235,6 +244,12 @@ def app_dev_token() -> None:
     print(label)
 
 
+@APP_DEV.command(name="user", help="Show the value of $USER.")
+def app_dev_user() -> None:
+    # This does not help if your ASF UID is not the same as $USER
+    print(os.environ["USER"])
+
+
 @APP_DRAFT.command(name="delete", help="Delete a draft release.")
 def app_draft_delete(project: str, version: str, /) -> None:
     jwt_value = config_jwt_usable()
@@ -271,6 +286,8 @@ def app_drop(path: str, /) -> None:
 @APP_JWT.command(name="dump", help="Show decoded JWT payload from stored config.")
 def app_jwt_dump() -> None:
     jwt_value = config_jwt_get()
+    if jwt_value is None:
+        show_error_and_exit("No JWT stored in configuration.")
 
     header = jwt.get_unverified_header(jwt_value)
     if header != {"alg": "HS256", "typ": "JWT"}:
@@ -286,7 +303,9 @@ def app_jwt_dump() -> None:
 
 @APP_JWT.command(name="info", help="Show JWT payload in human-readable form.")
 def app_jwt_info() -> None:
-    _jwt_value, payload = config_jwt_payload()
+    jwt_value, payload = config_jwt_payload()
+    if jwt_value is None:
+        show_error_and_exit("No JWT stored in configuration.")
 
     lines: list[str] = []
     for key, val in payload.items():
@@ -536,18 +555,16 @@ def config_host_get() -> tuple[str, bool]:
     return host, verify_ssl
 
 
-def config_jwt_get() -> str:
+def config_jwt_get() -> str | None:
     with config_lock() as config:
         jwt_value = config_get(config, ["tokens", "jwt"])
-
-    if jwt_value is None:
-        show_error_and_exit("No JWT stored in configuration.")
-
     return jwt_value
 
 
-def config_jwt_payload() -> tuple[str, dict[str, Any]]:
+def config_jwt_payload() -> tuple[str | None, dict[str, Any]]:
     jwt_value = config_jwt_get()
+    if jwt_value is None:
+        return None, {}
     if jwt_value == "dummy_jwt_token":
         # TODO: Use a better test JWT
         return jwt_value, {"exp": time.time() + 90 * 60, "sub": "test_asf_uid"}
@@ -587,9 +604,19 @@ def config_jwt_refresh(asf_uid: str | None = None) -> str:
 
 def config_jwt_usable() -> str:
     jwt_value, payload = config_jwt_payload()
-    if (payload.get("exp") or 0) < time.time():
+    if jwt_value is None:
+        with config_lock() as config:
+            asf_uid = config_get(config, ["asf", "uid"])
+        if asf_uid is None:
+            show_error_and_exit("No ASF UID stored in configuration.")
+        return config_jwt_refresh(asf_uid)
+
+    exp = payload.get("exp") or 0
+    if exp < time.time():
         asf_uid = payload.get("sub")
-        jwt_value = config_jwt_refresh(asf_uid)
+        if not asf_uid:
+            show_error_and_exit("No ASF UID in JWT payload.")
+        return config_jwt_refresh(asf_uid)
     return jwt_value
 
 
@@ -810,14 +837,16 @@ async def web_fetch(
     url: str, asfuid: str, pat_token: str, verify_ssl: bool = True
 ) -> str:
     # TODO: This is PAT request specific
-    # Should give this a more specific name
+    # Should give this a more specific name, e.g. web_post_pat
     connector = None if verify_ssl else aiohttp.TCPConnector(ssl=False)
     async with aiohttp.ClientSession(connector=connector) as session:
         payload = {"asfuid": asfuid, "pat": pat_token}
         async with session.post(url, json=payload) as resp:
             if resp.status != 200:
                 text = await resp.text()
-                show_error_and_exit(f"JWT fetch failed: {resp.status} {text}")
+                show_error_and_exit(
+                    f"JWT fetch failed: {payload!r} {resp.status} {text!r}"
+                )
 
             data: dict[str, Any] = await resp.json()
             if "jwt" in data:
