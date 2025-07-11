@@ -19,3 +19,12 @@ Set tokens.pat to "<!pat!>".
 
 $ atr release start tooling-test-example 0.3+cli
 <.skip.>created<.skip.>
+
+$ atr config path
+<?config_rel_path?>
+
+$ atr upload tooling-test-example 0.3+cli atr-client.conf <!config_rel_path!>
+<.skip.>created<.skip.>
+
+* atr draft delete tooling-test-example 0.3+cli
+<.etc.>

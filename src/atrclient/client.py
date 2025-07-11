@@ -33,7 +33,7 @@ import re
 import signal
 import sys
 import time
-from typing import TYPE_CHECKING, Annotated, Any, Literal, NoReturn
+from typing import TYPE_CHECKING, Annotated, Any, Literal, NoReturn, TypeGuard
 
 import aiohttp
 import cyclopts
@@ -72,6 +72,8 @@ YAML_SCHEMA: strictyaml.Map = strictyaml.Map(
     }
 )
 
+JSON = dict[str, Any] | list[Any] | str | int | float | bool | None
+
 
 @APP_CHECKS.command(
     name="exceptions", help="Get check exceptions for a release revision."
@@ -87,6 +89,8 @@ def app_checks_exceptions(
     host, verify_ssl = config_host_get()
     url = f"https://{host}/api/checks/{project}/{version}/{revision}"
     results = asyncio.run(web_get(url, jwt_value, verify_ssl))
+    if not is_json_list_of_dict(results):
+        show_error_and_exit(f"Unexpected API response: {results}")
     checks_display_status("exception", results, members=members)
 
 
@@ -102,6 +106,8 @@ def app_checks_failures(
     host, verify_ssl = config_host_get()
     url = f"https://{host}/api/checks/{project}/{version}/{revision}"
     results = asyncio.run(web_get(url, jwt_value, verify_ssl))
+    if not is_json_list_of_dict(results):
+        show_error_and_exit(f"Unexpected API response: {results}")
     checks_display_status("failure", results, members=members)
 
 
@@ -118,9 +124,14 @@ def app_checks_status(
 
     release_url = f"https://{host}/api/releases/{project}"
     releases_result = asyncio.run(web_get_public(release_url, verify_ssl))
+    if not is_json_dict(releases_result):
+        show_error_and_exit(f"Unexpected API response: {releases_result}")
 
     target_release = None
-    for release in releases_result.get("data", []):
+    releases_result_data = releases_result.get("data", [])
+    if not is_json_list_of_dict(releases_result_data):
+        show_error_and_exit(f"Unexpected API response: {releases_result_data}")
+    for release in releases_result_data:
         if release.get("version") == version:
             target_release = release
             break
@@ -137,6 +148,8 @@ def app_checks_status(
     url = f"https://{host}/api/checks/{project}/{version}/{revision}"
     results = asyncio.run(web_get(url, jwt_value, verify_ssl))
 
+    if not is_json_list_of_dict(results):
+        show_error_and_exit(f"Unexpected API response: {results}")
     checks_display(results, verbose)
 
 
@@ -152,6 +165,8 @@ def app_checks_warnings(
     host, verify_ssl = config_host_get()
     url = f"https://{host}/api/checks/{project}/{version}/{revision}"
     results = asyncio.run(web_get(url, jwt_value, verify_ssl))
+    if not is_json_list_of_dict(results):
+        show_error_and_exit(f"Unexpected API response: {results}")
     checks_display_status("warning", results, members=members)
 
 
@@ -257,7 +272,7 @@ def app_draft_delete(project: str, version: str, /) -> None:
     payload: dict[str, str] = {"project_name": project, "version": version}
     url = f"https://{host}/api/draft/delete"
     result = asyncio.run(web_post(url, payload, jwt_value, verify_ssl))
-    print(result)
+    print_json(result)
 
 
 @APP.command(name="docs", help="Show comprehensive CLI documentation in Markdown.")
@@ -354,6 +369,8 @@ def app_release_list(project: str, /) -> None:
     host, verify_ssl = config_host_get()
     url = f"https://{host}/api/releases/{project}"
     result = asyncio.run(web_get_public(url, verify_ssl))
+    if not is_json_dict(result):
+        show_error_and_exit(f"Unexpected API response: {result}")
     releases_display(result)
 
 
@@ -366,7 +383,7 @@ def app_release_start(project: str, version: str, /) -> None:
     payload: dict[str, str] = {"project_name": project, "version": version}
 
     result = asyncio.run(web_post(url, payload, jwt_value, verify_ssl))
-    print(result)
+    print_json(result)
 
 
 @APP.command(name="revisions", help="List all revisions for a release.")
@@ -374,7 +391,12 @@ def app_revisions(project: str, version: str, /) -> None:
     host, verify_ssl = config_host_get()
     url = f"https://{host}/api/revisions/{project}/{version}"
     result = asyncio.run(web_get_public(url, verify_ssl))
-    for revision in result.get("revisions", []):
+    if not is_json_dict(result):
+        show_error_and_exit(f"Unexpected API response: {result}")
+    result_revisions = result.get("revisions", [])
+    if not is_json_list_of_dict(result_revisions):
+        show_error_and_exit(f"Unexpected API response: {result_revisions}")
+    for revision in result_revisions:
         print(revision)
 
 
@@ -422,7 +444,7 @@ def app_upload(project: str, version: str, path: str, filepath: str, /) -> None:
     }
 
     result = asyncio.run(web_post(url, payload, jwt_value, verify_ssl))
-    print(result)
+    print_json(result)
 
 
 @APP_VOTE.command(name="start", help="Start a vote.")
@@ -455,10 +477,10 @@ def app_vote_start(
         "body": body_text or f"Release {project} {version} is ready for voting.",
     }
     result = asyncio.run(web_post(url, payload, jwt_value, verify_ssl))
-    print(result)
+    print_json(result)
 
 
-def checks_display(results: list[dict[str, Any]], verbose: bool = False) -> None:
+def checks_display(results: list[dict[str, JSON]], verbose: bool = False) -> None:
     if not results:
         print("No check results found for this revision.")
         return
@@ -473,7 +495,7 @@ def checks_display(results: list[dict[str, Any]], verbose: bool = False) -> None
 
 
 def checks_display_details(
-    by_status: dict[str, list[dict[str, Any]]], verbose: bool
+    by_status: dict[str, list[dict[str, JSON]]], verbose: bool
 ) -> None:
     if not verbose:
         return
@@ -486,7 +508,7 @@ def checks_display_details(
 
 def checks_display_status(
     status: Literal["failure", "exception", "warning"],
-    results: list[dict[str, Any]],
+    results: list[dict[str, JSON]],
     members: bool,
 ) -> None:
     messages = {}
@@ -498,7 +520,12 @@ def checks_display_status(
         if member_rel_path and (not members):
             continue
         checker = result.get("checker") or ""
+        if not isinstance(checker, str):
+            show_warning(f"Unexpected API response: {result}")
+            continue
         message = result.get("message")
+        if not isinstance(message, str):
+            show_warning(f"Unexpected API response: {result}")
         primary_rel_path = result.get("primary_rel_path")
         if not member_rel_path:
             path = primary_rel_path
@@ -518,7 +545,7 @@ def checks_display_status(
 
 
 def checks_display_summary(
-    by_status: dict[str, list[dict[str, Any]]], verbose: bool, total: int
+    by_status: dict[str, list[dict[str, JSON]]], verbose: bool, total: int
 ) -> None:
     print(f"Total checks: {total}")
     for status, checks in by_status.items():
@@ -530,7 +557,7 @@ def checks_display_summary(
             print(f"  {status}: {len(checks)}")
 
 
-def checks_display_verbose_details(checks: list[dict[str, Any]]) -> None:
+def checks_display_verbose_details(checks: list[dict[str, JSON]]) -> None:
     for check in checks[:10]:
         checker = check["checker"]
         primary_rel_path = check.get("primary_rel_path", "")
@@ -766,6 +793,32 @@ def initialised() -> bool:
     return APP.version == VERSION
 
 
+def is_json(data: Any) -> TypeGuard[JSON]:
+    if isinstance(data, str | int | float | bool | None):
+        return True
+    if isinstance(data, dict):
+        if any(not isinstance(key, str) for key in data):
+            return False
+        return all(is_json(value) for value in data.values())
+    if isinstance(data, list):
+        return all(is_json(item) for item in data)
+    return False
+
+
+def is_json_dict(data: JSON) -> TypeGuard[dict[str, JSON]]:
+    # The keys are already validated due to it being a JSON object
+    return isinstance(data, dict)
+
+
+def is_json_list(data: JSON) -> TypeGuard[list[JSON]]:
+    # The items are already validated due to it being a JSON array
+    return isinstance(data, list)
+
+
+def is_json_list_of_dict(data: JSON) -> TypeGuard[list[dict[str, JSON]]]:
+    return is_json_list(data) and all(is_json_dict(item) for item in data)
+
+
 def iso_to_human(ts: str) -> str:
     dt = datetime.datetime.fromisoformat(ts.rstrip("Z"))
     if dt.tzinfo is None:
@@ -782,11 +835,17 @@ def main() -> None:
     APP(sys.argv[1:])
 
 
-def releases_display(result: dict[str, Any]) -> None:
+def print_json(data: JSON) -> None:
+    print(json.dumps(data, indent=None))
+
+
+def releases_display(result: dict[str, JSON]) -> None:
     if ("data" not in result) or ("count" not in result):
         show_error_and_exit("Invalid response format")
 
     releases = result["data"]
+    if not is_json_list_of_dict(releases):
+        show_error_and_exit(f"Unexpected API response: {releases}")
     count = result["count"]
 
     if not releases:
@@ -798,6 +857,12 @@ def releases_display(result: dict[str, Any]) -> None:
     for release in releases:
         version = release.get("version", "Unknown")
         phase = release.get("phase", "Unknown")
+        # if not isinstance(version, str):
+        #     show_warning(f"Unexpected API response: {release}")
+        #     continue
+        if not isinstance(phase, str):
+            show_warning(f"Unexpected API response: {release}")
+            continue
         phase_short = {
             "release_candidate_draft": "draft",
             "release_candidate": "candidate",
@@ -805,6 +870,9 @@ def releases_display(result: dict[str, Any]) -> None:
             "release": "finished",
         }.get(phase, "unknown")
         created = release.get("created")
+        if not isinstance(created, str):
+            show_warning(f"Unexpected API response: {release}")
+            continue
         created_formatted = iso_to_human(created) if created else "Unknown"
         latest = release.get("latest_revision_number") or "-"
         print(f"  {version:<24} {latest:<7} {phase_short:<11} {created_formatted}")
@@ -857,13 +925,20 @@ async def web_fetch(
                     f"JWT fetch failed: {payload!r} {resp.status} {text!r}"
                 )
 
-            data: dict[str, Any] = await resp.json()
+            data = await resp.json()
+            if not is_json(data):
+                show_error_and_exit(f"Unexpected API response: {data}")
+            if not is_json_dict(data):
+                show_error_and_exit(f"Unexpected API response: {data}")
             if "jwt" in data:
-                return data["jwt"]
+                jwt_value = data["jwt"]
+                if not isinstance(jwt_value, str):
+                    show_error_and_exit(f"Unexpected API response: {data}")
+                return jwt_value
             raise RuntimeError(f"Unexpected response: {data}")
 
 
-async def web_get(url: str, jwt_token: str, verify_ssl: bool = True) -> Any:
+async def web_get(url: str, jwt_token: str, verify_ssl: bool = True) -> JSON:
     connector = None if verify_ssl else aiohttp.TCPConnector(ssl=False)
     headers = {"Authorization": f"Bearer {jwt_token}"}
     async with aiohttp.ClientSession(connector=connector, headers=headers) as session:
@@ -878,10 +953,13 @@ async def web_get(url: str, jwt_token: str, verify_ssl: bool = True) -> Any:
                         show_error_and_exit(f"Request failed: {resp.status} {text}")
                 except json.JSONDecodeError:
                     show_error_and_exit(f"Request failed: {resp.status} {text}")
-            return await resp.json()
+            data = await resp.json()
+            if not is_json(data):
+                show_error_and_exit(f"Unexpected API response: {data}")
+            return data
 
 
-async def web_get_public(url: str, verify_ssl: bool = True) -> Any:
+async def web_get_public(url: str, verify_ssl: bool = True) -> JSON:
     connector = None if verify_ssl else aiohttp.TCPConnector(ssl=False)
     async with aiohttp.ClientSession(connector=connector) as session:
         async with session.get(url) as resp:
@@ -895,12 +973,15 @@ async def web_get_public(url: str, verify_ssl: bool = True) -> Any:
                         show_error_and_exit(f"Request failed: {resp.status} {text}")
                 except json.JSONDecodeError:
                     show_error_and_exit(f"Request failed: {resp.status} {text}")
-            return await resp.json()
+            data = await resp.json()
+            if not is_json(data):
+                show_error_and_exit(f"Unexpected API response: {data}")
+            return data
 
 
 async def web_post(
     url: str, payload: dict[str, Any], jwt_token: str, verify_ssl: bool = True
-) -> Any:
+) -> JSON:
     connector = None if verify_ssl else aiohttp.TCPConnector(ssl=False)
     headers = {"Authorization": f"Bearer {jwt_token}"}
     async with aiohttp.ClientSession(connector=connector, headers=headers) as session:
@@ -912,7 +993,11 @@ async def web_post(
                 )
 
             try:
-                return await resp.json()
-            except Exception:
-                text = await resp.text()
-                return text
+                data = await resp.json()
+                if not is_json(data):
+                    show_error_and_exit(f"Unexpected API response: {data}")
+                return data
+            except Exception as e:
+                show_error_and_exit(
+                    f"Python error getting API response:\n{resp.status} {url}\n{e}"
+                )
