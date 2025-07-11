@@ -11,7 +11,7 @@ build-backend = "hatchling.build"
 
 [project]
 name            = "apache-trusted-releases"
-version         = "0.20250711.1511"
+version         = "0.20250711.1932"
 description     = "ATR CLI and Python API"
 readme          = "README.md"
 requires-python = ">=3.13"
@@ -28,7 +28,10 @@ dependencies = [
   "cyclopts",
   "filelock",
   "platformdirs",
+  "pydantic",
   "pyjwt",
+  "sqlalchemy",
+  "sqlmodel",
   "strictyaml",
 ]
 
@@ -47,5 +50,26 @@ atr = "atrclient.client:main"
 [tool.hatch.build.targets.wheel]
 packages = ["src/atrclient"]
 
+[tool.ruff]
+line-length = 120
+extend-exclude = [
+    "node_modules",
+]
+
+[tool.ruff.lint]
+ignore = []
+select = [
+  "C90",
+  "E",
+  "F",
+  "I",   # isort
+  "N",   # pep8-naming
+  "RUF", # ruff-checks
+  "TC",  # flake8-type-checking
+  "TID", # flake8-tidy-imports
+  "UP",  # pyupgrade
+  "W"
+]
+
 [tool.uv]
-exclude-newer = "2025-07-11T15:11:00Z"
+exclude-newer = "2025-07-11T19:32:00Z"

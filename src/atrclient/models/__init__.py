@@ -15,13 +15,7 @@
 # specific language governing permissions and limitations
 # under the License.
 
-import pathlib
+from . import api, helpers, results, schema, sql
 
-import pytest
-
-
-@pytest.fixture
-def fixture_config_env(monkeypatch: pytest.MonkeyPatch, tmp_path: pathlib.Path) -> pathlib.Path:
-    path = tmp_path / "atr.yaml"
-    monkeypatch.setenv("ATR_CLIENT_CONFIG_PATH", str(path))
-    return path
+# If we use .__name__, pyright gives a warning
+__all__ = ["api", "helpers", "results", "schema", "sql"]

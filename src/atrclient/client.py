@@ -42,6 +42,8 @@ import jwt
 import platformdirs
 import strictyaml
 
+import atrclient.models as models
+
 if TYPE_CHECKING:
     from collections.abc import Generator
 
@@ -57,12 +59,8 @@ VERSION: str = metadata.version("apache-trusted-releases")
 YAML_DEFAULTS: dict[str, Any] = {"asf": {}, "atr": {}, "tokens": {}}
 YAML_SCHEMA: strictyaml.Map = strictyaml.Map(
     {
-        strictyaml.Optional("atr"): strictyaml.Map(
-            {strictyaml.Optional("host"): strictyaml.Str()}
-        ),
-        strictyaml.Optional("asf"): strictyaml.Map(
-            {strictyaml.Optional("uid"): strictyaml.Str()}
-        ),
+        strictyaml.Optional("atr"): strictyaml.Map({strictyaml.Optional("host"): strictyaml.Str()}),
+        strictyaml.Optional("asf"): strictyaml.Map({strictyaml.Optional("uid"): strictyaml.Str()}),
         strictyaml.Optional("tokens"): strictyaml.Map(
             {
                 strictyaml.Optional("pat"): strictyaml.Str(),
@@ -75,9 +73,7 @@ YAML_SCHEMA: strictyaml.Map = strictyaml.Map(
 JSON = dict[str, Any] | list[Any] | str | int | float | bool | None
 
 
-@APP_CHECKS.command(
-    name="exceptions", help="Get check exceptions for a release revision."
-)
+@APP_CHECKS.command(name="exceptions", help="Get check exceptions for a release revision.")
 def app_checks_exceptions(
     project: str,
     version: str,
@@ -206,9 +202,7 @@ def app_dev_pat() -> None:
     print(text)
 
 
-@APP_DEV.command(
-    name="stamp", help="Update version and exclude-newer in pyproject.toml."
-)
+@APP_DEV.command(name="stamp", help="Update version and exclude-newer in pyproject.toml.")
 def app_dev_stamp() -> None:
     path = pathlib.Path("pyproject.toml")
     if not path.exists():
@@ -226,11 +220,7 @@ def app_dev_stamp() -> None:
 
     if version_updated or exclude_newer_updated:
         path.write_text(text_v3, "utf-8")
-    print(
-        "Updated exclude-newer."
-        if exclude_newer_updated
-        else "Did not update exclude-newer."
-    )
+    print("Updated exclude-newer." if exclude_newer_updated else "Did not update exclude-newer.")
     print("Updated version." if version_updated else "Did not update version.")
 
     path = pathlib.Path("tests/cli_version.t")
@@ -331,9 +321,7 @@ def app_jwt_info() -> None:
     print("\n".join(lines))
 
 
-@APP_JWT.command(
-    name="refresh", help="Fetch a JWT using the stored PAT and store it in config."
-)
+@APP_JWT.command(name="refresh", help="Fetch a JWT using the stored PAT and store it in config.")
 def app_jwt_refresh(asf_uid: str | None = None) -> None:
     jwt_value = config_jwt_refresh(asf_uid)
     print(jwt_value)
@@ -360,7 +348,8 @@ def app_release_info(project: str, version: str, /) -> None:
     host, verify_ssl = config_host_get()
     url = f"https://{host}/api/releases/{project}/{version}"
     result = asyncio.run(web_get_public(url, verify_ssl))
-    print(result)
+    release = models.sql.Release.model_validate(result)
+    print(release.model_dump_json(indent=None))
 
 
 @APP_RELEASE.command(name="list", help="List releases for a project.")
@@ -455,9 +444,7 @@ def app_vote_start(
     /,
     mailing_list: str,
     duration: Annotated[int, cyclopts.Parameter(alias="-d", name="--duration")] = 72,
-    subject: Annotated[
-        str | None, cyclopts.Parameter(alias="-s", name="--subject")
-    ] = None,
+    subject: Annotated[str | None, cyclopts.Parameter(alias="-s", name="--subject")] = None,
     body: Annotated[str | None, cyclopts.Parameter(alias="-b", name="--body")] = None,
 ) -> None:
     jwt_value = config_jwt_usable()
@@ -465,7 +452,7 @@ def app_vote_start(
     url = f"https://{host}/api/vote/start"
     body_text = None
     if body:
-        with open(body, "r", encoding="utf-8") as f:
+        with open(body, encoding="utf-8") as f:
             body_text = f.read()
     payload: dict[str, Any] = {
         "project_name": project,
@@ -494,9 +481,7 @@ def checks_display(results: list[dict[str, JSON]], verbose: bool = False) -> Non
     checks_display_details(by_status, verbose)
 
 
-def checks_display_details(
-    by_status: dict[str, list[dict[str, JSON]]], verbose: bool
-) -> None:
+def checks_display_details(by_status: dict[str, list[dict[str, JSON]]], verbose: bool) -> None:
     if not verbose:
         return
     for status_key in by_status.keys():
@@ -544,9 +529,7 @@ def checks_display_status(
         print()
 
 
-def checks_display_summary(
-    by_status: dict[str, list[dict[str, JSON]]], verbose: bool, total: int
-) -> None:
+def checks_display_summary(by_status: dict[str, list[dict[str, JSON]]], verbose: bool, total: int) -> None:
     print(f"Total checks: {total}")
     for status, checks in by_status.items():
         if verbose and status.upper() in ["FAILURE", "EXCEPTION", "WARNING"]:
@@ -648,10 +631,7 @@ def config_jwt_usable() -> str:
             # The user probably just changed their configuration
             # But we will refresh the JWT anyway
             # It will still fail if the PAT is not valid
-            show_warning(
-                f"JWT ASF UID {payload_asf_uid} does not "
-                f"match configuration ASF UID {config_asf_uid}"
-            )
+            show_warning(f"JWT ASF UID {payload_asf_uid} does not match configuration ASF UID {config_asf_uid}")
         return config_jwt_refresh(payload_asf_uid)
     return jwt_value
 
@@ -745,6 +725,7 @@ def documentation_to_markdown(
     seen: set[str] | None = None,
 ) -> str:
     import io
+
     import rich.console as console
 
     seen = seen or set()
@@ -758,11 +739,7 @@ def documentation_to_markdown(
 
     exported_text = rich_console.export_text()
     if not subcommands:
-        subcommands = [
-            " ".join(app.name)
-            if isinstance(app.name, (list, tuple))
-            else (app.name or "atr")
-        ]
+        subcommands = [" ".join(app.name) if isinstance(app.name, list | tuple) else (app.name or "atr")]
     level = len(subcommands)
     markdown = f"""
 {"#" * level} {" ".join(subcommands)}
@@ -910,9 +887,7 @@ def timestamp_format(ts: int | str | None) -> str | None:
         return str(ts)
 
 
-async def web_fetch(
-    url: str, asfuid: str, pat_token: str, verify_ssl: bool = True
-) -> str:
+async def web_fetch(url: str, asfuid: str, pat_token: str, verify_ssl: bool = True) -> str:
     # TODO: This is PAT request specific
     # Should give this a more specific name, e.g. web_post_pat
     connector = None if verify_ssl else aiohttp.TCPConnector(ssl=False)
@@ -921,9 +896,7 @@ async def web_fetch(
         async with session.post(url, json=payload) as resp:
             if resp.status != 200:
                 text = await resp.text()
-                show_error_and_exit(
-                    f"JWT fetch failed: {payload!r} {resp.status} {text!r}"
-                )
+                show_error_and_exit(f"JWT fetch failed: {payload!r} {resp.status} {text!r}")
 
             data = await resp.json()
             if not is_json(data):
@@ -979,18 +952,14 @@ async def web_get_public(url: str, verify_ssl: bool = True) -> JSON:
             return data
 
 
-async def web_post(
-    url: str, payload: dict[str, Any], jwt_token: str, verify_ssl: bool = True
-) -> JSON:
+async def web_post(url: str, payload: dict[str, Any], jwt_token: str, verify_ssl: bool = True) -> JSON:
     connector = None if verify_ssl else aiohttp.TCPConnector(ssl=False)
     headers = {"Authorization": f"Bearer {jwt_token}"}
     async with aiohttp.ClientSession(connector=connector, headers=headers) as session:
         async with session.post(url, json=payload) as resp:
             if resp.status not in (200, 201):
                 text = await resp.text()
-                show_error_and_exit(
-                    f"Error message from the API:\n{resp.status} {url}\n{text}"
-                )
+                show_error_and_exit(f"Error message from the API:\n{resp.status} {url}\n{text}")
 
             try:
                 data = await resp.json()
@@ -998,6 +967,4 @@ async def web_post(
                     show_error_and_exit(f"Unexpected API response: {data}")
                 return data
             except Exception as e:
-                show_error_and_exit(
-                    f"Python error getting API response:\n{resp.status} {url}\n{e}"
-                )
+                show_error_and_exit(f"Python error getting API response:\n{resp.status} {url}\n{e}")

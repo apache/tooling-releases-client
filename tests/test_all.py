@@ -18,21 +18,23 @@
 # TODO: Use transcript style script testing
 
 from __future__ import annotations
+
 import os
+import pathlib
 import re
 import shlex
-
-import atrclient.client as client
-import pathlib
-from typing import Any, Final
+from typing import TYPE_CHECKING, Any, Final
 
 import aioresponses
 import pytest
-import pytest_console_scripts
 
-REGEX_CAPTURE: Final[re.Pattern[str]] = re.compile(
-    r"<\?([A-Za-z_]+)\?>|<.(skip).>|(.+?)"
-)
+import atrclient.client as client
+
+if TYPE_CHECKING:
+    import pytest_console_scripts
+
+
+REGEX_CAPTURE: Final[re.Pattern[str]] = re.compile(r"<\?([A-Za-z_]+)\?>|<.(skip).>|(.+?)")
 REGEX_COMMENT: Final[re.Pattern[str]] = re.compile(r"<#.*?#>")
 REGEX_USE: Final[re.Pattern[str]] = re.compile(r"<!([A-Za-z_]+)!>")
 
@@ -75,9 +77,7 @@ def test_app_checks_status_non_draft_phase(
         assert "Checks are only performed during the draft phase." in captured.out
 
 
-def test_app_checks_status_verbose(
-    capsys: pytest.CaptureFixture[str], fixture_config_env: pathlib.Path
-) -> None:
+def test_app_checks_status_verbose(capsys: pytest.CaptureFixture[str], fixture_config_env: pathlib.Path) -> None:
     client.app_set("atr.host", "example.invalid")
     client.app_set("tokens.jwt", "dummy_jwt_token")
 
@@ -132,9 +132,7 @@ def test_app_checks_status_verbose(
         assert "test_checker1 → file1.txt : Test failure 1" in captured.out
 
 
-def test_app_release_list_not_found(
-    capsys: pytest.CaptureFixture[str], fixture_config_env: pathlib.Path
-) -> None:
+def test_app_release_list_not_found(capsys: pytest.CaptureFixture[str], fixture_config_env: pathlib.Path) -> None:
     client.app_set("atr.host", "example.invalid")
 
     releases_url = "https://example.invalid/api/releases/nonexistent-project"
@@ -146,9 +144,7 @@ def test_app_release_list_not_found(
             client.app_release_list("nonexistent-project")
 
 
-def test_app_release_list_success(
-    capsys: pytest.CaptureFixture[str], fixture_config_env: pathlib.Path
-) -> None:
+def test_app_release_list_success(capsys: pytest.CaptureFixture[str], fixture_config_env: pathlib.Path) -> None:
     client.app_set("atr.host", "example.invalid")
 
     releases_url = "https://example.invalid/api/releases/test-project"
@@ -182,15 +178,10 @@ def test_app_release_list_success(
         assert "2.3.0" in captured.out
 
 
-def test_app_set_show(
-    capsys: pytest.CaptureFixture[str], fixture_config_env: pathlib.Path
-) -> None:
+def test_app_set_show(capsys: pytest.CaptureFixture[str], fixture_config_env: pathlib.Path) -> None:
     client.app_set("atr.host", "example.invalid")
     client.app_show("atr.host")
-    assert (
-        capsys.readouterr().out
-        == 'Set atr.host to "example.invalid".\nexample.invalid\n'
-    )
+    assert capsys.readouterr().out == 'Set atr.host to "example.invalid".\nexample.invalid\n'
 
 
 def test_cli_version(script_runner: pytest_console_scripts.ScriptRunner) -> None:
@@ -200,9 +191,7 @@ def test_cli_version(script_runner: pytest_console_scripts.ScriptRunner) -> None
     assert result.stderr == ""
 
 
-@pytest.mark.parametrize(
-    "transcript_path", decorator_transcript_file_paths(), ids=lambda p: p.name
-)
+@pytest.mark.parametrize("transcript_path", decorator_transcript_file_paths(), ids=lambda p: p.name)
 def test_cli_transcripts(
     transcript_path: pathlib.Path,
     script_runner: pytest_console_scripts.ScriptRunner,
@@ -267,20 +256,16 @@ def transcript_capture(
     env = os.environ.copy()
 
     env["ATR_CLIENT_CONFIG_PATH"] = str(transcript_config_path)
-    with open(transcript_path, "r", encoding="utf-8") as f:
+    with open(transcript_path, encoding="utf-8") as f:
         for line in f:
             line = line.rstrip("\n")
             if captures:
                 line = REGEX_USE.sub(lambda m: captures[m.group(1)], line)
             line = REGEX_COMMENT.sub("", line)
             if line.startswith("$ ") or line.startswith("! ") or line.startswith("* "):
-                actual_output = transcript_execute(
-                    actual_output, line, script_runner, env
-                )
+                actual_output = transcript_execute(actual_output, line, script_runner, env)
             elif actual_output:
-                captures, actual_output = transcript_match(
-                    captures, actual_output, line
-                )
+                captures, actual_output = transcript_match(captures, actual_output, line)
             elif line:
                 pytest.fail(f"Unexpected line: {line!r}")
         assert not actual_output
@@ -307,9 +292,7 @@ def transcript_execute(
     print(f"Running: {command}")
     result = script_runner.run(shlex.split(command), env=env)
     if expected_code is not None:
-        assert result.returncode == expected_code, (
-            f"Command {command!r} returned {result.returncode}"
-        )
+        assert result.returncode == expected_code, f"Command {command!r} returned {result.returncode}"
     actual_output[:] = result.stdout.splitlines()
     if result.stderr:
         actual_output.append("<.stderr.>")
@@ -317,9 +300,7 @@ def transcript_execute(
     return actual_output
 
 
-def transcript_match(
-    captures: dict[str, str], actual_output: list[str], line: str
-) -> tuple[dict[str, str], list[str]]:
+def transcript_match(captures: dict[str, str], actual_output: list[str], line: str) -> tuple[dict[str, str], list[str]]:
     if line == "<.etc.>":
         actual_output[:] = []
         return captures, actual_output
