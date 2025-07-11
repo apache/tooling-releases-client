@@ -24,11 +24,17 @@ import shlex
 
 import atrclient.client as client
 import pathlib
-from typing import Any
+from typing import Any, Final
 
 import aioresponses
 import pytest
 import pytest_console_scripts
+
+REGEX_CAPTURE: Final[re.Pattern[str]] = re.compile(
+    r"<\?([A-Za-z_]+)\?>|<.(skip).>|(.+?)"
+)
+REGEX_COMMENT: Final[re.Pattern[str]] = re.compile(r"<#.*?#>")
+REGEX_USE: Final[re.Pattern[str]] = re.compile(r"<!([A-Za-z_]+)!>")
 
 
 def decorator_transcript_file_paths() -> list[pathlib.Path]:
@@ -202,88 +208,7 @@ def test_cli_transcripts(
     script_runner: pytest_console_scripts.ScriptRunner,
     fixture_config_env: pathlib.Path,
 ) -> None:
-    captures = {}
-    r_capture = re.compile(r"<\?([A-Za-z_]+)\?>|<.(skip).>|(.+?)")
-    r_use = re.compile(r"<!([A-Za-z_]+)!>")
-    env = os.environ.copy()
-    transcript_config_path = fixture_config_env
-
-    # transcript_config_path = fixture_config_env.with_suffix(f".{transcript_path.name}")
-    # if transcript_config_path.exists():
-    #     pytest.fail(f"Transcript config file already exists: {transcript_config_path}")
-    def substitute_uses(captures: dict[str, str], line: str) -> str:
-        return r_use.sub(lambda m: captures[m.group(1)], line)
-
-    env["ATR_CLIENT_CONFIG_PATH"] = str(transcript_config_path)
-    with open(transcript_path, "r", encoding="utf-8") as f:
-        actual_output = []
-        for line in f:
-            line = line.rstrip("\n")
-            if captures:
-                line = substitute_uses(captures, line)
-            if line.startswith("$ ") or line.startswith("! ") or line.startswith("* "):
-                match line[:1]:
-                    case "$":
-                        expected_code = 0
-                    case "!":
-                        expected_code = 1
-                    case "*":
-                        expected_code = None
-                    case _:
-                        pytest.fail(f"Unknown line prefix: {line[:1]!r}")
-                        return
-                command = line[2:]
-                if not command.startswith("atr"):
-                    pytest.fail(f"Command does not start with 'atr': {command}")
-                    return
-                print(f"Running: {command}")
-                result = script_runner.run(shlex.split(command), env=env)
-                if expected_code is not None:
-                    assert result.returncode == expected_code, (
-                        f"Command {command!r} returned {result.returncode}"
-                    )
-                actual_output[:] = result.stdout.splitlines()
-                if result.stderr:
-                    actual_output.append("<.stderr.>")
-                    actual_output.extend(result.stderr.splitlines())
-            elif actual_output:
-                if line == "<.etc.>":
-                    actual_output[:] = []
-                    continue
-                actual_output_line = actual_output.pop(0)
-                # Replace captures with (?P<name>.*?)
-                use_regex = False
-
-                def capture_sub(m: re.Match[str]) -> str:
-                    nonlocal use_regex
-                    if m.group(1):
-                        use_regex = True
-                        return f"(?P<{m.group(1)}>.*?)"
-                    if m.group(2) == "skip":
-                        use_regex = True
-                        return "(.*?)"
-                    return re.escape(m.group(3))
-
-                line_pattern = r"^" + r_capture.sub(capture_sub, line) + r"$"
-                if use_regex:
-                    success = re.match(line_pattern, actual_output_line)
-                    if success:
-                        captures.update(success.groupdict())
-                else:
-                    success = actual_output_line == line
-                if not success:
-                    # TODO: Improve this
-                    got = f"{actual_output_line!r}"
-                    if actual_output:
-                        got += f", {actual_output[:10]}"
-                        if len(actual_output) > 10:
-                            got += "..."
-                    pytest.fail(f"Expected {line!r} but got {got}")
-                    return
-            elif line:
-                pytest.fail(f"Unexpected line: {line!r}")
-                return
-        assert not actual_output
+    return transcript_capture(transcript_path, script_runner, fixture_config_env)
 
 
 def test_config_set_get_roundtrip() -> None:
@@ -329,3 +254,104 @@ async def test_web_fetch_failure() -> None:
         mock.post("https://error.invalid", status=500, body="error")
         await client.web_fetch("https://error.invalid", "uid", "pat", verify_ssl=False)
     assert (len(mock.requests)) == 1
+
+
+def transcript_capture(
+    transcript_path: pathlib.Path,
+    script_runner: pytest_console_scripts.ScriptRunner,
+    transcript_config_path: pathlib.Path,
+) -> None:
+    captures = {}
+    actual_output = []
+
+    env = os.environ.copy()
+
+    env["ATR_CLIENT_CONFIG_PATH"] = str(transcript_config_path)
+    with open(transcript_path, "r", encoding="utf-8") as f:
+        for line in f:
+            line = line.rstrip("\n")
+            if captures:
+                line = REGEX_USE.sub(lambda m: captures[m.group(1)], line)
+            line = REGEX_COMMENT.sub("", line)
+            if line.startswith("$ ") or line.startswith("! ") or line.startswith("* "):
+                actual_output = transcript_execute(
+                    actual_output, line, script_runner, env
+                )
+            elif actual_output:
+                captures, actual_output = transcript_match(
+                    captures, actual_output, line
+                )
+            elif line:
+                pytest.fail(f"Unexpected line: {line!r}")
+        assert not actual_output
+
+
+def transcript_execute(
+    actual_output: list[str],
+    line: str,
+    script_runner: pytest_console_scripts.ScriptRunner,
+    env: dict[str, str],
+) -> list[str]:
+    match line[:1]:
+        case "$":
+            expected_code = 0
+        case "!":
+            expected_code = 1
+        case "*":
+            expected_code = None
+        case _:
+            pytest.fail(f"Unknown line prefix: {line[:1]!r}")
+    command = line[2:]
+    if not command.startswith("atr"):
+        pytest.fail(f"Command does not start with 'atr': {command}")
+    print(f"Running: {command}")
+    result = script_runner.run(shlex.split(command), env=env)
+    if expected_code is not None:
+        assert result.returncode == expected_code, (
+            f"Command {command!r} returned {result.returncode}"
+        )
+    actual_output[:] = result.stdout.splitlines()
+    if result.stderr:
+        actual_output.append("<.stderr.>")
+        actual_output.extend(result.stderr.splitlines())
+    return actual_output
+
+
+def transcript_match(
+    captures: dict[str, str], actual_output: list[str], line: str
+) -> tuple[dict[str, str], list[str]]:
+    if line == "<.etc.>":
+        actual_output[:] = []
+        return captures, actual_output
+    actual_output_line = actual_output.pop(0)
+
+    # Replace captures with (?P<name>.*?)
+    # Can't lift this, because it uses use_regex
+    use_regex = False
+
+    def substitute(m: re.Match[str]) -> str:
+        nonlocal use_regex
+        if m.group(1):
+            use_regex = True
+            return f"(?P<{m.group(1)}>.*?)"
+        if m.group(2) == "skip":
+            use_regex = True
+            return "(.*?)"
+        return re.escape(m.group(3))
+
+    line_pattern = r"^" + REGEX_CAPTURE.sub(substitute, line) + r"$"
+    if use_regex:
+        success = re.match(line_pattern, actual_output_line)
+        if success:
+            captures.update(success.groupdict())
+    else:
+        success = actual_output_line == line
+    if not success:
+        # TODO: Improve this
+        got = f"{actual_output_line!r}"
+        if actual_output:
+            got += f", {actual_output[:10]}"
+            if len(actual_output) > 10:
+                got += "..."
+        pytest.fail(f"Expected {line!r} but got {got}")
+    return captures, actual_output

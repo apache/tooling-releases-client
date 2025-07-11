@@ -13,6 +13,7 @@ $ atr dev pat
 $ atr set tokens.pat <!pat!>
 Set tokens.pat to "<!pat!>".
 
+<# Reset any existing draft, ignoring errors. #>
 * atr draft delete tooling-test-example 0.3+cli
 <.etc.>
 
