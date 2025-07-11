@@ -40,6 +40,7 @@ import cyclopts
 import filelock
 import jwt
 import platformdirs
+import pydantic
 import strictyaml
 
 import atrclient.models as models
@@ -348,7 +349,10 @@ def app_release_info(project: str, version: str, /) -> None:
     host, verify_ssl = config_host_get()
     url = f"https://{host}/api/releases/{project}/{version}"
     result = asyncio.run(web_get_public(url, verify_ssl))
-    release = models.sql.Release.model_validate(result)
+    try:
+        release = models.sql.Release.model_validate(result)
+    except pydantic.ValidationError as e:
+        show_error_and_exit(f"Unexpected API response: {result}\n{e}")
     print(release.model_dump_json(indent=None))
 
 
@@ -591,18 +595,16 @@ def config_jwt_payload() -> tuple[str | None, dict[str, Any]]:
 def config_jwt_refresh(asf_uid: str | None = None) -> str:
     with config_lock() as config:
         pat_value = config_get(config, ["tokens", "pat"])
+        if asf_uid is None:
+            asf_uid = config.get("asf", {}).get("uid")
 
     if pat_value is None:
         show_error_and_exit("No Personal Access Token stored.")
+    if asf_uid is None:
+        show_error_and_exit("No ASF UID provided and asf.uid not configured.")
 
     host, verify_ssl = config_host_get()
     url = f"https://{host}/api/jwt"
-
-    if asf_uid is None:
-        asf_uid = config.get("asf", {}).get("uid")
-
-    if asf_uid is None:
-        show_error_and_exit("No ASF UID provided and asf.uid not configured.")
 
     jwt_token = asyncio.run(web_fetch(url, asf_uid, pat_value, verify_ssl))
 
@@ -677,6 +679,7 @@ def config_walk(
 ) -> tuple[bool, Any | None]:
     match (op, parts):
         case ("get", [k, *tail]) if tail:
+            # TODO: If config.get(k, {}) is not a dict, this fails
             return config_walk(config.get(k, {}), tail, op)
         case ("get", [k]):
             return (k in config), config.get(k)
@@ -762,7 +765,8 @@ def documentation_to_markdown(
 def initialise() -> None:
     # We do this because pytest_console_scripts.ScriptRunner invokes main multiple times
     APP.version = VERSION
-    signal.signal(signal.SIGPIPE, signal.SIG_DFL)
+    if sys.platform not in {"cygwin", "win32"}:
+        signal.signal(signal.SIGPIPE, signal.SIG_DFL)
     subcommands_register(APP)
 
 
