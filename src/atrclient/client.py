@@ -603,20 +603,29 @@ def config_jwt_refresh(asf_uid: str | None = None) -> str:
 
 
 def config_jwt_usable() -> str:
+    with config_lock() as config:
+        config_asf_uid = config_get(config, ["asf", "uid"])
+
     jwt_value, payload = config_jwt_payload()
     if jwt_value is None:
-        with config_lock() as config:
-            asf_uid = config_get(config, ["asf", "uid"])
-        if asf_uid is None:
+        if config_asf_uid is None:
             show_error_and_exit("No ASF UID stored in configuration.")
-        return config_jwt_refresh(asf_uid)
+        return config_jwt_refresh(config_asf_uid)
 
     exp = payload.get("exp") or 0
     if exp < time.time():
-        asf_uid = payload.get("sub")
-        if not asf_uid:
+        payload_asf_uid = payload.get("sub")
+        if not payload_asf_uid:
             show_error_and_exit("No ASF UID in JWT payload.")
-        return config_jwt_refresh(asf_uid)
+        if payload_asf_uid != config_asf_uid:
+            # The user probably just changed their configuration
+            # But we will refresh the JWT anyway
+            # It will still fail if the PAT is not valid
+            show_warning(
+                f"JWT ASF UID {payload_asf_uid} does not "
+                f"match configuration ASF UID {config_asf_uid}"
+            )
+        return config_jwt_refresh(payload_asf_uid)
     return jwt_value
 
 
