@@ -9,7 +9,8 @@ bump: install
 	rm -f uv.lock
 	uv lock
 
-check:
+check: bump
+	@# Always bump to ensure that we check the exact current version
 	git add -A
 	uv run pre-commit run --all-files
 	@# TODO: Move this to .pre-commit-config.yaml?

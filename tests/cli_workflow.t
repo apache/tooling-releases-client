@@ -26,5 +26,8 @@ $ atr config path
 $ atr upload tooling-test-example 0.3+cli atr-client.conf <!config_rel_path!>
 <.skip.>created<.skip.>
 
+$ atr checks wait tooling-test-example 0.3+cli
+Checks completed.
+
 * atr draft delete tooling-test-example 0.3+cli
 <.etc.>

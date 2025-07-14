@@ -82,7 +82,7 @@ def test_app_checks_status_verbose(capsys: pytest.CaptureFixture[str], fixture_c
     client.app_set("tokens.jwt", "dummy_jwt_token")
 
     release_url = "https://example.invalid/api/releases/test-project"
-    checks_url = "https://example.invalid/api/checks/test-project/2.3.1/00003"
+    checks_url = "https://example.invalid/api/checks/list/test-project/2.3.1/00003"
 
     release_payload = {
         "data": [

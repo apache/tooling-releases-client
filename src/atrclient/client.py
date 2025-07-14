@@ -84,7 +84,7 @@ def app_checks_exceptions(
 ) -> None:
     jwt_value = config_jwt_usable()
     host, verify_ssl = config_host_get()
-    url = f"https://{host}/api/checks/{project}/{version}/{revision}"
+    url = f"https://{host}/api/checks/list/{project}/{version}/{revision}"
     results = asyncio.run(web_get(url, jwt_value, verify_ssl))
     if not is_json_list_of_dict(results):
         show_error_and_exit(f"Unexpected API response: {results}")
@@ -101,7 +101,7 @@ def app_checks_failures(
 ) -> None:
     jwt_value = config_jwt_usable()
     host, verify_ssl = config_host_get()
-    url = f"https://{host}/api/checks/{project}/{version}/{revision}"
+    url = f"https://{host}/api/checks/list/{project}/{version}/{revision}"
     results = asyncio.run(web_get(url, jwt_value, verify_ssl))
     if not is_json_list_of_dict(results):
         show_error_and_exit(f"Unexpected API response: {results}")
@@ -142,12 +142,38 @@ def app_checks_status(
         print("Checks are only performed during the draft phase.")
         return
 
-    url = f"https://{host}/api/checks/{project}/{version}/{revision}"
+    url = f"https://{host}/api/checks/list/{project}/{version}/{revision}"
     results = asyncio.run(web_get(url, jwt_value, verify_ssl))
 
     if not is_json_list_of_dict(results):
         show_error_and_exit(f"Unexpected API response: {results}")
     checks_display(results, verbose)
+
+
+@APP_CHECKS.command(name="wait", help="Wait for checks to be completed.")
+def app_checks_wait(
+    project: str,
+    version: str,
+    /,
+    revision: str | None = None,
+    timeout: Annotated[int, cyclopts.Parameter(alias="-t", name="--timeout")] = 60,
+) -> None:
+    jwt_value = config_jwt_usable()
+    host, verify_ssl = config_host_get()
+    while True:
+        url = f"https://{host}/api/checks/ongoing/{project}/{version}/{revision}"
+        count = asyncio.run(web_get(url, jwt_value, verify_ssl))
+        try:
+            count = models.api.ResultCount.model_validate(count)
+        except pydantic.ValidationError as e:
+            show_error_and_exit(f"Unexpected API response: {count}\n{e}")
+        if count.count == 0:
+            break
+        time.sleep(0.5)
+        timeout -= 1
+        if timeout <= 0:
+            show_error_and_exit("Timeout waiting for checks to complete.")
+    print("Checks completed.")
 
 
 @APP_CHECKS.command(name="warnings", help="Get check warnings for a release revision.")
@@ -160,7 +186,7 @@ def app_checks_warnings(
 ) -> None:
     jwt_value = config_jwt_usable()
     host, verify_ssl = config_host_get()
-    url = f"https://{host}/api/checks/{project}/{version}/{revision}"
+    url = f"https://{host}/api/checks/list/{project}/{version}/{revision}"
     results = asyncio.run(web_get(url, jwt_value, verify_ssl))
     if not is_json_list_of_dict(results):
         show_error_and_exit(f"Unexpected API response: {results}")
@@ -924,7 +950,7 @@ async def web_get(url: str, jwt_token: str, verify_ssl: bool = True) -> JSON:
                 text = await resp.text()
                 try:
                     error_data = json.loads(text)
-                    if isinstance(error_data, dict) and "error" in error_data:
+                    if isinstance(error_data, dict) and ("error" in error_data):
                         show_error_and_exit(error_data["error"])
                     else:
                         show_error_and_exit(f"Request failed: {resp.status} {text}")
