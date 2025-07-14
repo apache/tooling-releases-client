@@ -292,9 +292,9 @@ def app_dev_user() -> None:
 def app_draft_delete(project: str, version: str, /) -> None:
     jwt_value = config_jwt_usable()
     host, verify_ssl = config_host_get()
-    payload: dict[str, str] = {"project_name": project, "version": version}
+    args = models.api.ProjectVersion(project=project, version=version)
     url = f"https://{host}/api/draft/delete"
-    result = asyncio.run(web_post(url, payload, jwt_value, verify_ssl))
+    result = asyncio.run(web_post(url, args, jwt_value, verify_ssl))
     print_json(result)
 
 
@@ -404,10 +404,8 @@ def app_release_start(project: str, version: str, /) -> None:
     jwt_value = config_jwt_usable()
     host, verify_ssl = config_host_get()
     url = f"https://{host}/api/releases/create"
-
-    payload: dict[str, str] = {"project_name": project, "version": version}
-
-    result = asyncio.run(web_post(url, payload, jwt_value, verify_ssl))
+    args = models.api.ProjectVersion(project=project, version=version)
+    result = asyncio.run(web_post(url, args, jwt_value, verify_ssl))
     print_json(result)
 
 
@@ -461,14 +459,14 @@ def app_upload(project: str, version: str, path: str, filepath: str, /) -> None:
     with open(filepath, "rb") as f:
         content = f.read()
 
-    payload: dict[str, str] = {
-        "project_name": project,
-        "version": version,
-        "rel_path": path,
-        "content": base64.b64encode(content).decode("utf-8"),
-    }
+    args = models.api.ProjectVersionRelpathContent(
+        project=project,
+        version=version,
+        relpath=path,
+        content=base64.b64encode(content).decode("utf-8"),
+    )
 
-    result = asyncio.run(web_post(url, payload, jwt_value, verify_ssl))
+    result = asyncio.run(web_post(url, args, jwt_value, verify_ssl))
     print_json(result)
 
 
@@ -490,16 +488,16 @@ def app_vote_start(
     if body:
         with open(body, encoding="utf-8") as f:
             body_text = f.read()
-    payload: dict[str, Any] = {
-        "project_name": project,
-        "version": version,
-        "revision": revision,
-        "email_to": mailing_list,
-        "vote_duration": duration,
-        "subject": subject or f"[VOTE] Release {project} {version}",
-        "body": body_text or f"Release {project} {version} is ready for voting.",
-    }
-    result = asyncio.run(web_post(url, payload, jwt_value, verify_ssl))
+    args = models.api.VoteStart(
+        project=project,
+        version=version,
+        revision=revision,
+        email_to=mailing_list,
+        vote_duration=duration,
+        subject=subject or f"[VOTE] Release {project} {version}",
+        body=body_text or f"Release {project} {version} is ready for voting.",
+    )
+    result = asyncio.run(web_post(url, args, jwt_value, verify_ssl))
     print_json(result)
 
 
@@ -988,11 +986,11 @@ async def web_get_public(url: str, verify_ssl: bool = True) -> JSON:
             return data
 
 
-async def web_post(url: str, payload: dict[str, Any], jwt_token: str, verify_ssl: bool = True) -> JSON:
+async def web_post(url: str, args: models.schema.Strict, jwt_token: str, verify_ssl: bool = True) -> JSON:
     connector = None if verify_ssl else aiohttp.TCPConnector(ssl=False)
     headers = {"Authorization": f"Bearer {jwt_token}"}
     async with aiohttp.ClientSession(connector=connector, headers=headers) as session:
-        async with session.post(url, json=payload) as resp:
+        async with session.post(url, json=args.model_dump()) as resp:
             if resp.status not in (200, 201):
                 text = await resp.text()
                 show_error_and_exit(f"Error message from the API:\n{resp.status} {url}\n{text}")
