@@ -33,6 +33,12 @@ $ atr checks status tooling-test-example 0.3+cli
 Total checks: 1
   warning: 1
 
+$ atr vote start tooling-test-example 0.3+cli 00002 -m "<!user!>@apache.org"
+<.skip.>"email_to": "<!user!>@apache.org"<.skip.>
+
+$ atr vote resolve tooling-test-example 0.3+cli failed
+{"success": "Vote marked as failed"}
+
 <# Tidy up. #>
 * atr draft delete tooling-test-example 0.3+cli
 <.etc.>

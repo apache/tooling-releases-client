@@ -470,13 +470,31 @@ def app_upload(project: str, version: str, path: str, filepath: str, /) -> None:
     print_json(result)
 
 
+@APP_VOTE.command(name="resolve", help="Resolve a vote.")
+def app_vote_resolve(
+    project: str,
+    version: str,
+    resolution: Literal["passed", "failed"],
+) -> None:
+    jwt_value = config_jwt_usable()
+    host, verify_ssl = config_host_get()
+    url = f"https://{host}/api/vote/resolve"
+    args = models.api.ProjectVersionResolution(
+        project=project,
+        version=version,
+        resolution=resolution,
+    )
+    result = asyncio.run(web_post(url, args, jwt_value, verify_ssl))
+    print_json(result)
+
+
 @APP_VOTE.command(name="start", help="Start a vote.")
 def app_vote_start(
     project: str,
     version: str,
     revision: str,
     /,
-    mailing_list: str,
+    mailing_list: Annotated[str, cyclopts.Parameter(alias="-m", name="--mailing-list")],
     duration: Annotated[int, cyclopts.Parameter(alias="-d", name="--duration")] = 72,
     subject: Annotated[str | None, cyclopts.Parameter(alias="-s", name="--subject")] = None,
     body: Annotated[str | None, cyclopts.Parameter(alias="-b", name="--body")] = None,
