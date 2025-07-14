@@ -13,7 +13,7 @@ $ atr dev pat
 $ atr set tokens.pat <!pat!>
 Set tokens.pat to "<!pat!>".
 
-<# Reset any existing draft, ignoring errors. #>
+<# Delete any existing draft, ignoring errors. #>
 * atr draft delete tooling-test-example 0.3+cli
 <.etc.>
 
@@ -26,8 +26,13 @@ $ atr config path
 $ atr upload tooling-test-example 0.3+cli atr-client.conf <!config_rel_path!>
 <.skip.>created<.skip.>
 
-$ atr checks wait tooling-test-example 0.3+cli
+$ atr checks wait tooling-test-example 0.3+cli -i 25
 Checks completed.
 
+$ atr checks status tooling-test-example 0.3+cli
+Total checks: 1
+  warning: 1
+
+<# Tidy up. #>
 * atr draft delete tooling-test-example 0.3+cli
 <.etc.>

@@ -51,22 +51,17 @@ def test_app_checks_status_non_draft_phase(
     client.app_set("atr.host", "example.invalid")
     client.app_set("tokens.jwt", "dummy_jwt_token")
 
-    releases_url = "https://example.invalid/api/releases/test-project"
+    releases_url = "https://example.invalid/api/releases/test-project/2.3.0"
 
     with aioresponses.aioresponses() as mock:
         mock.get(
             releases_url,
             status=200,
             payload={
-                "data": [
-                    {
-                        "version": "2.3.0",
-                        "phase": "release",
-                        "created": "2024-07-04T00:00:00.000000Z",
-                        "latest_revision_number": "00001",
-                    }
-                ],
-                "count": 1,
+                "version": "2.3.0",
+                "phase": "release",
+                "created": "2024-07-04T00:00:00.000000Z",
+                "latest_revision_number": "00001",
             },
         )
 
@@ -81,19 +76,14 @@ def test_app_checks_status_verbose(capsys: pytest.CaptureFixture[str], fixture_c
     client.app_set("atr.host", "example.invalid")
     client.app_set("tokens.jwt", "dummy_jwt_token")
 
-    release_url = "https://example.invalid/api/releases/test-project"
+    release_url = "https://example.invalid/api/releases/test-project/2.3.1"
     checks_url = "https://example.invalid/api/checks/list/test-project/2.3.1/00003"
 
     release_payload = {
-        "data": [
-            {
-                "version": "2.3.1",
-                "phase": "release_candidate_draft",
-                "created": "2025-01-01T00:00:00.000000Z",
-                "latest_revision_number": "00003",
-            }
-        ],
-        "count": 1,
+        "version": "2.3.1",
+        "phase": "release_candidate_draft",
+        "created": "2025-01-01T00:00:00.000000Z",
+        "latest_revision_number": "00003",
     }
 
     checks_payload = [
@@ -259,6 +249,8 @@ def transcript_capture(
     with open(transcript_path, encoding="utf-8") as f:
         for line in f:
             line = line.rstrip("\n")
+            if line == "<.exit.>":
+                return
             if captures:
                 line = REGEX_USE.sub(lambda m: captures[m.group(1)], line)
             line = REGEX_COMMENT.sub("", line)

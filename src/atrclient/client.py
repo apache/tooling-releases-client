@@ -112,35 +112,32 @@ def app_checks_failures(
 def app_checks_status(
     project: str,
     version: str,
-    revision: str,
     /,
+    revision: str | None = None,
     verbose: Annotated[bool, cyclopts.Parameter(alias="-v", name="--verbose")] = False,
 ) -> None:
     jwt_value = config_jwt_usable()
     host, verify_ssl = config_host_get()
 
-    release_url = f"https://{host}/api/releases/{project}"
-    releases_result = asyncio.run(web_get_public(release_url, verify_ssl))
-    if not is_json_dict(releases_result):
-        show_error_and_exit(f"Unexpected API response: {releases_result}")
-
-    target_release = None
-    releases_result_data = releases_result.get("data", [])
-    if not is_json_list_of_dict(releases_result_data):
-        show_error_and_exit(f"Unexpected API response: {releases_result_data}")
-    for release in releases_result_data:
-        if release.get("version") == version:
-            target_release = release
-            break
-
-    if target_release is None:
-        show_error_and_exit(f"Release {project}-{version} not found.")
+    release_url = f"https://{host}/api/releases/{project}/{version}"
+    target_release = asyncio.run(web_get_public(release_url, verify_ssl))
+    # TODO: Handle the not found case better
+    if not is_json_dict(target_release):
+        show_error_and_exit(f"Unexpected API response: {target_release}")
 
     phase = target_release.get("phase")
     if phase != "release_candidate_draft":
         print("Checks are not applicable for this release phase.")
         print("Checks are only performed during the draft phase.")
         return
+
+    if revision is None:
+        latest_revision_number = target_release.get("latest_revision_number")
+        if latest_revision_number is None:
+            show_error_and_exit("No revision number found.")
+        if not isinstance(latest_revision_number, str):
+            show_error_and_exit(f"Unexpected API response: {latest_revision_number}")
+        revision = latest_revision_number
 
     url = f"https://{host}/api/checks/list/{project}/{version}/{revision}"
     results = asyncio.run(web_get(url, jwt_value, verify_ssl))
@@ -156,26 +153,30 @@ def app_checks_wait(
     version: str,
     /,
     revision: str | None = None,
-    timeout: Annotated[int, cyclopts.Parameter(alias="-t", name="--timeout")] = 60,
+    timeout: Annotated[float, cyclopts.Parameter(alias="-t", name="--timeout")] = 60,
     interval: Annotated[int, cyclopts.Parameter(alias="-i", name="--interval")] = 500,
 ) -> None:
-    if interval < 500:
-        show_error_and_exit("Interval must be at least 500ms.")
-    if (interval / 1000) > timeout:
+    host, verify_ssl = config_host_get()
+    if verify_ssl is True:
+        if interval < 500:
+            show_error_and_exit("Interval must be at least 500ms.")
+    interval_seconds = interval / 1000
+    if interval_seconds > timeout:
         show_error_and_exit("Interval must be less than timeout.")
     jwt_value = config_jwt_usable()
-    host, verify_ssl = config_host_get()
     while True:
-        url = f"https://{host}/api/checks/ongoing/{project}/{version}/{revision}"
-        count = asyncio.run(web_get(url, jwt_value, verify_ssl))
+        url = f"https://{host}/api/checks/ongoing/{project}/{version}"
+        if revision is not None:
+            url += f"/{revision}"
+        result = asyncio.run(web_get(url, jwt_value, verify_ssl))
         try:
-            count = models.api.ResultCount.model_validate(count)
+            result_count = models.api.ResultCount.model_validate(result)
         except pydantic.ValidationError as e:
-            show_error_and_exit(f"Unexpected API response: {count}\n{e}")
-        if count.count == 0:
+            show_error_and_exit(f"Unexpected API response: {result}\n{e}")
+        if result_count.count == 0:
             break
-        time.sleep(interval / 1000)
-        timeout -= 1
+        time.sleep(interval_seconds)
+        timeout -= interval_seconds
         if timeout <= 0:
             show_error_and_exit("Timeout waiting for checks to complete.")
     print("Checks completed.")
