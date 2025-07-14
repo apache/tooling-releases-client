@@ -18,6 +18,7 @@ Check result operations.
 │ exceptions  Get check exceptions for a release revision.                                                             │
 │ failures    Get check failures for a release revision.                                                               │
 │ status      Get check status for a release revision.                                                                 │
+│ wait        Wait for checks to be completed.                                                                         │
 │ warnings    Get check warnings for a release revision.                                                               │
 ╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
 ```
@@ -64,12 +65,30 @@ Usage: status [ARGS] [OPTIONS]
 Get check status for a release revision.
 
 ╭─ Arguments ──────────────────────────────────────────────────────────────────────────────────────────────────────────╮
-│ *  PROJECT   [required]                                                                                              │
-│ *  VERSION   [required]                                                                                              │
-│ *  REVISION  [required]                                                                                              │
+│ *  PROJECT  [required]                                                                                               │
+│ *  VERSION  [required]                                                                                               │
 ╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
 ╭─ Parameters ─────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│ REVISION --revision                                                                                                  │
 │ VERBOSE --verbose --no-verbose  -v  [default: False]                                                                 │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+```
+
+### atr checks wait
+
+```
+Usage: wait [ARGS] [OPTIONS]
+
+Wait for checks to be completed.
+
+╭─ Arguments ──────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│ *  PROJECT  [required]                                                                                               │
+│ *  VERSION  [required]                                                                                               │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+╭─ Parameters ─────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│ REVISION --revision                                                                                                  │
+│ TIMEOUT --timeout    -t  [default: 60]                                                                               │
+│ INTERVAL --interval  -i  [default: 500]                                                                              │
 ╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
 ```
 
@@ -128,7 +147,10 @@ Developer operations.
 
 ╭─ Commands ───────────────────────────────────────────────────────────────────────────────────────────────────────────╮
 │ env    Show the environment variables.                                                                               │
+│ pat    Read a PAT from development configuration.                                                                    │
 │ stamp  Update version and exclude-newer in pyproject.toml.                                                           │
+│ token  Generate a random alphabetical token.                                                                         │
+│ user   Show the value of $USER.                                                                                      │
 ╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
 ```
 
@@ -140,6 +162,14 @@ Usage: env
 Show the environment variables.
 ```
 
+### atr dev pat
+
+```
+Usage: pat
+
+Read a PAT from development configuration.
+```
+
 ### atr dev stamp
 
 ```
@@ -148,12 +178,53 @@ Usage: stamp
 Update version and exclude-newer in pyproject.toml.
 ```
 
+### atr dev token
+
+```
+Usage: token
+
+Generate a random alphabetical token.
+```
+
+### atr dev user
+
+```
+Usage: user
+
+Show the value of $USER.
+```
+
 ## atr docs
 
 ```
 Usage: docs
 
 Show comprehensive CLI documentation in Markdown.
+```
+
+## atr draft
+
+```
+Usage: draft COMMAND
+
+Draft operations.
+
+╭─ Commands ───────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│ delete  Delete a draft release.                                                                                      │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+```
+
+### atr draft delete
+
+```
+Usage: delete [ARGS]
+
+Delete a draft release.
+
+╭─ Arguments ──────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│ *  PROJECT  [required]                                                                                               │
+│ *  VERSION  [required]                                                                                               │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
 ```
 
 ## atr drop
