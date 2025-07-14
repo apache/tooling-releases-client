@@ -74,6 +74,33 @@ YAML_SCHEMA: strictyaml.Map = strictyaml.Map(
 JSON = dict[str, Any] | list[Any] | str | int | float | bool | None
 
 
+@APP.command(name="announce", help="Announce a release.")
+def app_announce(
+    project: str,
+    version: str,
+    revision: str,
+    /,
+    mailing_list: Annotated[str, cyclopts.Parameter(alias="-m", name="--mailing-list")],
+    subject: Annotated[str | None, cyclopts.Parameter(alias="-s", name="--subject")] = None,
+    body: Annotated[str | None, cyclopts.Parameter(alias="-b", name="--body")] = None,
+    path_suffix: Annotated[str | None, cyclopts.Parameter(alias="-p", name="--path-suffix")] = None,
+) -> None:
+    jwt_value = config_jwt_usable()
+    host, verify_ssl = config_host_get()
+    announce = models.api.Announce(
+        project=project,
+        version=version,
+        revision=revision,
+        email_to=mailing_list,
+        subject=subject or f"[ANNOUNCE] Release {project} {version}",
+        body=body or f"Release {project} {version} has been announced.",
+        path_suffix=path_suffix or "",
+    )
+    url = f"https://{host}/api/announce"
+    result = asyncio.run(web_post(url, announce, jwt_value, verify_ssl))
+    print_json(result)
+
+
 @APP_CHECKS.command(name="exceptions", help="Get check exceptions for a release revision.")
 def app_checks_exceptions(
     project: str,
