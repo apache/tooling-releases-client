@@ -170,8 +170,8 @@ def app_checks_wait(
             url += f"/{revision}"
         result = asyncio.run(web_get(url, jwt_value, verify_ssl))
         try:
-            result_count = models.api.ResultCount.model_validate(result)
-        except pydantic.ValidationError as e:
+            result_count = models.api.validate_count(result)
+        except (pydantic.ValidationError, models.api.ResultsTypeError) as e:
             show_error_and_exit(f"Unexpected API response: {result}\n{e}")
         if result_count.count == 0:
             break
