@@ -157,7 +157,12 @@ def app_checks_wait(
     /,
     revision: str | None = None,
     timeout: Annotated[int, cyclopts.Parameter(alias="-t", name="--timeout")] = 60,
+    interval: Annotated[int, cyclopts.Parameter(alias="-i", name="--interval")] = 500,
 ) -> None:
+    if interval < 500:
+        show_error_and_exit("Interval must be at least 500ms.")
+    if (interval / 1000) > timeout:
+        show_error_and_exit("Interval must be less than timeout.")
     jwt_value = config_jwt_usable()
     host, verify_ssl = config_host_get()
     while True:
@@ -169,7 +174,7 @@ def app_checks_wait(
             show_error_and_exit(f"Unexpected API response: {count}\n{e}")
         if count.count == 0:
             break
-        time.sleep(0.5)
+        time.sleep(interval / 1000)
         timeout -= 1
         if timeout <= 0:
             show_error_and_exit("Timeout waiting for checks to complete.")
