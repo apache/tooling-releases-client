@@ -39,6 +39,12 @@ $ atr vote start tooling-test-example 0.3+cli 00002 -m "<!user!>@apache.org"
 $ atr vote resolve tooling-test-example 0.3+cli failed
 {"success": "Vote marked as failed"}
 
+$ atr vote start tooling-test-example 0.3+cli 00002 -m "<!user!>@apache.org"
+<.skip.>"email_to": "<!user!>@apache.org"<.skip.>
+
+$ atr vote resolve tooling-test-example 0.3+cli passed
+{"success": "Vote marked as passed"}
+
 <# Tidy up. #>
-* atr draft delete tooling-test-example 0.3+cli
+* atr dev delete tooling-test-example 0.3+cli
 <.etc.>

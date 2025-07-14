@@ -215,6 +215,17 @@ def app_config_path() -> None:
     print(config_path())
 
 
+@APP_DEV.command(name="delete", help="Delete a release.")
+def app_dev_delete(project: str, version: str, /) -> None:
+    # Only ATR admins may do this
+    jwt_value = config_jwt_usable()
+    host, verify_ssl = config_host_get()
+    args = models.api.ProjectVersion(project=project, version=version)
+    url = f"https://{host}/api/releases/delete"
+    result = asyncio.run(web_post(url, args, jwt_value, verify_ssl))
+    print_json(result)
+
+
 @APP_DEV.command(name="env", help="Show the environment variables.")
 def app_dev_env() -> None:
     total = 0
