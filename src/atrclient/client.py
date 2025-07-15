@@ -155,25 +155,26 @@ def app_checks_status(
     jwt_value = config_jwt_usable()
     host, verify_ssl = config_host_get()
 
-    release_url = f"https://{host}/api/releases/{project}/{version}"
-    target_release = asyncio.run(web_get_public(release_url, verify_ssl))
-    # TODO: Handle the not found case better
-    if not is_json_dict(target_release):
-        show_error_and_exit(f"Unexpected API response: {target_release}")
+    release_url = f"https://{host}/api/releases/version/{project}/{version}"
+    response = asyncio.run(web_get_public(release_url, verify_ssl))
+    try:
+        releases_version = models.api.validate_releases_version(response)
+    except (pydantic.ValidationError, models.api.ResultsTypeError) as e:
+        show_error_and_exit(f"Unexpected API response: {response}\n{e}")
 
-    phase = target_release.get("phase")
-    if phase != "release_candidate_draft":
+    release = releases_version.release
+    # TODO: Handle the not found case better
+    if release.phase != "release_candidate_draft":
         print("Checks are not applicable for this release phase.")
         print("Checks are only performed during the draft phase.")
         return
 
     if revision is None:
-        latest_revision_number = target_release.get("latest_revision_number")
-        if latest_revision_number is None:
+        if release.latest_revision_number is None:
             show_error_and_exit("No revision number found.")
-        if not isinstance(latest_revision_number, str):
-            show_error_and_exit(f"Unexpected API response: {latest_revision_number}")
-        revision = latest_revision_number
+        if not isinstance(release.latest_revision_number, str):
+            show_error_and_exit(f"Unexpected API response: {release.latest_revision_number}")
+        revision = release.latest_revision_number
 
     url = f"https://{host}/api/checks/list/{project}/{version}/{revision}"
     response = asyncio.run(web_get(url, jwt_value, verify_ssl))
@@ -261,8 +262,12 @@ def app_dev_delete(project: str, version: str, /) -> None:
     host, verify_ssl = config_host_get()
     args = models.api.ProjectVersion(project=project, version=version)
     url = f"https://{host}/api/releases/delete"
-    result = asyncio.run(web_post(url, args, jwt_value, verify_ssl))
-    print_json(result)
+    response = asyncio.run(web_post(url, args, jwt_value, verify_ssl))
+    try:
+        release_delete = models.api.validate_releases_delete(response)
+    except (pydantic.ValidationError, models.api.ResultsTypeError) as e:
+        show_error_and_exit(f"Unexpected API response: {response}\n{e}")
+    print(release_delete.deleted)
 
 
 @APP_DEV.command(name="env", help="Show the environment variables.")
@@ -438,24 +443,26 @@ def app_list(project: str, version: str, revision: str | None = None, /) -> None
 @APP_RELEASE.command(name="info", help="Show information about a release.")
 def app_release_info(project: str, version: str, /) -> None:
     host, verify_ssl = config_host_get()
-    url = f"https://{host}/api/releases/{project}/{version}"
-    result = asyncio.run(web_get_public(url, verify_ssl))
+    url = f"https://{host}/api/releases/version/{project}/{version}"
+    response = asyncio.run(web_get_public(url, verify_ssl))
     try:
-        release = models.sql.Release.model_validate(result)
-    except pydantic.ValidationError as e:
-        show_error_and_exit(f"Unexpected API response: {result}\n{e}")
-    print(release.model_dump_json(indent=None))
+        releases_version = models.api.validate_releases_version(response)
+    except (pydantic.ValidationError, models.api.ResultsTypeError) as e:
+        show_error_and_exit(f"Unexpected API response: {response}\n{e}")
+    print(releases_version.release.model_dump_json(indent=None))
 
 
 @APP_RELEASE.command(name="list", help="List releases for a project.")
 def app_release_list(project: str, /) -> None:
     # TODO: Support showing all of a user's releases if no project is provided
     host, verify_ssl = config_host_get()
-    url = f"https://{host}/api/releases/{project}"
-    result = asyncio.run(web_get_public(url, verify_ssl))
-    if not is_json_dict(result):
-        show_error_and_exit(f"Unexpected API response: {result}")
-    releases_display(result)
+    url = f"https://{host}/api/releases/project/{project}"
+    response = asyncio.run(web_get_public(url, verify_ssl))
+    try:
+        releases_project = models.api.validate_releases_project(response)
+    except (pydantic.ValidationError, models.api.ResultsTypeError) as e:
+        show_error_and_exit(f"Unexpected API response: {response}\n{e}")
+    releases_display(releases_project.data)
 
 
 @APP_RELEASE.command(name="start", help="Start a release.")
@@ -464,8 +471,12 @@ def app_release_start(project: str, version: str, /) -> None:
     host, verify_ssl = config_host_get()
     url = f"https://{host}/api/releases/create"
     args = models.api.ProjectVersion(project=project, version=version)
-    result = asyncio.run(web_post(url, args, jwt_value, verify_ssl))
-    print_json(result)
+    response = asyncio.run(web_post(url, args, jwt_value, verify_ssl))
+    try:
+        releases_create = models.api.validate_releases_create(response)
+    except (pydantic.ValidationError, models.api.ResultsTypeError) as e:
+        show_error_and_exit(f"Unexpected API response: {response}\n{e}")
+    print(releases_create.release.model_dump_json(indent=None))
 
 
 @APP.command(name="revisions", help="List all revisions for a release.")
@@ -926,42 +937,31 @@ def print_json(data: JSON) -> None:
     print(json.dumps(data, indent=None))
 
 
-def releases_display(result: dict[str, JSON]) -> None:
-    if ("data" not in result) or ("count" not in result):
-        show_error_and_exit("Invalid response format")
-
-    releases = result["data"]
-    if not is_json_list_of_dict(releases):
-        show_error_and_exit(f"Unexpected API response: {releases}")
-    count = result["count"]
-
+def releases_display(releases: Sequence[models.sql.Release]) -> None:
     if not releases:
         print("No releases found for this project.")
         return
 
-    print(f"Total releases: {count}")
+    print(f"Total releases: {len(releases)}")
     print(f"  {'Version':<24} {'Latest':<7} {'Phase':<11} {'Created'}")
     for release in releases:
-        version = release.get("version", "Unknown")
-        phase = release.get("phase", "Unknown")
+        version = release.version
+        phase = release.phase
         # if not isinstance(version, str):
         #     show_warning(f"Unexpected API response: {release}")
         #     continue
-        if not isinstance(phase, str):
-            show_warning(f"Unexpected API response: {release}")
-            continue
         phase_short = {
             "release_candidate_draft": "draft",
             "release_candidate": "candidate",
             "release_preview": "preview",
             "release": "finished",
         }.get(phase, "unknown")
-        created = release.get("created")
-        if not isinstance(created, str):
-            show_warning(f"Unexpected API response: {release}")
-            continue
-        created_formatted = iso_to_human(created) if created else "Unknown"
-        latest = release.get("latest_revision_number") or "-"
+        if release.created:
+            created_iso = release.created.isoformat()
+            created_formatted = iso_to_human(created_iso)
+        else:
+            created_formatted = "Unknown"
+        latest = release.latest_revision_number or "-"
         print(f"  {version:<24} {latest:<7} {phase_short:<11} {created_formatted}")
 
 

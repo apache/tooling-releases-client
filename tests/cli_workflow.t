@@ -29,7 +29,7 @@ $ atr upload tooling-test-example 0.3+cli atr-client.conf <!config_rel_path!>
 $ atr checks wait tooling-test-example 0.3+cli -i 25
 Checks completed.
 
-$ atr checks status tooling-test-example 0.3+cli
+$ atr checks status tooling-test-example 0.3+cli 00002
 Total checks: 1
   warning: 1
 

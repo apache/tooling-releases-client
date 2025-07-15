@@ -51,17 +51,26 @@ def test_app_checks_status_non_draft_phase(
     client.app_set("atr.host", "example.invalid")
     client.app_set("tokens.jwt", "dummy_jwt_token")
 
-    releases_url = "https://example.invalid/api/releases/test-project/2.3.0"
+    releases_url = "https://example.invalid/api/releases/version/test-project/2.3.0"
 
     with aioresponses.aioresponses() as mock:
         mock.get(
             releases_url,
             status=200,
             payload={
-                "version": "2.3.0",
-                "phase": "release",
-                "created": "2024-07-04T00:00:00.000000Z",
-                "latest_revision_number": "00001",
+                "endpoint": "/releases/version",
+                "release": {
+                    "name": "test-project-2.3.0",
+                    "project_name": "test-project",
+                    "version": "2.3.0",
+                    "phase": "release",
+                    "created": "2024-07-04T00:00:00.000000Z",
+                    "latest_revision_number": "00001",
+                    "package_managers": [],
+                    "sboms": [],
+                    "votes": [],
+                    "vote_manual": False,
+                },
             },
         )
 
@@ -76,14 +85,23 @@ def test_app_checks_status_verbose(capsys: pytest.CaptureFixture[str], fixture_c
     client.app_set("atr.host", "example.invalid")
     client.app_set("tokens.jwt", "dummy_jwt_token")
 
-    release_url = "https://example.invalid/api/releases/test-project/2.3.1"
+    release_url = "https://example.invalid/api/releases/version/test-project/2.3.1"
     checks_url = "https://example.invalid/api/checks/list/test-project/2.3.1/00003"
 
     release_payload = {
-        "version": "2.3.1",
-        "phase": "release_candidate_draft",
-        "created": "2025-01-01T00:00:00.000000Z",
-        "latest_revision_number": "00003",
+        "endpoint": "/releases/version",
+        "release": {
+            "name": "test-project-2.3.1",
+            "project_name": "test-project",
+            "version": "2.3.1",
+            "phase": "release_candidate_draft",
+            "created": "2025-01-01T00:00:00.000000Z",
+            "latest_revision_number": "00003",
+            "package_managers": [],
+            "sboms": [],
+            "votes": [],
+            "vote_manual": False,
+        },
     }
 
     checks_payload = {
@@ -140,7 +158,7 @@ def test_app_checks_status_verbose(capsys: pytest.CaptureFixture[str], fixture_c
 def test_app_release_list_not_found(capsys: pytest.CaptureFixture[str], fixture_config_env: pathlib.Path) -> None:
     client.app_set("atr.host", "example.invalid")
 
-    releases_url = "https://example.invalid/api/releases/nonexistent-project"
+    releases_url = "https://example.invalid/api/releases/project/nonexistent-project"
 
     with aioresponses.aioresponses() as mock:
         mock.get(releases_url, status=404, body="Not Found")
@@ -152,21 +170,34 @@ def test_app_release_list_not_found(capsys: pytest.CaptureFixture[str], fixture_
 def test_app_release_list_success(capsys: pytest.CaptureFixture[str], fixture_config_env: pathlib.Path) -> None:
     client.app_set("atr.host", "example.invalid")
 
-    releases_url = "https://example.invalid/api/releases/test-project"
+    releases_url = "https://example.invalid/api/releases/project/test-project"
 
     payload = {
+        "endpoint": "/releases/project",
         "data": [
             {
+                "name": "test-project-2.3.1",
+                "project_name": "test-project",
                 "version": "2.3.1",
                 "phase": "release_candidate_draft",
                 "created": "2025-01-01T00:00:00.000000Z",
                 "latest_revision_number": "00003",
+                "package_managers": [],
+                "sboms": [],
+                "votes": [],
+                "vote_manual": False,
             },
             {
+                "name": "test-project-2.3.0",
+                "project_name": "test-project",
                 "version": "2.3.0",
                 "phase": "release",
                 "created": "2024-07-04T00:00:00.000000Z",
                 "latest_revision_number": "00001",
+                "package_managers": [],
+                "sboms": [],
+                "votes": [],
+                "vote_manual": False,
             },
         ],
         "count": 2,
