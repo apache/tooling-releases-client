@@ -56,7 +56,9 @@ APP_CONFIG: cyclopts.App = cyclopts.App(name="config", help="Configuration opera
 APP_DEV: cyclopts.App = cyclopts.App(name="dev", help="Developer operations.")
 APP_DRAFT: cyclopts.App = cyclopts.App(name="draft", help="Draft operations.")
 APP_JWT: cyclopts.App = cyclopts.App(name="jwt", help="JWT operations.")
+APP_KEYS: cyclopts.App = cyclopts.App(name="keys", help="Keys operations.")
 APP_RELEASE: cyclopts.App = cyclopts.App(name="release", help="Release operations.")
+APP_SSH: cyclopts.App = cyclopts.App(name="ssh", help="SSH operations.")
 APP_VOTE: cyclopts.App = cyclopts.App(name="vote", help="Vote operations.")
 VERSION: str = metadata.version("apache-trusted-releases")
 YAML_DEFAULTS: dict[str, Any] = {"asf": {}, "atr": {}, "tokens": {}}
@@ -196,6 +198,24 @@ def api_releases_version(api: ApiGet, project: str, version: str) -> models.api.
 def api_revisions(api: ApiGet, project: str, version: str) -> models.api.RevisionsResults:
     response = api.get(project, version)
     return models.api.validate_revisions(response)
+
+
+@api_post("/ssh/add")
+def api_ssh_add(api: ApiPost, args: models.api.SshAddArgs) -> models.api.SshAddResults:
+    response = api.post(args)
+    return models.api.validate_ssh_add(response)
+
+
+@api_post("/ssh/delete")
+def api_ssh_delete(api: ApiPost, args: models.api.SshDeleteArgs) -> models.api.SshDeleteResults:
+    response = api.post(args)
+    return models.api.validate_ssh_delete(response)
+
+
+@api_get("/ssh/list")
+def api_ssh_list(api: ApiGet, asf_uid: str) -> models.api.SshListResults:
+    response = api.get(asf_uid)
+    return models.api.validate_ssh_list(response)
 
 
 @api_post("/upload")
@@ -559,6 +579,31 @@ def app_show(path: str, /) -> None:
         show_error_and_exit(f"Could not find {path} in the configuration file.")
 
     print(value)
+
+
+@APP_SSH.command(name="add", help="Add an SSH key.")
+def app_ssh_add(text: str, /) -> None:
+    ssh_add_args = models.api.SshAddArgs(text=text)
+    ssh_add = api_ssh_add(ssh_add_args)
+    print(ssh_add.fingerprint)
+
+
+@APP_SSH.command(name="delete", help="Delete an SSH key.")
+def app_ssh_delete(fingerprint: str, /) -> None:
+    ssh_delete_args = models.api.SshDeleteArgs(fingerprint=fingerprint)
+    ssh_delete = api_ssh_delete(ssh_delete_args)
+    print(ssh_delete.success)
+
+
+@APP_SSH.command(name="list", help="List SSH keys.")
+def app_ssh_list(asf_uid: str | None = None) -> None:
+    if asf_uid is None:
+        with config_lock() as config:
+            asf_uid = config_get(config, ["asf", "uid"])
+    if asf_uid is None:
+        show_error_and_exit("No ASF UID provided and asf.uid not configured.")
+    ssh_list = api_ssh_list(asf_uid)
+    print(ssh_list.data)
 
 
 @APP.command(name="upload", help="Upload a file to a release.")
@@ -1009,7 +1054,9 @@ def subcommands_register(app: cyclopts.App) -> None:
     app.command(APP_DEV)
     app.command(APP_DRAFT)
     app.command(APP_JWT)
+    app.command(APP_KEYS)
     app.command(APP_RELEASE)
+    app.command(APP_SSH)
     app.command(APP_VOTE)
 
 
@@ -1036,11 +1083,12 @@ async def web_get(url: str, jwt_token: str | None, verify_ssl: bool = True) -> J
                 try:
                     error_data = json.loads(text)
                     if isinstance(error_data, dict) and ("error" in error_data):
-                        show_error_and_exit(error_data["error"])
+                        error_message = error_data["error"]
+                        show_error_and_exit(f"{error_message} from {url}")
                     else:
-                        show_error_and_exit(f"Request failed: {resp.status} {text}")
+                        show_error_and_exit(f"Request failed: {resp.status} {url}\n{text}")
                 except json.JSONDecodeError:
-                    show_error_and_exit(f"Request failed: {resp.status} {text}")
+                    show_error_and_exit(f"Request failed: {resp.status} {url}\n{text}")
             data = await resp.json()
             if not is_json(data):
                 show_error_and_exit(f"Unexpected API response: {data}")
