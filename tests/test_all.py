@@ -242,14 +242,6 @@ def test_timestamp_format_none_and_bad() -> None:
     assert client.timestamp_format("bad") == "bad"
 
 
-@pytest.mark.asyncio
-async def test_web_fetch_failure() -> None:
-    with aioresponses.aioresponses() as mock, pytest.raises(SystemExit):
-        mock.post("https://error.invalid", status=500, body="error")
-        await client.web_fetch("https://error.invalid", "uid", "pat", verify_ssl=False)
-    assert (len(mock.requests)) == 1
-
-
 def transcript_capture(
     transcript_path: pathlib.Path,
     script_runner: pytest_console_scripts.ScriptRunner,

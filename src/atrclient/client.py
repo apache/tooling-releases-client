@@ -344,8 +344,12 @@ def app_draft_delete(project: str, version: str, /) -> None:
     host, verify_ssl = config_host_get()
     args = models.api.ProjectVersion(project=project, version=version)
     url = f"https://{host}/api/draft/delete"
-    result = asyncio.run(web_post(url, args, jwt_value, verify_ssl))
-    print_json(result)
+    response = asyncio.run(web_post(url, args, jwt_value, verify_ssl))
+    try:
+        draft_delete = models.api.validate_draft_delete(response)
+    except (pydantic.ValidationError, models.api.ResultsTypeError) as e:
+        show_error_and_exit(f"Unexpected API response: {response}\n{e}")
+    print(draft_delete.success)
 
 
 @APP.command(name="docs", help="Show comprehensive CLI documentation in Markdown.")
@@ -422,8 +426,13 @@ def app_list(project: str, version: str, revision: str | None = None, /) -> None
     url = f"https://{host}/api/list/{project}/{version}"
     if revision:
         url += f"/{revision}"
-    result = asyncio.run(web_get(url, jwt_value, verify_ssl))
-    print(result)
+    response = asyncio.run(web_get(url, jwt_value, verify_ssl))
+    try:
+        list_results = models.api.validate_list(response)
+    except (pydantic.ValidationError, models.api.ResultsTypeError) as e:
+        show_error_and_exit(f"Unexpected API response: {response}\n{e}")
+    for rel_path in list_results.rel_paths:
+        print(rel_path)
 
 
 @APP_RELEASE.command(name="info", help="Show information about a release.")
@@ -698,12 +707,17 @@ def config_jwt_refresh(asf_uid: str | None = None) -> str:
     host, verify_ssl = config_host_get()
     url = f"https://{host}/api/jwt"
 
-    jwt_token = asyncio.run(web_fetch(url, asf_uid, pat_value, verify_ssl))
+    args = models.api.JwtArgs(asfuid=asf_uid, pat=pat_value)
+    response = asyncio.run(web_post(url, args, jwt_token=None, verify_ssl=verify_ssl))
+    try:
+        jwt_results = models.api.validate_jwt(response)
+    except (pydantic.ValidationError, models.api.ResultsTypeError) as e:
+        show_error_and_exit(f"Unexpected API response: {response}\n{e}")
 
     with config_lock(write=True) as config:
-        config_set(config, ["tokens", "jwt"], jwt_token)
+        config_set(config, ["tokens", "jwt"], jwt_results.jwt)
 
-    return jwt_token
+    return jwt_results.jwt
 
 
 def config_jwt_usable() -> str:
@@ -983,30 +997,6 @@ def timestamp_format(ts: int | str | None) -> str | None:
         return str(ts)
 
 
-async def web_fetch(url: str, asfuid: str, pat_token: str, verify_ssl: bool = True) -> str:
-    # TODO: This is PAT request specific
-    # Should give this a more specific name, e.g. web_post_pat
-    connector = None if verify_ssl else aiohttp.TCPConnector(ssl=False)
-    async with aiohttp.ClientSession(connector=connector) as session:
-        payload = {"asfuid": asfuid, "pat": pat_token}
-        async with session.post(url, json=payload) as resp:
-            if resp.status != 200:
-                text = await resp.text()
-                show_error_and_exit(f"JWT fetch failed: {payload!r} {resp.status} {text!r}")
-
-            data = await resp.json()
-            if not is_json(data):
-                show_error_and_exit(f"Unexpected API response: {data}")
-            if not is_json_dict(data):
-                show_error_and_exit(f"Unexpected API response: {data}")
-            if "jwt" in data:
-                jwt_value = data["jwt"]
-                if not isinstance(jwt_value, str):
-                    show_error_and_exit(f"Unexpected API response: {data}")
-                return jwt_value
-            raise RuntimeError(f"Unexpected response: {data}")
-
-
 async def web_get(url: str, jwt_token: str, verify_ssl: bool = True) -> JSON:
     connector = None if verify_ssl else aiohttp.TCPConnector(ssl=False)
     headers = {"Authorization": f"Bearer {jwt_token}"}
@@ -1048,9 +1038,11 @@ async def web_get_public(url: str, verify_ssl: bool = True) -> JSON:
             return data
 
 
-async def web_post(url: str, args: models.schema.Strict, jwt_token: str, verify_ssl: bool = True) -> JSON:
+async def web_post(url: str, args: models.schema.Strict, jwt_token: str | None, verify_ssl: bool = True) -> JSON:
     connector = None if verify_ssl else aiohttp.TCPConnector(ssl=False)
-    headers = {"Authorization": f"Bearer {jwt_token}"}
+    headers = {}
+    if jwt_token is not None:
+        headers["Authorization"] = f"Bearer {jwt_token}"
     async with aiohttp.ClientSession(connector=connector, headers=headers) as session:
         async with session.post(url, json=args.model_dump()) as resp:
             if resp.status not in (200, 201):
