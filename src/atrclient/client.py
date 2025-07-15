@@ -15,8 +15,9 @@
 # specific language governing permissions and limitations
 # under the License.
 
-# TODO: Use Pydantic models to validate API responses
-# TODO: Use transcript style script testing
+# TODO: Allow upload and download by calling rsync
+# Or potentially native for downloads, which should be trivial
+# There is also https://github.com/synodriver/pyrsync
 
 from __future__ import annotations
 

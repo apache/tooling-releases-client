@@ -1,20 +1,21 @@
-.PHONY: build bump check commit install sync
+.PHONY: build bump check commit pre-commit update-deps
 
 build:
 	uv build
 
-bump: install
-	@# We install above to ensure that dev stamp is up to date
+bump:
+	@# This assumes that we have the latest version of "dev stamp"
+	@# If not, run "uv pip install -e ." first
 	uv run atr dev stamp
+	@# Suppress the warning about ignoring the existing lockfile
 	rm -f uv.lock
-	uv lock
+	@# This writes the new stamp into the uv.lock file and upgrades the package
+	@# We do not have to use --upgrade as that is only for dependencies
+	uv sync
 
-check: bump
-	@# Always bump to ensure that we check the exact current version
-	git add -A
-	uv run pre-commit run --all-files
-	@# TODO: Move this to .pre-commit-config.yaml?
-	@# It always runs on all files, so it's not a good traditional lint
+check: pre-commit bump
+	@# We run lint modifications first, then update the version
+	@# We do not consider the following a lint as it runs all test cases always
 	uv run pytest -q
 
 commit:
@@ -23,8 +24,10 @@ commit:
 	git pull
 	git push
 
-install:
-	uv pip install -e .
+pre-commit:
+	git add -A
+	uv run pre-commit run --all-files
 
-sync:
-	uv sync --group dev
+update-deps:
+	uv lock --upgrade
+	uv sync
