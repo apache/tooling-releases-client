@@ -47,7 +47,7 @@ import strictyaml
 import atrclient.models as models
 
 if TYPE_CHECKING:
-    from collections.abc import Generator
+    from collections.abc import Generator, Sequence
 
 APP: cyclopts.App = cyclopts.App()
 APP_CHECKS: cyclopts.App = cyclopts.App(name="checks", help="Check result operations.")
@@ -88,7 +88,7 @@ def app_announce(
 ) -> None:
     jwt_value = config_jwt_usable()
     host, verify_ssl = config_host_get()
-    announce = models.api.Announce(
+    announce = models.api.AnnounceArgs(
         project=project,
         version=version,
         revision=revision,
@@ -98,8 +98,12 @@ def app_announce(
         path_suffix=path_suffix or "",
     )
     url = f"https://{host}/api/announce"
-    result = asyncio.run(web_post(url, announce, jwt_value, verify_ssl))
-    print_json(result)
+    response = asyncio.run(web_post(url, announce, jwt_value, verify_ssl))
+    try:
+        announce = models.api.validate_announce(response)
+    except (pydantic.ValidationError, models.api.ResultsTypeError) as e:
+        show_error_and_exit(f"Unexpected API response: {response}\n{e}")
+    print(announce.success)
 
 
 @APP_CHECKS.command(name="exceptions", help="Get check exceptions for a release revision.")
@@ -113,10 +117,12 @@ def app_checks_exceptions(
     jwt_value = config_jwt_usable()
     host, verify_ssl = config_host_get()
     url = f"https://{host}/api/checks/list/{project}/{version}/{revision}"
-    results = asyncio.run(web_get(url, jwt_value, verify_ssl))
-    if not is_json_list_of_dict(results):
-        show_error_and_exit(f"Unexpected API response: {results}")
-    checks_display_status("exception", results, members=members)
+    response = asyncio.run(web_get(url, jwt_value, verify_ssl))
+    try:
+        checks_list = models.api.validate_checks_list(response)
+    except (pydantic.ValidationError, models.api.ResultsTypeError) as e:
+        show_error_and_exit(f"Unexpected API response: {response}\n{e}")
+    checks_display_status("exception", checks_list.checks, members=members)
 
 
 @APP_CHECKS.command(name="failures", help="Get check failures for a release revision.")
@@ -130,10 +136,12 @@ def app_checks_failures(
     jwt_value = config_jwt_usable()
     host, verify_ssl = config_host_get()
     url = f"https://{host}/api/checks/list/{project}/{version}/{revision}"
-    results = asyncio.run(web_get(url, jwt_value, verify_ssl))
-    if not is_json_list_of_dict(results):
-        show_error_and_exit(f"Unexpected API response: {results}")
-    checks_display_status("failure", results, members=members)
+    response = asyncio.run(web_get(url, jwt_value, verify_ssl))
+    try:
+        checks_list = models.api.validate_checks_list(response)
+    except (pydantic.ValidationError, models.api.ResultsTypeError) as e:
+        show_error_and_exit(f"Unexpected API response: {response}\n{e}")
+    checks_display_status("failure", checks_list.checks, members=members)
 
 
 @APP_CHECKS.command(name="status", help="Get check status for a release revision.")
@@ -168,11 +176,12 @@ def app_checks_status(
         revision = latest_revision_number
 
     url = f"https://{host}/api/checks/list/{project}/{version}/{revision}"
-    results = asyncio.run(web_get(url, jwt_value, verify_ssl))
-
-    if not is_json_list_of_dict(results):
-        show_error_and_exit(f"Unexpected API response: {results}")
-    checks_display(results, verbose)
+    response = asyncio.run(web_get(url, jwt_value, verify_ssl))
+    try:
+        checks_list = models.api.validate_checks_list(response)
+    except (pydantic.ValidationError, models.api.ResultsTypeError) as e:
+        show_error_and_exit(f"Unexpected API response: {response}\n{e}")
+    checks_display(checks_list.checks, verbose)
 
 
 @APP_CHECKS.command(name="wait", help="Wait for checks to be completed.")
@@ -196,12 +205,12 @@ def app_checks_wait(
         url = f"https://{host}/api/checks/ongoing/{project}/{version}"
         if revision is not None:
             url += f"/{revision}"
-        result = asyncio.run(web_get(url, jwt_value, verify_ssl))
+        response = asyncio.run(web_get(url, jwt_value, verify_ssl))
         try:
-            result_count = models.api.validate_count(result)
+            checks_ongoing = models.api.validate_checks_ongoing(response)
         except (pydantic.ValidationError, models.api.ResultsTypeError) as e:
-            show_error_and_exit(f"Unexpected API response: {result}\n{e}")
-        if result_count.count == 0:
+            show_error_and_exit(f"Unexpected API response: {response}\n{e}")
+        if checks_ongoing.ongoing == 0:
             break
         time.sleep(interval_seconds)
         timeout -= interval_seconds
@@ -221,10 +230,12 @@ def app_checks_warnings(
     jwt_value = config_jwt_usable()
     host, verify_ssl = config_host_get()
     url = f"https://{host}/api/checks/list/{project}/{version}/{revision}"
-    results = asyncio.run(web_get(url, jwt_value, verify_ssl))
-    if not is_json_list_of_dict(results):
-        show_error_and_exit(f"Unexpected API response: {results}")
-    checks_display_status("warning", results, members=members)
+    response = asyncio.run(web_get(url, jwt_value, verify_ssl))
+    try:
+        checks_list = models.api.validate_checks_list(response)
+    except (pydantic.ValidationError, models.api.ResultsTypeError) as e:
+        show_error_and_exit(f"Unexpected API response: {response}\n{e}")
+    checks_display_status("warning", checks_list.checks, members=members)
 
 
 @APP_CONFIG.command(name="file", help="Display the configuration file contents.")
@@ -558,21 +569,21 @@ def app_vote_start(
     print_json(result)
 
 
-def checks_display(results: list[dict[str, JSON]], verbose: bool = False) -> None:
+def checks_display(results: Sequence[models.sql.CheckResult], verbose: bool = False) -> None:
     if not results:
         print("No check results found for this revision.")
         return
 
-    by_status = {}
+    by_status: dict[str, list[models.sql.CheckResult]] = {}
     for result in results:
-        status = result["status"]
+        status = result.status
         by_status.setdefault(status, []).append(result)
 
     checks_display_summary(by_status, verbose, len(results))
     checks_display_details(by_status, verbose)
 
 
-def checks_display_details(by_status: dict[str, list[dict[str, JSON]]], verbose: bool) -> None:
+def checks_display_details(by_status: dict[str, list[models.sql.CheckResult]], verbose: bool) -> None:
     if not verbose:
         return
     for status_key in by_status.keys():
@@ -584,25 +595,19 @@ def checks_display_details(by_status: dict[str, list[dict[str, JSON]]], verbose:
 
 def checks_display_status(
     status: Literal["failure", "exception", "warning"],
-    results: list[dict[str, JSON]],
+    results: Sequence[models.sql.CheckResult],
     members: bool,
 ) -> None:
     messages = {}
     for result in results:
-        result_status = result.get("status")
-        if result_status != status:
+        if result.status != status:
             continue
-        member_rel_path = result.get("member_rel_path")
+        member_rel_path = result.member_rel_path
         if member_rel_path and (not members):
             continue
-        checker = result.get("checker") or ""
-        if not isinstance(checker, str):
-            show_warning(f"Unexpected API response: {result}")
-            continue
-        message = result.get("message")
-        if not isinstance(message, str):
-            show_warning(f"Unexpected API response: {result}")
-        primary_rel_path = result.get("primary_rel_path")
+        checker = result.checker or ""
+        message = result.message
+        primary_rel_path = result.primary_rel_path
         if not member_rel_path:
             path = primary_rel_path
         else:
@@ -620,23 +625,23 @@ def checks_display_status(
         print()
 
 
-def checks_display_summary(by_status: dict[str, list[dict[str, JSON]]], verbose: bool, total: int) -> None:
+def checks_display_summary(by_status: dict[str, list[models.sql.CheckResult]], verbose: bool, total: int) -> None:
     print(f"Total checks: {total}")
     for status, checks in by_status.items():
         if verbose and status.upper() in ["FAILURE", "EXCEPTION", "WARNING"]:
-            top = sum(r["member_rel_path"] is None for r in checks)
+            top = sum(r.member_rel_path is None for r in checks)
             inner = len(checks) - top
             print(f"  {status}: {len(checks)} (top-level {top}, inner {inner})")
         else:
             print(f"  {status}: {len(checks)}")
 
 
-def checks_display_verbose_details(checks: list[dict[str, JSON]]) -> None:
+def checks_display_verbose_details(checks: Sequence[models.sql.CheckResult]) -> None:
     for check in checks[:10]:
-        checker = check["checker"]
-        primary_rel_path = check.get("primary_rel_path", "")
-        member_rel_path = check.get("member_rel_path", "")
-        message = check["message"]
+        checker = check.checker or ""
+        primary_rel_path = check.primary_rel_path or ""
+        member_rel_path = check.member_rel_path or ""
+        message = check.message
         member_part = f" ({member_rel_path})" if member_rel_path else ""
         print(f"  {checker} → {primary_rel_path}{member_part} : {message}")
 

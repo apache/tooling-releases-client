@@ -86,29 +86,44 @@ def test_app_checks_status_verbose(capsys: pytest.CaptureFixture[str], fixture_c
         "latest_revision_number": "00003",
     }
 
-    checks_payload = [
-        {
-            "status": "FAILURE",
-            "checker": "test_checker1",
-            "primary_rel_path": "file1.txt",
-            "member_rel_path": None,
-            "message": "Test failure 1",
-        },
-        {
-            "status": "FAILURE",
-            "checker": "test_checker2",
-            "primary_rel_path": "file2.txt",
-            "member_rel_path": "inner.txt",
-            "message": "Test failure 2",
-        },
-        {
-            "status": "SUCCESS",
-            "checker": "test_checker3",
-            "primary_rel_path": "file3.txt",
-            "member_rel_path": None,
-            "message": "Test success",
-        },
-    ]
+    checks_payload = {
+        "endpoint": "/checks/list",
+        "checks": [
+            {
+                "release_name": "test-project-2.3.1",
+                "revision_number": "00003",
+                "created": "2025-01-01T00:00:00Z",
+                "status": "failure",
+                "checker": "test_checker1",
+                "primary_rel_path": "file1.txt",
+                "member_rel_path": None,
+                "message": "Test failure 1",
+                "data": None,
+            },
+            {
+                "release_name": "test-project-2.3.1",
+                "revision_number": "00003",
+                "created": "2025-01-01T00:00:00Z",
+                "status": "failure",
+                "checker": "test_checker2",
+                "primary_rel_path": "file2.txt",
+                "member_rel_path": "inner.txt",
+                "message": "Test failure 2",
+                "data": None,
+            },
+            {
+                "release_name": "test-project-2.3.1",
+                "revision_number": "00003",
+                "created": "2025-01-01T00:00:00Z",
+                "status": "success",
+                "checker": "test_checker3",
+                "primary_rel_path": "file3.txt",
+                "member_rel_path": None,
+                "message": "Test success",
+                "data": None,
+            },
+        ],
+    }
 
     with aioresponses.aioresponses() as mock:
         mock.get(release_url, status=200, payload=release_payload)
@@ -118,7 +133,7 @@ def test_app_checks_status_verbose(capsys: pytest.CaptureFixture[str], fixture_c
 
         captured = capsys.readouterr()
         assert "(top-level" in captured.out
-        assert "FAILURE: 2 (top-level 1, inner 1)" in captured.out
+        assert "failure: 2 (top-level 1, inner 1)" in captured.out
         assert "test_checker1 → file1.txt : Test failure 1" in captured.out
 
 
