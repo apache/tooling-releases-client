@@ -7,6 +7,26 @@ Usage: atr docs
 Show comprehensive CLI documentation in Markdown.
 ```
 
+## atr announce
+
+```
+Usage: announce [ARGS] [OPTIONS]
+
+Announce a release.
+
+╭─ Arguments ──────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│ *  PROJECT   [required]                                                                                              │
+│ *  VERSION   [required]                                                                                              │
+│ *  REVISION  [required]                                                                                              │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+╭─ Parameters ─────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│ *  MAILING-LIST --mailing-list  -m  [required]                                                                       │
+│    SUBJECT --subject            -s                                                                                   │
+│    BODY --body                  -b                                                                                   │
+│    PATH-SUFFIX --path-suffix    -p                                                                                   │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+```
+
 ## atr checks
 
 ```
@@ -146,11 +166,25 @@ Usage: dev COMMAND
 Developer operations.
 
 ╭─ Commands ───────────────────────────────────────────────────────────────────────────────────────────────────────────╮
-│ env    Show the environment variables.                                                                               │
-│ pat    Read a PAT from development configuration.                                                                    │
-│ stamp  Update version and exclude-newer in pyproject.toml.                                                           │
-│ token  Generate a random alphabetical token.                                                                         │
-│ user   Show the value of $USER.                                                                                      │
+│ delete  Delete a release.                                                                                            │
+│ env     Show the environment variables.                                                                              │
+│ pat     Read a PAT from development configuration.                                                                   │
+│ stamp   Update version and exclude-newer in pyproject.toml.                                                          │
+│ token   Generate a random alphabetical token.                                                                        │
+│ user    Show the value of $USER.                                                                                     │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+```
+
+### atr dev delete
+
+```
+Usage: delete [ARGS]
+
+Delete a release.
+
+╭─ Arguments ──────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│ *  PROJECT  [required]                                                                                               │
+│ *  VERSION  [required]                                                                                               │
 ╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
 ```
 
@@ -211,19 +245,6 @@ Draft operations.
 
 ╭─ Commands ───────────────────────────────────────────────────────────────────────────────────────────────────────────╮
 │ delete  Delete a draft release.                                                                                      │
-╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
-```
-
-### atr draft delete
-
-```
-Usage: delete [ARGS]
-
-Delete a draft release.
-
-╭─ Arguments ──────────────────────────────────────────────────────────────────────────────────────────────────────────╮
-│ *  PROJECT  [required]                                                                                               │
-│ *  VERSION  [required]                                                                                               │
 ╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
 ```
 
@@ -288,6 +309,14 @@ Fetch a JWT using the stored PAT and store it in config.
 Usage: show
 
 Show stored JWT token.
+```
+
+## atr keys
+
+```
+Usage: keys
+
+Keys operations.
 ```
 
 ## atr list
@@ -357,6 +386,32 @@ Set a configuration value using dot notation.
 ╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
 ```
 
+## atr ssh
+
+```
+Usage: ssh COMMAND
+
+SSH operations.
+
+╭─ Commands ───────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│ add     Add an SSH key.                                                                                              │
+│ delete  Delete an SSH key.                                                                                           │
+│ list    List SSH keys.                                                                                               │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+```
+
+### atr ssh add
+
+```
+Usage: add [ARGS]
+
+Add an SSH key.
+
+╭─ Arguments ──────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│ *  TEXT  [required]                                                                                                  │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+```
+
 ## atr upload
 
 ```
@@ -380,6 +435,21 @@ Usage: vote COMMAND
 Vote operations.
 
 ╭─ Commands ───────────────────────────────────────────────────────────────────────────────────────────────────────────╮
-│ start  Start a vote.                                                                                                 │
+│ resolve  Resolve a vote.                                                                                             │
+│ start    Start a vote.                                                                                               │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+```
+
+### atr vote resolve
+
+```
+Usage: resolve [ARGS] [OPTIONS]
+
+Resolve a vote.
+
+╭─ Parameters ─────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│ *  PROJECT --project        [required]                                                                               │
+│ *  VERSION --version        [required]                                                                               │
+│ *  RESOLUTION --resolution  [choices: passed, failed] [required]                                                     │
 ╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
 ```
