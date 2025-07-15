@@ -260,7 +260,7 @@ def app_dev_delete(project: str, version: str, /) -> None:
     # Only ATR admins may do this
     jwt_value = config_jwt_usable()
     host, verify_ssl = config_host_get()
-    args = models.api.ProjectVersion(project=project, version=version)
+    args = models.api.ReleasesDeleteArgs(project=project, version=version)
     url = f"https://{host}/api/releases/delete"
     response = asyncio.run(web_post(url, args, jwt_value, verify_ssl))
     try:
@@ -347,7 +347,7 @@ def app_dev_user() -> None:
 def app_draft_delete(project: str, version: str, /) -> None:
     jwt_value = config_jwt_usable()
     host, verify_ssl = config_host_get()
-    args = models.api.ProjectVersion(project=project, version=version)
+    args = models.api.DraftDeleteArgs(project=project, version=version)
     url = f"https://{host}/api/draft/delete"
     response = asyncio.run(web_post(url, args, jwt_value, verify_ssl))
     try:
@@ -470,7 +470,7 @@ def app_release_start(project: str, version: str, /) -> None:
     jwt_value = config_jwt_usable()
     host, verify_ssl = config_host_get()
     url = f"https://{host}/api/releases/create"
-    args = models.api.ProjectVersion(project=project, version=version)
+    args = models.api.ReleasesCreateArgs(project=project, version=version)
     response = asyncio.run(web_post(url, args, jwt_value, verify_ssl))
     try:
         releases_create = models.api.validate_releases_create(response)
@@ -483,13 +483,12 @@ def app_release_start(project: str, version: str, /) -> None:
 def app_revisions(project: str, version: str, /) -> None:
     host, verify_ssl = config_host_get()
     url = f"https://{host}/api/revisions/{project}/{version}"
-    result = asyncio.run(web_get_public(url, verify_ssl))
-    if not is_json_dict(result):
-        show_error_and_exit(f"Unexpected API response: {result}")
-    result_revisions = result.get("revisions", [])
-    if not is_json_list_of_dict(result_revisions):
-        show_error_and_exit(f"Unexpected API response: {result_revisions}")
-    for revision in result_revisions:
+    response = asyncio.run(web_get_public(url, verify_ssl))
+    try:
+        revisions = models.api.validate_revisions(response)
+    except (pydantic.ValidationError, models.api.ResultsTypeError) as e:
+        show_error_and_exit(f"Unexpected API response: {response}\n{e}")
+    for revision in revisions.revisions:
         print(revision)
 
 
@@ -529,15 +528,19 @@ def app_upload(project: str, version: str, path: str, filepath: str, /) -> None:
     with open(filepath, "rb") as f:
         content = f.read()
 
-    args = models.api.ProjectVersionRelpathContent(
+    args = models.api.UploadArgs(
         project=project,
         version=version,
         relpath=path,
         content=base64.b64encode(content).decode("utf-8"),
     )
 
-    result = asyncio.run(web_post(url, args, jwt_value, verify_ssl))
-    print_json(result)
+    response = asyncio.run(web_post(url, args, jwt_value, verify_ssl))
+    try:
+        upload = models.api.validate_upload(response)
+    except (pydantic.ValidationError, models.api.ResultsTypeError) as e:
+        show_error_and_exit(f"Unexpected API response: {response}\n{e}")
+    print(upload.revision.model_dump_json(indent=None))
 
 
 @APP_VOTE.command(name="resolve", help="Resolve a vote.")
@@ -549,13 +552,17 @@ def app_vote_resolve(
     jwt_value = config_jwt_usable()
     host, verify_ssl = config_host_get()
     url = f"https://{host}/api/vote/resolve"
-    args = models.api.ProjectVersionResolution(
+    args = models.api.VoteResolveArgs(
         project=project,
         version=version,
         resolution=resolution,
     )
-    result = asyncio.run(web_post(url, args, jwt_value, verify_ssl))
-    print_json(result)
+    response = asyncio.run(web_post(url, args, jwt_value, verify_ssl))
+    try:
+        vote_resolve = models.api.validate_vote_resolve(response)
+    except (pydantic.ValidationError, models.api.ResultsTypeError) as e:
+        show_error_and_exit(f"Unexpected API response: {response}\n{e}")
+    print(vote_resolve.success)
 
 
 @APP_VOTE.command(name="start", help="Start a vote.")
@@ -576,7 +583,7 @@ def app_vote_start(
     if body:
         with open(body, encoding="utf-8") as f:
             body_text = f.read()
-    args = models.api.VoteStart(
+    args = models.api.VoteStartArgs(
         project=project,
         version=version,
         revision=revision,
@@ -585,8 +592,12 @@ def app_vote_start(
         subject=subject or f"[VOTE] Release {project} {version}",
         body=body_text or f"Release {project} {version} is ready for voting.",
     )
-    result = asyncio.run(web_post(url, args, jwt_value, verify_ssl))
-    print_json(result)
+    response = asyncio.run(web_post(url, args, jwt_value, verify_ssl))
+    try:
+        vote_start = models.api.validate_vote_start(response)
+    except (pydantic.ValidationError, models.api.ResultsTypeError) as e:
+        show_error_and_exit(f"Unexpected API response: {response}\n{e}")
+    print(vote_start.task.model_dump_json(indent=None))
 
 
 def checks_display(results: Sequence[models.sql.CheckResult], verbose: bool = False) -> None:
@@ -931,10 +942,6 @@ def main() -> None:
     #     # "Cyclopts application invoked without tokens"
     #     pass
     APP(sys.argv[1:])
-
-
-def print_json(data: JSON) -> None:
-    print(json.dumps(data, indent=None))
 
 
 def releases_display(releases: Sequence[models.sql.Release]) -> None:
