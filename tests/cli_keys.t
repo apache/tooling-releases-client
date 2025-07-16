@@ -15,3 +15,12 @@ Set tokens.pat to "<!pat!>".
 
 $ atr keys user
 <.etc.>
+
+$ atr dev pwd
+<.skip.>tmp<.skip.>
+
+<# write a test key to tooling-public-test.asc #>
+$ atr dev key
+
+$ atr keys add tooling-public-test.asc
+E35604DD9E2892E5465B3D8A203F105A7B33A64F

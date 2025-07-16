@@ -23,6 +23,7 @@ import os
 import pathlib
 import re
 import shlex
+import tempfile
 from typing import TYPE_CHECKING, Any, Final
 
 import aioresponses
@@ -233,7 +234,9 @@ def test_cli_transcripts(
     script_runner: pytest_console_scripts.ScriptRunner,
     fixture_config_env: pathlib.Path,
 ) -> None:
-    return transcript_capture(transcript_path, script_runner, fixture_config_env)
+    with tempfile.TemporaryDirectory() as tmpdir:
+        os.chdir(tmpdir)
+        return transcript_capture(transcript_path, script_runner, fixture_config_env)
 
 
 def test_config_set_get_roundtrip() -> None:
