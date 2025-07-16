@@ -34,7 +34,6 @@ import re
 import signal
 import sys
 import time
-from collections.abc import Callable
 from typing import TYPE_CHECKING, Annotated, Any, Literal, NoReturn, TypeGuard, TypeVar
 
 import aiohttp
@@ -48,7 +47,7 @@ import strictyaml
 import atrclient.models as models
 
 if TYPE_CHECKING:
-    from collections.abc import Generator, Sequence
+    from collections.abc import Callable, Generator, Sequence
 
 APP: cyclopts.App = cyclopts.App()
 APP_CHECKS: cyclopts.App = cyclopts.App(name="checks", help="Check result operations.")
@@ -104,12 +103,9 @@ class ApiPost(ApiCore):
 A = TypeVar("A", bound=models.schema.Strict)
 R = TypeVar("R", bound=models.api.Results)
 
-ApiGetFunction = Callable[..., R]
-ApiPostFunction = Callable[[ApiPost, A], R]
 
-
-def api_get(path: str) -> Callable[[ApiGetFunction], Callable[..., R]]:
-    def decorator(func: ApiGetFunction) -> Callable[..., R]:
+def api_get(path: str) -> Callable[[Callable[..., R]], Callable[..., R]]:
+    def decorator(func: Callable[..., R]) -> Callable[..., R]:
         def wrapper(*args: str, **kwargs: str | None) -> R:
             api_instance = ApiGet(path)
             try:
@@ -123,8 +119,8 @@ def api_get(path: str) -> Callable[[ApiGetFunction], Callable[..., R]]:
     return decorator
 
 
-def api_post(path: str) -> Callable[[ApiPostFunction], Callable[[A], R]]:
-    def decorator(func: ApiPostFunction) -> Callable[[A], R]:
+def api_post(path: str) -> Callable[[Callable[[ApiPost, A], R]], Callable[[A], R]]:
+    def decorator(func: Callable[[ApiPost, A], R]) -> Callable[[A], R]:
         def wrapper(args: A) -> R:
             api_instance = ApiPost(path)
             try:
@@ -180,6 +176,12 @@ def api_keys_delete(api: ApiPost, args: models.api.KeysDeleteArgs) -> models.api
 def api_keys_get(api: ApiGet, fingerprint: str) -> models.api.KeysGetResults:
     response = api.get(fingerprint)
     return models.api.validate_keys_get(response)
+
+
+@api_post("/keys/upload")
+def api_keys_upload(api: ApiPost, args: models.api.KeysUploadArgs) -> models.api.KeysUploadResults:
+    response = api.post(args)
+    return models.api.validate_keys_upload(response)
 
 
 @api_get("/keys/user")
@@ -622,12 +624,15 @@ def app_jwt_show() -> None:
 
 @APP_KEYS.command(name="add", help="Add an OpenPGP key.")
 def app_keys_add(path: str, committees: str = "", /) -> None:
+    selected_committee_names = []
+    if committees:
+        selected_committee_names[:] = committees.split(",")
     key = pathlib.Path(path).read_text(encoding="utf-8")
     with config_lock() as config:
         asf_uid = config_get(config, ["asf", "uid"])
     if asf_uid is None:
         show_error_and_exit("Please configure asf.uid before adding a key.")
-    keys_add_args = models.api.KeysAddArgs(asfuid=asf_uid, key=key, committees=committees)
+    keys_add_args = models.api.KeysAddArgs(asfuid=asf_uid, key=key, committees=selected_committee_names)
     keys_add = api_keys_add(keys_add_args)
     for fingerprint in keys_add.fingerprints:
         print(fingerprint)
@@ -644,6 +649,20 @@ def app_keys_delete(fingerprint: str, /) -> None:
 def app_keys_get(fingerprint: str, /) -> None:
     keys_get = api_keys_get(fingerprint)
     print(keys_get.key.model_dump_json(indent=None))
+
+
+@APP_KEYS.command(name="upload", help="Upload a KEYS file.")
+def app_keys_upload(path: str, selected_committees: str, /) -> None:
+    selected_committee_names = []
+    if selected_committees:
+        selected_committee_names[:] = selected_committees.split(",")
+    key = pathlib.Path(path).read_text(encoding="utf-8")
+    keys_upload_args = models.api.KeysUploadArgs(filetext=key, committees=selected_committee_names)
+    keys_upload = api_keys_upload(keys_upload_args)
+    for result in keys_upload.results:
+        print(result.model_dump_json(indent=None))
+    print(f"Successfully uploaded {keys_upload.success_count} keys.")
+    print(f"Failed to upload {keys_upload.error_count} keys.")
 
 
 @APP_KEYS.command(name="user", help="List OpenPGP keys for a user.")
