@@ -13,7 +13,7 @@ $ atr dev pat
 $ atr set tokens.pat <!pat!>
 Set tokens.pat to "<!pat!>".
 
-<# Delete any existing draft, ignoring errors. #>
+<# delete any existing draft, ignoring errors #>
 * atr dev delete tooling-test-example 0.3+cli
 <.etc.>
 
@@ -54,6 +54,6 @@ Vote marked as passed
 $ atr announce tooling-test-example 0.3+cli 00003 -m "<!user!>@apache.org" -s "[ANNOUNCE] Release tooling-test-example 0.3+cli" -b "Release tooling-test-example 0.3+cli has been announced."
 Announcement sent
 
-<# Tidy up. #>
+<# tidy up #>
 * atr dev delete tooling-test-example 0.3+cli
 <.etc.>
