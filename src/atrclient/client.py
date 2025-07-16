@@ -164,6 +164,12 @@ def api_draft_delete(api: ApiPost, args: models.api.DraftDeleteArgs) -> models.a
     return models.api.validate_draft_delete(response)
 
 
+@api_get("/keys/user")
+def api_keys_user(api: ApiGet, asf_uid: str) -> models.api.KeysUserResults:
+    response = api.get(asf_uid)
+    return models.api.validate_keys_user(response)
+
+
 @api_get("/list")
 def api_list(api: ApiGet, project: str, version: str) -> models.api.ListResults:
     response = api.get(project, version)
@@ -518,6 +524,18 @@ def app_jwt_refresh(asf_uid: str | None = None) -> None:
 @APP_JWT.command(name="show", help="Show stored JWT token.")
 def app_jwt_show() -> None:
     return app_show("tokens.jwt")
+
+
+@APP_KEYS.command(name="user", help="List OpenPGP keys for a user.")
+def app_keys_user(asf_uid: str | None = None) -> None:
+    if asf_uid is None:
+        with config_lock() as config:
+            asf_uid = config_get(config, ["asf", "uid"])
+    if asf_uid is None:
+        show_error_and_exit("No ASF UID provided and asf.uid not configured.")
+    keys_user = api_keys_user(asf_uid)
+    for key in keys_user.keys:
+        print(key.model_dump_json(indent=None))
 
 
 @APP.command(name="list", help="List all files within a release.")
