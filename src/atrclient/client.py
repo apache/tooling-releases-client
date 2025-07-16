@@ -170,6 +170,18 @@ def api_keys_add(api: ApiPost, args: models.api.KeysAddArgs) -> models.api.KeysA
     return models.api.validate_keys_add(response)
 
 
+@api_post("/keys/delete")
+def api_keys_delete(api: ApiPost, args: models.api.KeysDeleteArgs) -> models.api.KeysDeleteResults:
+    response = api.post(args)
+    return models.api.validate_keys_delete(response)
+
+
+@api_get("/keys/get")
+def api_keys_get(api: ApiGet, fingerprint: str) -> models.api.KeysGetResults:
+    response = api.get(fingerprint)
+    return models.api.validate_keys_get(response)
+
+
 @api_get("/keys/user")
 def api_keys_user(api: ApiGet, asf_uid: str) -> models.api.KeysUserResults:
     response = api.get(asf_uid)
@@ -619,6 +631,19 @@ def app_keys_add(path: str, committees: str = "", /) -> None:
     keys_add = api_keys_add(keys_add_args)
     for fingerprint in keys_add.fingerprints:
         print(fingerprint)
+
+
+@APP_KEYS.command(name="delete", help="Delete an OpenPGP key.")
+def app_keys_delete(fingerprint: str, /) -> None:
+    keys_delete_args = models.api.KeysDeleteArgs(fingerprint=fingerprint)
+    keys_delete = api_keys_delete(keys_delete_args)
+    print(keys_delete.success)
+
+
+@APP_KEYS.command(name="get", help="Get an OpenPGP key.")
+def app_keys_get(fingerprint: str, /) -> None:
+    keys_get = api_keys_get(fingerprint)
+    print(keys_get.key.model_dump_json(indent=None))
 
 
 @APP_KEYS.command(name="user", help="List OpenPGP keys for a user.")

@@ -24,3 +24,9 @@ $ atr dev key
 
 $ atr keys add tooling-public-test.asc
 E35604DD9E2892E5465B3D8A203F105A7B33A64F
+
+$ atr keys get E35604DD9E2892E5465B3D8A203F105A7B33A64F
+<.skip.>e35604dd9e2892e5465b3d8a203f105a7b33a64f<.skip.><!user!><.skip.>
+
+$ atr keys delete E35604DD9E2892E5465B3D8A203F105A7B33A64F
+Key deleted
