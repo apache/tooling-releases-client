@@ -634,8 +634,7 @@ def app_keys_add(path: str, committees: str = "", /) -> None:
         show_error_and_exit("Please configure asf.uid before adding a key.")
     keys_add_args = models.api.KeysAddArgs(asfuid=asf_uid, key=key, committees=selected_committee_names)
     keys_add = api_keys_add(keys_add_args)
-    for fingerprint in keys_add.fingerprints:
-        print(fingerprint)
+    print(keys_add.fingerprint)
 
 
 @APP_KEYS.command(name="delete", help="Delete an OpenPGP key.")
