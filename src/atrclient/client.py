@@ -652,12 +652,12 @@ def app_keys_get(fingerprint: str, /) -> None:
 
 
 @APP_KEYS.command(name="upload", help="Upload a KEYS file.")
-def app_keys_upload(path: str, selected_committees: str, /) -> None:
-    selected_committee_names = []
-    if selected_committees:
-        selected_committee_names[:] = selected_committees.split(",")
+def app_keys_upload(path: str, selected_committee_name: str, /) -> None:
+    # selected_committee_names = []
+    # if selected_committees:
+    #     selected_committee_names[:] = selected_committees.split(",")
     key = pathlib.Path(path).read_text(encoding="utf-8")
-    keys_upload_args = models.api.KeysUploadArgs(filetext=key, committees=selected_committee_names)
+    keys_upload_args = models.api.KeysUploadArgs(filetext=key, committee=selected_committee_name)
     keys_upload = api_keys_upload(keys_upload_args)
     for result in keys_upload.results:
         print(result.model_dump_json(indent=None))
