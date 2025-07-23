@@ -710,6 +710,34 @@ def app_revisions(project: str, version: str, /) -> None:
         print(revision)
 
 
+@APP.command(name="rsync", help="Rsync a release.")
+def app_rsync(project: str, version: str, source: str = ".", target: str = "/", /) -> None:
+    import subprocess
+
+    with config_lock() as config:
+        asf_uid = config_get(config, ["asf", "uid"])
+    if asf_uid is None:
+        show_error_and_exit("Please configure asf.uid before uploading.")
+
+    if not source.endswith("/"):
+        source += "/"
+
+    if target.startswith("./"):
+        target = target[2:]
+    elif target.startswith("/"):
+        target = target[1:]
+    if target and (not target.endswith("/")):
+        # Must not do this if target is empty
+        target += "/"
+
+    host, _verify_ssl = config_host_get()
+    if ":" in host:
+        host, _port = host.split(":", 1)
+    remote_target = f"{asf_uid}@{host}:/{project}/{version}/{target}"
+    cmd = ["rsync", "-av", "-e", "ssh -p 2222", source, remote_target]
+    subprocess.run(cmd, check=True)
+
+
 @APP.command(name="set", help="Set a configuration value using dot notation.")
 def app_set(path: str, value: str, /) -> None:
     parts = path.split(".")
