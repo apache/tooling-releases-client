@@ -286,6 +286,27 @@ def app_announce(
     print(announce.success)
 
 
+@APP.command(name="api", help="Call the API directly.")
+async def app_api(path: str, /, **kwargs: str) -> None:
+    print("app_api")
+    jwt_value = config_jwt_usable()
+    host, verify_ssl = config_host_get()
+    url = f"https://{host}/api{path}"
+    # if debugging:
+    #     print(url)
+    #     print(kwargs)
+    if "_version" in kwargs:
+        # There's a bug in Cyclopts where it does not pass --version to **kwargs
+        kwargs["version"] = kwargs["_version"]
+        del kwargs["_version"]
+    if not is_json(kwargs):
+        show_error_and_exit(f"Unexpected API response: {kwargs}")
+    if not is_json_dict(kwargs):
+        show_error_and_exit(f"Unexpected API response: {kwargs}")
+    json_data = await web_post_json(url, kwargs, jwt_value, verify_ssl)
+    print(json.dumps(json_data, indent=None))
+
+
 @APP_CHECKS.command(name="exceptions", help="Get check exceptions for a release revision.")
 def app_checks_exceptions(
     project: str,
@@ -1280,12 +1301,16 @@ async def web_get(url: str, jwt_token: str | None, verify_ssl: bool = True) -> J
 
 
 async def web_post(url: str, args: models.schema.Strict, jwt_token: str | None, verify_ssl: bool = True) -> JSON:
+    return await web_post_json(url, args.model_dump(), jwt_token, verify_ssl)
+
+
+async def web_post_json(url: str, args: JSON, jwt_token: str | None, verify_ssl: bool = True) -> JSON:
     connector = None if verify_ssl else aiohttp.TCPConnector(ssl=False)
     headers = {}
     if jwt_token is not None:
         headers["Authorization"] = f"Bearer {jwt_token}"
     async with aiohttp.ClientSession(connector=connector, headers=headers) as session:
-        async with session.post(url, json=args.model_dump()) as resp:
+        async with session.post(url, json=args) as resp:
             if resp.status not in (200, 201):
                 text = await resp.text()
                 show_error_and_exit(f"Error message from the API:\n{resp.status} {url}\n{text}")
