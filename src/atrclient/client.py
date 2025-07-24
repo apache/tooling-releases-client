@@ -262,6 +262,12 @@ def api_vote_start(api: ApiPost, args: models.api.VoteStartArgs) -> models.api.V
     return models.api.validate_vote_start(response)
 
 
+@api_post("/vote/tabulate")
+def api_vote_tabulate(api: ApiPost, args: models.api.VoteTabulateArgs) -> models.api.VoteTabulateResults:
+    response = api.post(args)
+    return models.api.validate_vote_tabulate(response)
+
+
 @APP.command(name="announce", help="Announce a release.")
 def app_announce(
     project: str,
@@ -288,7 +294,6 @@ def app_announce(
 
 @APP.command(name="api", help="Call the API directly.")
 async def app_api(path: str, /, **kwargs: str) -> None:
-    print("app_api")
     jwt_value = config_jwt_usable()
     host, verify_ssl = config_host_get()
     url = f"https://{host}/api{path}"
@@ -869,6 +874,13 @@ def app_vote_start(
     )
     vote_start = api_vote_start(vote_start_args)
     print(vote_start.task.model_dump_json(indent=None))
+
+
+@APP_VOTE.command(name="tabulate", help="Tabulate a vote.")
+def app_vote_tabulate(project: str, version: str, /) -> None:
+    vote_tabulate_args = models.api.VoteTabulateArgs(project=project, version=version)
+    vote_tabulate = api_vote_tabulate(vote_tabulate_args)
+    print(vote_tabulate.model_dump_json(indent=2))
 
 
 def checks_display(results: Sequence[models.sql.CheckResult], verbose: bool = False) -> None:
