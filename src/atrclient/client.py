@@ -901,7 +901,7 @@ def app_verify(url: str, /, verbose: bool = False) -> None:
         signature_asc_text=signature_asc_text,
         signature_sha3_256=signature_hash,
     )
-    print_if_verbose("To get they key, we are going to send the following API request:\n")
+    print_if_verbose("To get the key, we are going to send the following API request:\n")
     dumped_json = verify_provenance_args.model_dump()
     dumped_json["signature_asc_text"] = dumped_json["signature_asc_text"][:32] + "..."
     print_if_verbose(json.dumps(dumped_json, indent=2))
