@@ -11,7 +11,7 @@ build-backend = "hatchling.build"
 
 [project]
 name            = "apache-trusted-releases"
-version         = "0.20250724.1835"
+version         = "0.20250725.1934"
 description     = "ATR CLI and Python API"
 readme          = "README.md"
 requires-python = ">=3.13"
@@ -27,11 +27,13 @@ dependencies = [
   "aiohttp",
   "cyclopts",
   "filelock",
+  "pgpy>=0.6.0",
   "platformdirs",
   "pydantic",
   "pyjwt",
   "sqlalchemy",
   "sqlmodel",
+  "standard-imghdr>=3.13.0",
   "strictyaml",
 ]
 
@@ -72,4 +74,4 @@ select = [
 ]
 
 [tool.uv]
-exclude-newer = "2025-07-24T18:35:00Z"
+exclude-newer = "2025-07-25T19:34:00Z"

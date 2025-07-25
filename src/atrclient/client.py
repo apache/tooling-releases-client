@@ -26,7 +26,9 @@ import base64
 import contextlib
 import copy
 import datetime
+import hashlib
 import importlib.metadata as metadata
+import io
 import json
 import os
 import pathlib
@@ -40,6 +42,7 @@ import aiohttp
 import cyclopts
 import filelock
 import jwt
+import pgpy
 import platformdirs
 import pydantic
 import strictyaml
@@ -98,6 +101,19 @@ class ApiPost(ApiCore):
     def post(self, args: models.schema.Strict) -> JSON:
         jwt_value = config_jwt_usable()
         return asyncio.run(web_post(self.url, args, jwt_value, self.verify_ssl))
+
+
+class ForceUnexpiredOpenPGPKey(pgpy.PGPKey):
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
+        super().__init__(*args, **kwargs)
+
+    def __iter__(self) -> Generator[pgpy.PGPKey]:
+        # Just for the type checker
+        yield self
+
+    @property
+    def is_expired(self) -> bool:
+        return False
 
 
 A = TypeVar("A", bound=models.schema.Strict)
@@ -248,6 +264,12 @@ def api_ssh_list(api: ApiGet, asf_uid: str) -> models.api.SshListResults:
 def api_upload(api: ApiPost, args: models.api.UploadArgs) -> models.api.UploadResults:
     response = api.post(args)
     return models.api.validate_upload(response)
+
+
+@api_post("/verify/provenance")
+def api_verify_provenance(api: ApiPost, args: models.api.VerifyProvenanceArgs) -> models.api.VerifyProvenanceResults:
+    response = api.post(args)
+    return models.api.validate_verify_provenance(response)
 
 
 @api_post("/vote/resolve")
@@ -832,6 +854,73 @@ def app_upload(project: str, version: str, path: str, filepath: str, /) -> None:
     print(upload.revision.model_dump_json(indent=None))
 
 
+@APP.command(name="verify", help="Verify an artifact.")
+def app_verify(url: str, /, verbose: bool = False) -> None:
+    def print_if_verbose(message: str) -> None:
+        if verbose:
+            print(message)
+
+    if url.endswith(".asc"):
+        artifact_url = url[:-4]
+        signature_url = url
+        print_if_verbose("You provided the signature file URL:\n")
+        print_if_verbose(signature_url + "\n")
+        print_if_verbose("And we will assume that the artifact file URL is here:\n")
+        print_if_verbose(artifact_url)
+    else:
+        artifact_url = url
+        signature_url = url + ".asc"
+        print_if_verbose("You provided the artifact file URL:\n")
+        print_if_verbose(artifact_url + "\n")
+        print_if_verbose("And we will assume that the signature file URL is here:\n")
+        print_if_verbose(signature_url)
+    print_if_verbose("")
+
+    print_if_verbose("We will now download the artifact and then the signature from these URLs.\n")
+    artifact_data = asyncio.run(web_get_url(artifact_url, verify_ssl=False))
+    signature_data = asyncio.run(web_get_url(signature_url, verify_ssl=False))
+    if not signature_data:
+        show_error_and_exit(f"Signature is empty: {signature_url}")
+    artifact_hash = hashlib.sha3_256(artifact_data).hexdigest()
+    signature_hash = hashlib.sha3_256(signature_data).hexdigest()
+    print_if_verbose(f"The artifact file is {len(artifact_data):,} bytes in size, and its SHA3-256 is:\n")
+    print_if_verbose(artifact_hash + "\n")
+    print_if_verbose(f"The signature file is {len(signature_data):,} bytes in size, and its SHA3-256 is:\n")
+    print_if_verbose(signature_hash)
+    print_if_verbose("")
+
+    artifact_file_name = artifact_url.split("/")[-1]
+    signature_asc_text = signature_data.decode("utf-8", errors="ignore")
+    signature_file_name = signature_url.split("/")[-1]
+
+    print_if_verbose("To verify the signature, we need the OpenPGP signing key from the ATR.\n")
+    verify_provenance_args = models.api.VerifyProvenanceArgs(
+        artifact_file_name=artifact_file_name,
+        artifact_sha3_256=artifact_hash,
+        signature_file_name=signature_file_name,
+        signature_asc_text=signature_asc_text,
+        signature_sha3_256=signature_hash,
+    )
+    print_if_verbose("To get they key, we are going to send the following API request:\n")
+    dumped_json = verify_provenance_args.model_dump()
+    dumped_json["signature_asc_text"] = dumped_json["signature_asc_text"][:32] + "..."
+    print_if_verbose(json.dumps(dumped_json, indent=2))
+    print_if_verbose("")
+    verify_provenance = api_verify_provenance(verify_provenance_args)
+    print_if_verbose("The ATR found a matching OpenPGP key with the following fingerprint:\n")
+    print_if_verbose(verify_provenance.fingerprint.upper() + "\n")
+    print_if_verbose("This key is associated with these committees with a project containing the artifact:\n")
+    for committee_with_artifact in verify_provenance.committees_with_artifact:
+        print_if_verbose(f"-- {committee_with_artifact.committee} --")
+        print_if_verbose(f"KEYS URL: {committee_with_artifact.keys_file_url}")
+        print_if_verbose(f"SHA3-256: {committee_with_artifact.keys_file_sha3_256}")
+        print_if_verbose("")
+
+    print_if_verbose("We can now try to verify the signature using the OpenPGP key from the ATR.\n")
+    print_if_verbose("Note that we ignore key expiry, so we consider expired key signatures to be valid.\n")
+    verify_summary(verify_provenance, signature_data, artifact_data, verbose)
+
+
 @APP_VOTE.command(name="resolve", help="Resolve a vote.")
 def app_vote_resolve(
     project: str,
@@ -1226,6 +1315,12 @@ def main() -> None:
     APP(sys.argv[1:])
 
 
+@contextlib.contextmanager
+def quiet() -> Generator[None]:
+    with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(io.StringIO()):
+        yield
+
+
 def releases_display(releases: Sequence[models.sql.Release]) -> None:
     if not releases:
         print("No releases found for this project.")
@@ -1288,6 +1383,31 @@ def timestamp_format(ts: int | str | None) -> str | None:
         return str(ts)
 
 
+def verify_summary(
+    verify_provenance: models.api.VerifyProvenanceResults,
+    signature_data: bytes,
+    artifact_data: bytes,
+    verbose: bool = False,
+) -> None:
+    key, _ = ForceUnexpiredOpenPGPKey.from_blob(verify_provenance.key_asc_text)
+    sig = pgpy.PGPSignature.from_blob(signature_data)
+    with quiet():
+        verification_result = key.verify(artifact_data, sig)
+    bad_signatures = sum(1 for _ in verification_result.bad_signatures)
+    good_signatures = sum(1 for _ in verification_result.good_signatures)
+    if bad_signatures:
+        if good_signatures:
+            show_error_and_exit("There was an uncertain mixture of good and bad signatures.")
+        for bad_signature in verification_result.bad_signatures:
+            for issue in bad_signature.issues:
+                print(f"The verification package reported the following issue: {issue.name}")
+        show_error_and_exit("The signature is not valid!")
+    if verbose:
+        print("The signature is valid! This completes the verification process.")
+    else:
+        print("The signature is valid!")
+
+
 async def web_get(url: str, jwt_token: str | None, verify_ssl: bool = True) -> JSON:
     connector = None if verify_ssl else aiohttp.TCPConnector(ssl=False)
     headers = {}
@@ -1310,6 +1430,15 @@ async def web_get(url: str, jwt_token: str | None, verify_ssl: bool = True) -> J
             if not is_json(data):
                 show_error_and_exit(f"Unexpected API response: {data}")
             return data
+
+
+async def web_get_url(url: str, verify_ssl: bool = True) -> bytes:
+    connector = None if verify_ssl else aiohttp.TCPConnector(ssl=False)
+    async with aiohttp.ClientSession(connector=connector) as session:
+        async with session.get(url) as response:
+            if response.status != 200:
+                show_error_and_exit(f"URL not found: {url}")
+            return await response.read()
 
 
 async def web_post(url: str, args: models.schema.Strict, jwt_token: str | None, verify_ssl: bool = True) -> JSON:
