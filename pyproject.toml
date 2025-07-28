@@ -11,7 +11,7 @@ build-backend = "hatchling.build"
 
 [project]
 name            = "apache-trusted-releases"
-version         = "0.20250728.1817"
+version         = "0.20250728.1919"
 description     = "ATR CLI and Python API"
 readme          = "README.md"
 requires-python = ">=3.13"
@@ -74,4 +74,4 @@ select = [
 ]
 
 [tool.uv]
-exclude-newer = "2025-07-28T18:17:00Z"
+exclude-newer = "2025-07-28T19:19:00Z"

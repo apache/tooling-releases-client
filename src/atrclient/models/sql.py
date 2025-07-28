@@ -192,6 +192,11 @@ class ResultsJSON(sqlalchemy.types.TypeDecorator):
 
 # SQL models
 
+
+def example(value: Any) -> dict[Literal["schema_extra"], dict[str, Any]]:
+    return {"schema_extra": {"json_schema_extra": {"examples": [value]}}}
+
+
 # SQL models with no dependencies
 
 
@@ -309,8 +314,8 @@ class TextValue(sqlmodel.SQLModel, table=True):
 class Committee(sqlmodel.SQLModel, table=True):
     # TODO: Consider using key or label for primary string keys
     # Then we can use simply "name" for full_name, and make it str rather than str | None
-    name: str = sqlmodel.Field(unique=True, primary_key=True)
-    full_name: str | None = sqlmodel.Field(default=None)
+    name: str = sqlmodel.Field(unique=True, primary_key=True, **example("example"))
+    full_name: str | None = sqlmodel.Field(default=None, **example("Example"))
     # True only if this is an incubator podling with a PPMC
     is_podling: bool = sqlmodel.Field(default=False)
 
@@ -331,9 +336,15 @@ class Committee(sqlmodel.SQLModel, table=True):
     # M-1: Project -> Committee
     projects: list["Project"] = sqlmodel.Relationship(back_populates="committee")
 
-    committee_members: list[str] = sqlmodel.Field(default_factory=list, sa_column=sqlalchemy.Column(sqlalchemy.JSON))
-    committers: list[str] = sqlmodel.Field(default_factory=list, sa_column=sqlalchemy.Column(sqlalchemy.JSON))
-    release_managers: list[str] = sqlmodel.Field(default_factory=list, sa_column=sqlalchemy.Column(sqlalchemy.JSON))
+    committee_members: list[str] = sqlmodel.Field(
+        default_factory=list, sa_column=sqlalchemy.Column(sqlalchemy.JSON), **example(["sbp", "tn", "wave"])
+    )
+    committers: list[str] = sqlmodel.Field(
+        default_factory=list, sa_column=sqlalchemy.Column(sqlalchemy.JSON), **example(["sbp", "tn", "wave"])
+    )
+    release_managers: list[str] = sqlmodel.Field(
+        default_factory=list, sa_column=sqlalchemy.Column(sqlalchemy.JSON), **example(["wave"])
+    )
 
     # M-M: Committee -> [PublicSigningKey]
     # M-M: PublicSigningKey -> [Committee]
@@ -356,12 +367,12 @@ def see_also(arg: Any) -> None:
 class Project(sqlmodel.SQLModel, table=True):
     # TODO: Consider using key or label for primary string keys
     # Then we can use simply "name" for full_name, and make it str rather than str | None
-    name: str = sqlmodel.Field(unique=True, primary_key=True)
+    name: str = sqlmodel.Field(unique=True, primary_key=True, **example("example"))
     # TODO: Ideally full_name would be unique for str only, but that's complex
     # We always include "Apache" in the full_name
-    full_name: str | None = sqlmodel.Field(default=None)
+    full_name: str | None = sqlmodel.Field(default=None, **example("Apache Example"))
 
-    status: ProjectStatus = sqlmodel.Field(default=ProjectStatus.ACTIVE)
+    status: ProjectStatus = sqlmodel.Field(default=ProjectStatus.ACTIVE, **example(ProjectStatus.ACTIVE))
 
     # M-1: Project -> Project
     # 1-M: (Project.child_project is missing, would be Project -> [Project])
@@ -369,13 +380,13 @@ class Project(sqlmodel.SQLModel, table=True):
     # NOTE: Neither "Project" | None nor "Project | None" works
     super_project: Optional["Project"] = sqlmodel.Relationship()
 
-    description: str | None = sqlmodel.Field(default=None)
-    category: str | None = sqlmodel.Field(default=None)
-    programming_languages: str | None = sqlmodel.Field(default=None)
+    description: str | None = sqlmodel.Field(default=None, **example("Example is a simple example project"))
+    category: str | None = sqlmodel.Field(default=None, **example("data,storage"))
+    programming_languages: str | None = sqlmodel.Field(default=None, **example("c,python"))
 
     # M-1: Project -> Committee
     # 1-M: Committee -> [Project]
-    committee_name: str | None = sqlmodel.Field(default=None, foreign_key="committee.name")
+    committee_name: str | None = sqlmodel.Field(default=None, foreign_key="committee.name", **example("example"))
     committee: Committee | None = sqlmodel.Relationship(back_populates="projects")
     see_also(Committee.projects)
 
@@ -396,9 +407,11 @@ class Project(sqlmodel.SQLModel, table=True):
     )
 
     created: datetime.datetime = sqlmodel.Field(
-        default_factory=lambda: datetime.datetime.now(datetime.UTC), sa_column=sqlalchemy.Column(UTCDateTime)
+        default_factory=lambda: datetime.datetime.now(datetime.UTC),
+        sa_column=sqlalchemy.Column(UTCDateTime),
+        **example(datetime.datetime(2025, 5, 1, 1, 2, 3, tzinfo=datetime.UTC)),
     )
-    created_by: str | None = sqlmodel.Field(default=None)
+    created_by: str | None = sqlmodel.Field(default=None, **example("user"))
 
     @property
     def display_name(self) -> str:
@@ -646,10 +659,6 @@ class Release(sqlmodel.SQLModel, table=True):
 # SQL models referencing Committee, Project, or Release
 
 
-def example(value: Any) -> dict[Literal["schema_extra"], dict[str, Any]]:
-    return {"schema_extra": {"json_schema_extra": {"examples": [value]}}}
-
-
 # CheckResult: Release
 class CheckResult(sqlmodel.SQLModel, table=True):
     # TODO: We have default=None here with a field typed int, not int | None
@@ -657,19 +666,19 @@ class CheckResult(sqlmodel.SQLModel, table=True):
 
     # M-1: CheckResult -> Release
     # 1-M: Release -C-> [CheckResult]
-    release_name: str = sqlmodel.Field(foreign_key="release.name", ondelete="CASCADE")
+    release_name: str = sqlmodel.Field(foreign_key="release.name", ondelete="CASCADE", **example("example-0.0.1"))
     release: Release = sqlmodel.Relationship(back_populates="check_results")
 
     # We don't call this latest_revision_number, because it might not be the latest
     revision_number: str | None = sqlmodel.Field(default=None, index=True, **example("00005"))
-    checker: str = sqlmodel.Field(**example("atr.tasks.checks.hashing.HashingCheck"))
+    checker: str = sqlmodel.Field(**example("atr.tasks.checks.license.files"))
     primary_rel_path: str | None = sqlmodel.Field(
         default=None, index=True, **example("apache-example-0.0.1-source.tar.gz")
     )
     member_rel_path: str | None = sqlmodel.Field(default=None, index=True, **example("apache-example-0.0.1/pom.xml"))
     created: datetime.datetime = sqlmodel.Field(
         sa_column=sqlalchemy.Column(UTCDateTime),
-        **example(datetime.datetime(2025, 1, 1, 12, 0, 0, tzinfo=datetime.UTC)),
+        **example(datetime.datetime(2025, 5, 1, 1, 2, 3, tzinfo=datetime.UTC)),
     )
     status: CheckResultStatus = sqlmodel.Field(default=CheckResultStatus.SUCCESS, **example(CheckResultStatus.SUCCESS))
     message: str = sqlmodel.Field(**example("sha512 matches for apache-example-0.0.1/pom.xml"))
@@ -698,13 +707,17 @@ class DistributionChannel(sqlmodel.SQLModel, table=True):
 # PublicSigningKey: Committee
 class PublicSigningKey(sqlmodel.SQLModel, table=True):
     # The fingerprint must be stored as lowercase hex
-    fingerprint: str = sqlmodel.Field(primary_key=True, unique=True)
+    fingerprint: str = sqlmodel.Field(
+        primary_key=True, unique=True, **example("0123456789abcdef0123456789abcdef01234567")
+    )
     # The algorithm is an RFC 4880 algorithm ID
-    algorithm: int
+    algorithm: int = sqlmodel.Field(**example(1))
     # Key length in bits
-    length: int
+    length: int = sqlmodel.Field(**example(4096))
     # Creation date
-    created: datetime.datetime = sqlmodel.Field(sa_column=sqlalchemy.Column(UTCDateTime))
+    created: datetime.datetime = sqlmodel.Field(
+        sa_column=sqlalchemy.Column(UTCDateTime), **example(datetime.datetime(2025, 5, 1, 1, 2, 3, tzinfo=datetime.UTC))
+    )
     # Latest self signature
     latest_self_signature: datetime.datetime | None = sqlmodel.Field(
         default=None, sa_column=sqlalchemy.Column(UTCDateTime)
@@ -712,15 +725,17 @@ class PublicSigningKey(sqlmodel.SQLModel, table=True):
     # Expiration date
     expires: datetime.datetime | None = sqlmodel.Field(default=None, sa_column=sqlalchemy.Column(UTCDateTime))
     # The primary UID declared in the key
-    primary_declared_uid: str | None
+    primary_declared_uid: str | None = sqlmodel.Field(**example("User <user@example.org>"))
     # The secondary UIDs declared in the key
     secondary_declared_uids: list[str] = sqlmodel.Field(
-        default_factory=list, sa_column=sqlalchemy.Column(sqlalchemy.JSON)
+        default_factory=list, sa_column=sqlalchemy.Column(sqlalchemy.JSON), **example(["User <user@example.net>"])
     )
     # The UID used by Apache, if available
-    apache_uid: str | None
+    apache_uid: str | None = sqlmodel.Field(**example("user"))
     # The ASCII armored key
-    ascii_armored_key: str
+    ascii_armored_key: str = sqlmodel.Field(
+        **example("-----BEGIN PGP PUBLIC KEY BLOCK-----\n\n...\n-----END PGP PUBLIC KEY BLOCK-----\n")
+    )
 
     # M-M: PublicSigningKey -> [Committee]
     # M-M: Committee -> [PublicSigningKey]

@@ -321,7 +321,7 @@ def app_announce(
 
 
 @APP.command(name="api", help="Call the API directly.")
-async def app_api(path: str, /, **kwargs: str) -> None:
+def app_api(path: str, /, **kwargs: str) -> None:
     jwt_value = config_jwt_usable()
     host, verify_ssl = config_host_get()
     url = f"https://{host}/api{path}"
@@ -329,14 +329,14 @@ async def app_api(path: str, /, **kwargs: str) -> None:
     #     print(url)
     #     print(kwargs)
     if "_version" in kwargs:
-        # There's a bug in Cyclopts where it does not pass --version to **kwargs
+        # TODO: There's a bug in Cyclopts where it does not pass --version to **kwargs
         kwargs["version"] = kwargs["_version"]
         del kwargs["_version"]
     if not is_json(kwargs):
         show_error_and_exit(f"Unexpected API response: {kwargs}")
     if not is_json_dict(kwargs):
         show_error_and_exit(f"Unexpected API response: {kwargs}")
-    json_data = await web_post_json(url, kwargs, jwt_value, verify_ssl)
+    json_data = asyncio.run(web_post_json(url, kwargs, jwt_value, verify_ssl))
     print(json.dumps(json_data, indent=None))
 
 
