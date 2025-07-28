@@ -1,5 +1,5 @@
-$ atr set atr.host 127.0.0.1:8080
-Set atr.host to "127.0.0.1:8080".
+$ atr set atr.host localhost.apache.org:8080
+Set atr.host to "localhost.apache.org:8080".
 
 $ atr dev user
 <?user?>
@@ -29,7 +29,7 @@ $ atr upload tooling-test-example 0.3+slow /deliberately_slow_ATR_task_filename.
 ! atr vote start tooling-test-example 0.3+slow 00002 -m "<!user!>@apache.org"
 <.stderr.>
 atr: error: Error message from the API:
-400 https://127.0.0.1:8080/api/vote/start
+400 https://localhost.apache.org:8080/api/vote/start
 {
   "error": "All checks must be completed before starting a vote"
 }

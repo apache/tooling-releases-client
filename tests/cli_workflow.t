@@ -1,5 +1,5 @@
-$ atr set atr.host 127.0.0.1:8080
-Set atr.host to "127.0.0.1:8080".
+$ atr set atr.host localhost.apache.org:8080
+Set atr.host to "localhost.apache.org:8080".
 
 $ atr dev user
 <?user?>

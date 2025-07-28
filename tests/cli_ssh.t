@@ -1,5 +1,5 @@
-$ atr set atr.host 127.0.0.1:8080
-Set atr.host to "127.0.0.1:8080".
+$ atr set atr.host localhost.apache.org:8080
+Set atr.host to "localhost.apache.org:8080".
 
 $ atr dev user
 <?user?>
@@ -19,7 +19,7 @@ $ atr ssh list
 ! atr ssh add invalid-key
 <.stderr.>
 atr: error: Error message from the API:
-500 https://127.0.0.1:8080/api/ssh/add
+500 https://localhost.apache.org:8080/api/ssh/add
 {
   "error": "Invalid SSH key format"
 }
