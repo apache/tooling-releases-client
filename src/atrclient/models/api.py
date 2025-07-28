@@ -26,28 +26,42 @@ from . import schema, sql, tabulate
 T = TypeVar("T")
 
 
+def example(value: Any) -> dict[Literal["json_schema_extra"], dict[str, Any]]:
+    return {"json_schema_extra": {"example": value}}
+
+
 class ResultsTypeError(TypeError):
     pass
 
 
 class AnnounceArgs(schema.Strict):
-    project: str
-    version: str
-    revision: str
-    email_to: str
-    subject: str
-    body: str
-    path_suffix: str
+    project: str = schema.Field(..., **example("example"))
+    version: str = schema.Field(..., **example("1.0.0"))
+    revision: str = schema.Field(..., **example("00005"))
+    email_to: str = schema.Field(..., **example("dev@example.apache.org"))
+    subject: str = schema.Field(..., **example("[ANNOUNCE] Apache Example 1.0.0 release"))
+    body: str = schema.Field(
+        ...,
+        **example("The Apache Example team is pleased to announce the release of Example 1.0.0..."),
+    )
+    path_suffix: str = schema.Field(..., **example("example/1.0.0"))
 
 
 class AnnounceResults(schema.Strict):
     endpoint: Literal["/announce"] = schema.Field(alias="endpoint")
-    success: str
+    success: str = schema.Field(..., **example("Announcement sent"))
 
 
 class ChecksListResults(schema.Strict):
     endpoint: Literal["/checks/list"] = schema.Field(alias="endpoint")
     checks: Sequence[sql.CheckResult]
+    checks_revision: str = schema.Field(..., **example("00005"))
+    current_phase: sql.ReleasePhase = schema.Field(..., **example(sql.ReleasePhase.RELEASE_CANDIDATE))
+
+    @pydantic.field_validator("current_phase", mode="before")
+    @classmethod
+    def current_phase_to_enum(cls, v):
+        return sql.ReleasePhase(v) if isinstance(v, str) else v
 
 
 class ChecksOngoingResults(schema.Strict):
@@ -254,6 +268,19 @@ class ReleasesProjectResults(schema.Strict):
 class ReleasesVersionResults(schema.Strict):
     endpoint: Literal["/releases/version"] = schema.Field(alias="endpoint")
     release: sql.Release
+
+    @pydantic.field_validator("release", mode="before")
+    @classmethod
+    def _preserve_latest_revision_number(cls, v):
+        if isinstance(v, dict):
+            data = dict(v)
+            lrn = data.pop("latest_revision_number", None)
+            allowed = {k: data[k] for k in data if k in sql.Release.model_fields}
+            obj = sql.Release(**allowed)
+            if lrn is not None:
+                setattr(obj, "_latest_revision_number", lrn)
+            return obj
+        return v
 
 
 class ReleasesRevisionsResults(schema.Strict):

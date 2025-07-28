@@ -107,6 +107,8 @@ def test_app_checks_status_verbose(capsys: pytest.CaptureFixture[str], fixture_c
 
     checks_payload = {
         "endpoint": "/checks/list",
+        "checks_revision": "00003",
+        "current_phase": "release_candidate_draft",
         "checks": [
             {
                 "release_name": "test-project-2.3.1",

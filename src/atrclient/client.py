@@ -26,6 +26,7 @@ import base64
 import contextlib
 import copy
 import datetime
+import functools
 import hashlib
 import importlib.metadata as metadata
 import io
@@ -122,13 +123,18 @@ R = TypeVar("R", bound=models.api.Results)
 
 def api_get(path: str) -> Callable[[Callable[..., R]], Callable[..., R]]:
     def decorator(func: Callable[..., R]) -> Callable[..., R]:
+        @functools.wraps(func)
         def wrapper(*args: str, **kwargs: str | None) -> R:
             api_instance = ApiGet(path)
             try:
                 response = func(api_instance, *args, **kwargs)
-            except (pydantic.ValidationError, models.api.ResultsTypeError) as e:
+            except pydantic.ValidationError as e:
+                error_summary = "\n".join([f"  - {err['loc'][1]}: {err['msg']}" for err in e.errors()])
+                show_error_and_exit(f"API response failed validation:\n{error_summary}")
+            except (aiohttp.ClientError, models.api.ResultsTypeError) as e:
                 show_error_and_exit(f"Unexpected API GET response: {e}")
-            return response
+            else:
+                return response
 
         return wrapper
 
