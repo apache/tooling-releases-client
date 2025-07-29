@@ -212,12 +212,6 @@ def api_keys_user(api: ApiGet, asf_uid: str) -> models.api.KeysUserResults:
     return models.api.validate_keys_user(response)
 
 
-@api_get("/list")
-def api_list(api: ApiGet, project: str, version: str) -> models.api.ListResults:
-    response = api.get(project, version)
-    return models.api.validate_list(response)
-
-
 @api_post("/releases/create")
 def api_releases_create(api: ApiPost, args: models.api.ReleasesCreateArgs) -> models.api.ReleasesCreateResults:
     response = api.post(args)
@@ -228,6 +222,14 @@ def api_releases_create(api: ApiPost, args: models.api.ReleasesCreateArgs) -> mo
 def api_releases_delete(api: ApiPost, args: models.api.ReleasesDeleteArgs) -> models.api.ReleasesDeleteResults:
     response = api.post(args)
     return models.api.validate_releases_delete(response)
+
+
+@api_get("/releases/paths")
+def api_releases_paths(
+    api: ApiGet, project: str, version: str, revision: str | None = None
+) -> models.api.ReleasesPathsResults:
+    response = api.get(project, version, revision=revision)
+    return models.api.validate_releases_paths(response)
 
 
 @api_get("/releases/project")
@@ -732,8 +734,8 @@ def app_keys_user(asf_uid: str | None = None) -> None:
 
 @APP.command(name="list", help="List all files within a release.")
 def app_list(project: str, version: str, revision: str | None = None, /) -> None:
-    list_results = api_list(project, version, revision)
-    for rel_path in list_results.rel_paths:
+    releases_paths = api_releases_paths(project, version, revision)
+    for rel_path in releases_paths.rel_paths:
         print(rel_path)
 
 
@@ -1107,11 +1109,11 @@ def config_jwt_refresh(asf_uid: str | None = None) -> str:
         show_error_and_exit("No ASF UID provided and asf.uid not configured.")
 
     host, verify_ssl = config_host_get()
-    url = f"https://{host}/api/jwt"
-    args = models.api.JwtArgs(asfuid=asf_uid, pat=pat_value)
+    url = f"https://{host}/api/jwt/create"
+    args = models.api.JwtCreateArgs(asfuid=asf_uid, pat=pat_value)
     response = asyncio.run(web_post(url, args, jwt_token=None, verify_ssl=verify_ssl))
     try:
-        jwt_results = models.api.validate_jwt(response)
+        jwt_results = models.api.validate_jwt_create(response)
     except (pydantic.ValidationError, models.api.ResultsTypeError) as e:
         show_error_and_exit(f"Unexpected API response: {response}\n{e}")
 
