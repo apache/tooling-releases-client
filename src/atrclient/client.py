@@ -156,12 +156,6 @@ def api_post(path: str) -> Callable[[Callable[[ApiPost, A], R]], Callable[[A], R
     return decorator
 
 
-@api_post("/announce")
-def api_announce(api: ApiPost, args: models.api.AnnounceArgs) -> models.api.AnnounceResults:
-    response = api.post(args)
-    return models.api.validate_announce(response)
-
-
 @api_get("/checks/list")
 def api_checks_list(api: ApiGet, project: str, version: str, revision: str) -> models.api.ChecksListResults:
     response = api.get(project, version, revision)
@@ -210,6 +204,12 @@ def api_keys_upload(api: ApiPost, args: models.api.KeysUploadArgs) -> models.api
 def api_keys_user(api: ApiGet, asf_uid: str) -> models.api.KeysUserResults:
     response = api.get(asf_uid)
     return models.api.validate_keys_user(response)
+
+
+@api_post("/release/announce")
+def api_release_announce(api: ApiPost, args: models.api.ReleaseAnnounceArgs) -> models.api.ReleaseAnnounceResults:
+    response = api.post(args)
+    return models.api.validate_release_announce(response)
 
 
 @api_post("/releases/create")
@@ -309,7 +309,7 @@ def app_announce(
     body: Annotated[str | None, cyclopts.Parameter(alias="-b", name="--body")] = None,
     path_suffix: Annotated[str | None, cyclopts.Parameter(alias="-p", name="--path-suffix")] = None,
 ) -> None:
-    announce_args = models.api.AnnounceArgs(
+    announce_args = models.api.ReleaseAnnounceArgs(
         project=project,
         version=version,
         revision=revision,
@@ -318,8 +318,10 @@ def app_announce(
         body=body or f"Release {project} {version} has been announced.",
         path_suffix=path_suffix or "",
     )
-    announce = api_announce(announce_args)
-    print(announce.success)
+    announce = api_release_announce(announce_args)
+    if not announce.success:
+        show_error_and_exit("Failed to announce release.")
+    print("Announcement sent.")
 
 
 @APP.command(name="api", help="Call the API directly.")

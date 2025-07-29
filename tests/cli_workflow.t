@@ -56,7 +56,7 @@ $ atr vote resolve tooling-test-example 0.3+cli passed
 Vote marked as passed
 
 $ atr announce tooling-test-example 0.3+cli 00003 -m "<!user!>@apache.org" -s "[ANNOUNCE] Release tooling-test-example 0.3+cli" -b "Release tooling-test-example 0.3+cli has been announced."
-Announcement sent
+Announcement sent.
 
 <# tidy up #>
 * atr dev delete tooling-test-example 0.3+cli
