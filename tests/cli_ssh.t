@@ -19,7 +19,7 @@ $ atr ssh list
 ! atr ssh add invalid-key
 <.stderr.>
 atr: error: Error message from the API:
-500 https://localhost.apache.org:8080/api/ssh/add
+500 https://localhost.apache.org:8080/api/ssh-key/add
 {
   "error": "Invalid SSH key format"
 }

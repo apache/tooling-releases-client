@@ -170,28 +170,22 @@ def api_checks_ongoing(
     return models.api.validate_checks_ongoing(response)
 
 
-@api_post("/draft/delete")
-def api_draft_delete(api: ApiPost, args: models.api.DraftDeleteArgs) -> models.api.DraftDeleteResults:
+@api_post("/key/add")
+def api_key_add(api: ApiPost, args: models.api.KeyAddArgs) -> models.api.KeyAddResults:
     response = api.post(args)
-    return models.api.validate_draft_delete(response)
+    return models.api.validate_key_add(response)
 
 
-@api_post("/keys/add")
-def api_keys_add(api: ApiPost, args: models.api.KeysAddArgs) -> models.api.KeysAddResults:
+@api_post("/key/delete")
+def api_key_delete(api: ApiPost, args: models.api.KeyDeleteArgs) -> models.api.KeyDeleteResults:
     response = api.post(args)
-    return models.api.validate_keys_add(response)
+    return models.api.validate_key_delete(response)
 
 
-@api_post("/keys/delete")
-def api_keys_delete(api: ApiPost, args: models.api.KeysDeleteArgs) -> models.api.KeysDeleteResults:
-    response = api.post(args)
-    return models.api.validate_keys_delete(response)
-
-
-@api_get("/keys/get")
-def api_keys_get(api: ApiGet, fingerprint: str) -> models.api.KeysGetResults:
+@api_get("/key/get")
+def api_key_get(api: ApiGet, fingerprint: str) -> models.api.KeyGetResults:
     response = api.get(fingerprint)
-    return models.api.validate_keys_get(response)
+    return models.api.validate_key_get(response)
 
 
 @api_post("/keys/upload")
@@ -206,78 +200,88 @@ def api_keys_user(api: ApiGet, asf_uid: str) -> models.api.KeysUserResults:
     return models.api.validate_keys_user(response)
 
 
+@api_get("/project/releases")
+def api_project_releases(api: ApiGet, project: str) -> models.api.ProjectReleasesResults:
+    response = api.get(project)
+    return models.api.validate_project_releases(response)
+
+
 @api_post("/release/announce")
 def api_release_announce(api: ApiPost, args: models.api.ReleaseAnnounceArgs) -> models.api.ReleaseAnnounceResults:
     response = api.post(args)
     return models.api.validate_release_announce(response)
 
 
-@api_post("/releases/create")
-def api_releases_create(api: ApiPost, args: models.api.ReleasesCreateArgs) -> models.api.ReleasesCreateResults:
+@api_post("/release/create")
+def api_release_create(api: ApiPost, args: models.api.ReleaseCreateArgs) -> models.api.ReleaseCreateResults:
     response = api.post(args)
-    return models.api.validate_releases_create(response)
+    return models.api.validate_release_create(response)
 
 
-@api_post("/releases/delete")
-def api_releases_delete(api: ApiPost, args: models.api.ReleasesDeleteArgs) -> models.api.ReleasesDeleteResults:
+@api_post("/release/delete")
+def api_release_delete(api: ApiPost, args: models.api.ReleaseDeleteArgs) -> models.api.ReleaseDeleteResults:
     response = api.post(args)
-    return models.api.validate_releases_delete(response)
+    return models.api.validate_release_delete(response)
 
 
-@api_get("/releases/paths")
-def api_releases_paths(
+@api_post("/release/draft/delete")
+def api_release_draft_delete(
+    api: ApiPost, args: models.api.ReleaseDraftDeleteArgs
+) -> models.api.ReleaseDraftDeleteResults:
+    response = api.post(args)
+    return models.api.validate_release_draft_delete(response)
+
+
+@api_get("/release/paths")
+def api_release_paths(
     api: ApiGet, project: str, version: str, revision: str | None = None
-) -> models.api.ReleasesPathsResults:
+) -> models.api.ReleasePathsResults:
     response = api.get(project, version, revision=revision)
-    return models.api.validate_releases_paths(response)
+    return models.api.validate_release_paths(response)
 
 
-@api_get("/releases/project")
-def api_releases_project(api: ApiGet, project: str) -> models.api.ReleasesProjectResults:
-    response = api.get(project)
-    return models.api.validate_releases_project(response)
-
-
-@api_get("/releases/version")
-def api_releases_version(api: ApiGet, project: str, version: str) -> models.api.ReleasesVersionResults:
+@api_get("/release/get")
+def api_release_get(api: ApiGet, project: str, version: str) -> models.api.ReleaseGetResults:
     response = api.get(project, version)
-    return models.api.validate_releases_version(response)
+    return models.api.validate_release_get(response)
 
 
-@api_get("/revisions")
-def api_revisions(api: ApiGet, project: str, version: str) -> models.api.RevisionsResults:
+@api_get("/release/revisions")
+def api_release_revisions(api: ApiGet, project: str, version: str) -> models.api.ReleaseRevisionsResults:
     response = api.get(project, version)
-    return models.api.validate_revisions(response)
+    return models.api.validate_release_revisions(response)
 
 
-@api_post("/ssh/add")
-def api_ssh_add(api: ApiPost, args: models.api.SshAddArgs) -> models.api.SshAddResults:
+@api_post("/release/upload")
+def api_release_upload(api: ApiPost, args: models.api.ReleaseUploadArgs) -> models.api.ReleaseUploadResults:
     response = api.post(args)
-    return models.api.validate_ssh_add(response)
+    return models.api.validate_release_upload(response)
 
 
-@api_post("/ssh/delete")
-def api_ssh_delete(api: ApiPost, args: models.api.SshDeleteArgs) -> models.api.SshDeleteResults:
+@api_post("/signature/provenance")
+def api_signature_provenance(
+    api: ApiPost, args: models.api.SignatureProvenanceArgs
+) -> models.api.SignatureProvenanceResults:
     response = api.post(args)
-    return models.api.validate_ssh_delete(response)
+    return models.api.validate_signature_provenance(response)
 
 
-@api_get("/ssh/list")
-def api_ssh_list(api: ApiGet, asf_uid: str) -> models.api.SshListResults:
+@api_post("/ssh-key/add")
+def api_ssh_key_add(api: ApiPost, args: models.api.SshKeyAddArgs) -> models.api.SshKeyAddResults:
+    response = api.post(args)
+    return models.api.validate_ssh_key_add(response)
+
+
+@api_post("/ssh-key/delete")
+def api_ssh_key_delete(api: ApiPost, args: models.api.SshKeyDeleteArgs) -> models.api.SshKeyDeleteResults:
+    response = api.post(args)
+    return models.api.validate_ssh_key_delete(response)
+
+
+@api_get("/ssh-keys/list")
+def api_ssh_keys_list(api: ApiGet, asf_uid: str) -> models.api.SshKeysListResults:
     response = api.get(asf_uid)
-    return models.api.validate_ssh_list(response)
-
-
-@api_post("/upload")
-def api_upload(api: ApiPost, args: models.api.UploadArgs) -> models.api.UploadResults:
-    response = api.post(args)
-    return models.api.validate_upload(response)
-
-
-@api_post("/verify/provenance")
-def api_verify_provenance(api: ApiPost, args: models.api.VerifyProvenanceArgs) -> models.api.VerifyProvenanceResults:
-    response = api.post(args)
-    return models.api.validate_verify_provenance(response)
+    return models.api.validate_ssh_keys_list(response)
 
 
 @api_post("/vote/resolve")
@@ -376,7 +380,7 @@ def app_checks_status(
     revision: str | None = None,
     verbose: Annotated[bool, cyclopts.Parameter(alias="-v", name="--verbose")] = False,
 ) -> None:
-    releases_version = api_releases_version(project, version)
+    releases_version = api_release_get(project, version)
     release = releases_version.release
     # TODO: Handle the not found case better
     if release.phase != "release_candidate_draft":
@@ -452,8 +456,8 @@ def app_config_path() -> None:
 
 @APP_DEV.command(name="delete", help="Delete a release.")
 def app_dev_delete(project: str, version: str, /) -> None:
-    releases_delete_args = models.api.ReleasesDeleteArgs(project=project, version=version)
-    release_delete = api_releases_delete(releases_delete_args)
+    releases_delete_args = models.api.ReleaseDeleteArgs(project=project, version=version)
+    release_delete = api_release_delete(releases_delete_args)
     print(release_delete.deleted)
 
 
@@ -608,8 +612,8 @@ def app_dev_user() -> None:
 
 @APP_DRAFT.command(name="delete", help="Delete a draft release.")
 def app_draft_delete(project: str, version: str, /) -> None:
-    draft_delete_args = models.api.DraftDeleteArgs(project=project, version=version)
-    draft_delete = api_draft_delete(draft_delete_args)
+    draft_delete_args = models.api.ReleaseDraftDeleteArgs(project=project, version=version)
+    draft_delete = api_release_draft_delete(draft_delete_args)
     print(draft_delete.success)
 
 
@@ -690,21 +694,21 @@ def app_keys_add(path: str, committees: str = "", /) -> None:
         asf_uid = config_get(config, ["asf", "uid"])
     if asf_uid is None:
         show_error_and_exit("Please configure asf.uid before adding a key.")
-    keys_add_args = models.api.KeysAddArgs(asfuid=asf_uid, key=key, committees=selected_committee_names)
-    keys_add = api_keys_add(keys_add_args)
+    keys_add_args = models.api.KeyAddArgs(asfuid=asf_uid, key=key, committees=selected_committee_names)
+    keys_add = api_key_add(keys_add_args)
     print(keys_add.fingerprint)
 
 
 @APP_KEYS.command(name="delete", help="Delete an OpenPGP key.")
 def app_keys_delete(fingerprint: str, /) -> None:
-    keys_delete_args = models.api.KeysDeleteArgs(fingerprint=fingerprint)
-    keys_delete = api_keys_delete(keys_delete_args)
+    keys_delete_args = models.api.KeyDeleteArgs(fingerprint=fingerprint)
+    keys_delete = api_key_delete(keys_delete_args)
     print(keys_delete.success)
 
 
 @APP_KEYS.command(name="get", help="Get an OpenPGP key.")
 def app_keys_get(fingerprint: str, /) -> None:
-    keys_get = api_keys_get(fingerprint)
+    keys_get = api_key_get(fingerprint)
     print(keys_get.key.model_dump_json(indent=None))
 
 
@@ -736,34 +740,34 @@ def app_keys_user(asf_uid: str | None = None) -> None:
 
 @APP.command(name="list", help="List all files within a release.")
 def app_list(project: str, version: str, revision: str | None = None, /) -> None:
-    releases_paths = api_releases_paths(project, version, revision)
+    releases_paths = api_release_paths(project, version, revision)
     for rel_path in releases_paths.rel_paths:
         print(rel_path)
 
 
 @APP_RELEASE.command(name="info", help="Show information about a release.")
 def app_release_info(project: str, version: str, /) -> None:
-    releases_version = api_releases_version(project, version)
+    releases_version = api_release_get(project, version)
     print(releases_version.release.model_dump_json(indent=None))
 
 
 @APP_RELEASE.command(name="list", help="List releases for a project.")
 def app_release_list(project: str, /) -> None:
     # TODO: Support showing all of a user's releases if no project is provided
-    releases_project = api_releases_project(project)
-    releases_display(releases_project.data)
+    releases_project = api_project_releases(project)
+    releases_display(releases_project.releases)
 
 
 @APP_RELEASE.command(name="start", help="Start a release.")
 def app_release_start(project: str, version: str, /) -> None:
-    releases_create_args = models.api.ReleasesCreateArgs(project=project, version=version)
-    releases_create = api_releases_create(releases_create_args)
+    releases_create_args = models.api.ReleaseCreateArgs(project=project, version=version)
+    releases_create = api_release_create(releases_create_args)
     print(releases_create.release.model_dump_json(indent=None))
 
 
 @APP.command(name="revisions", help="List all revisions for a release.")
 def app_revisions(project: str, version: str, /) -> None:
-    revisions = api_revisions(project, version)
+    revisions = api_release_revisions(project, version)
     for revision in revisions.revisions:
         print(revision)
 
@@ -825,15 +829,15 @@ def app_show(path: str, /) -> None:
 
 @APP_SSH.command(name="add", help="Add an SSH key.")
 def app_ssh_add(text: str, /) -> None:
-    ssh_add_args = models.api.SshAddArgs(text=text)
-    ssh_add = api_ssh_add(ssh_add_args)
+    ssh_add_args = models.api.SshKeyAddArgs(text=text)
+    ssh_add = api_ssh_key_add(ssh_add_args)
     print(ssh_add.fingerprint)
 
 
 @APP_SSH.command(name="delete", help="Delete an SSH key.")
 def app_ssh_delete(fingerprint: str, /) -> None:
-    ssh_delete_args = models.api.SshDeleteArgs(fingerprint=fingerprint)
-    ssh_delete = api_ssh_delete(ssh_delete_args)
+    ssh_delete_args = models.api.SshKeyDeleteArgs(fingerprint=fingerprint)
+    ssh_delete = api_ssh_key_delete(ssh_delete_args)
     print(ssh_delete.success)
 
 
@@ -844,7 +848,7 @@ def app_ssh_list(asf_uid: str | None = None) -> None:
             asf_uid = config_get(config, ["asf", "uid"])
     if asf_uid is None:
         show_error_and_exit("No ASF UID provided and asf.uid not configured.")
-    ssh_list = api_ssh_list(asf_uid)
+    ssh_list = api_ssh_keys_list(asf_uid)
     print(ssh_list.data)
 
 
@@ -853,14 +857,14 @@ def app_upload(project: str, version: str, path: str, filepath: str, /) -> None:
     with open(filepath, "rb") as fh:
         content = fh.read()
 
-    upload_args = models.api.UploadArgs(
+    upload_args = models.api.ReleaseUploadArgs(
         project=project,
         version=version,
         relpath=path,
         content=base64.b64encode(content).decode("utf-8"),
     )
 
-    upload = api_upload(upload_args)
+    upload = api_release_upload(upload_args)
     print(upload.revision.model_dump_json(indent=None))
 
 
@@ -904,7 +908,7 @@ def app_verify(url: str, /, verbose: bool = False) -> None:
     signature_file_name = signature_url.split("/")[-1]
 
     print_if_verbose("To verify the signature, we need the OpenPGP signing key from the ATR.\n")
-    verify_provenance_args = models.api.VerifyProvenanceArgs(
+    verify_provenance_args = models.api.SignatureProvenanceArgs(
         artifact_file_name=artifact_file_name,
         artifact_sha3_256=artifact_hash,
         signature_file_name=signature_file_name,
@@ -916,7 +920,7 @@ def app_verify(url: str, /, verbose: bool = False) -> None:
     dumped_json["signature_asc_text"] = dumped_json["signature_asc_text"][:32] + "..."
     print_if_verbose(json.dumps(dumped_json, indent=2))
     print_if_verbose("")
-    verify_provenance = api_verify_provenance(verify_provenance_args)
+    verify_provenance = api_signature_provenance(verify_provenance_args)
     print_if_verbose("The ATR found a matching OpenPGP key with the following fingerprint:\n")
     print_if_verbose(verify_provenance.fingerprint.upper() + "\n")
     print_if_verbose("This key is associated with these committees with a project containing the artifact:\n")
@@ -1396,7 +1400,7 @@ def timestamp_format(ts: int | str | None) -> str | None:
 
 
 def verify_summary(
-    verify_provenance: models.api.VerifyProvenanceResults,
+    verify_provenance: models.api.SignatureProvenanceResults,
     signature_data: bytes,
     artifact_data: bytes,
     verbose: bool = False,

@@ -11,7 +11,7 @@ build-backend = "hatchling.build"
 
 [project]
 name            = "apache-trusted-releases"
-version         = "0.20250729.1318"
+version         = "0.20250729.1358"
 description     = "ATR CLI and Python API"
 readme          = "README.md"
 requires-python = ">=3.13"
@@ -73,5 +73,10 @@ select = [
   "W"
 ]
 
+[tool.pytest.ini_options]
+filterwarnings = [
+    "ignore:imghdr was removed in Python 3.13:DeprecationWarning:pgpy.constants",
+]
+
 [tool.uv]
-exclude-newer = "2025-07-29T13:18:00Z"
+exclude-newer = "2025-07-29T13:58:00Z"
