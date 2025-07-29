@@ -457,8 +457,8 @@ def app_config_path() -> None:
 @APP_DEV.command(name="delete", help="Delete a release.")
 def app_dev_delete(project: str, version: str, /) -> None:
     releases_delete_args = models.api.ReleaseDeleteArgs(project=project, version=version)
-    release_delete = api_release_delete(releases_delete_args)
-    print(release_delete.deleted)
+    api_release_delete(releases_delete_args)
+    print(f"{project}-{version}")
 
 
 @APP_DEV.command(name="env", help="Show the environment variables.")
@@ -946,8 +946,8 @@ def app_vote_resolve(
         version=version,
         resolution=resolution,
     )
-    vote_resolve = api_vote_resolve(vote_resolve_args)
-    print(vote_resolve.success)
+    api_vote_resolve(vote_resolve_args)
+    print(f"Vote marked as {resolution}.")
 
 
 @APP_VOTE.command(name="start", help="Start a vote.")

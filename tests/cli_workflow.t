@@ -47,13 +47,13 @@ $ atr vote start tooling-test-example 0.3+cli 00002 -m "<!user!>@apache.org"
 <.skip.>"email_to":"<!user!>@apache.org"<.skip.>
 
 $ atr vote resolve tooling-test-example 0.3+cli failed
-Vote marked as failed
+Vote marked as failed.
 
 $ atr vote start tooling-test-example 0.3+cli 00002 -m "<!user!>@apache.org"
 <.skip.>"email_to":"<!user!>@apache.org"<.skip.>
 
 $ atr vote resolve tooling-test-example 0.3+cli passed
-Vote marked as passed
+Vote marked as passed.
 
 $ atr announce tooling-test-example 0.3+cli 00003 -m "<!user!>@apache.org" -s "[ANNOUNCE] Release tooling-test-example 0.3+cli" -b "Release tooling-test-example 0.3+cli has been announced."
 Announcement sent.
