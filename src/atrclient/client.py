@@ -156,6 +156,12 @@ def api_post(path: str) -> Callable[[Callable[[ApiPost, A], R]], Callable[[A], R
     return decorator
 
 
+@api_post("/checks/ignore/add")
+def api_checks_ignore_add(api: ApiPost, args: models.api.ChecksIgnoreAddArgs) -> models.api.ChecksIgnoreAddResults:
+    response = api.post(args)
+    return models.api.validate_checks_ignore_add(response)
+
+
 @api_get("/checks/list")
 def api_checks_list(api: ApiGet, project: str, version: str, revision: str) -> models.api.ChecksListResults:
     response = api.get(project, version, revision)
@@ -370,6 +376,51 @@ def app_checks_failures(
 ) -> None:
     checks_list = api_checks_list(project, version, revision)
     checks_display_status("failure", checks_list.checks, members=members)
+
+    # committee_name: str = schema.Field(..., **example("example"))
+    # release_glob: str | None = schema.Field(default=None, **example("example-0.0.*"))
+    # revision_number: str | None = schema.Field(default=None, **example("00001"))
+    # checker_glob: str | None = schema.Field(default=None, **example("atr.tasks.checks.license.files"))
+    # primary_rel_path_glob: str | None = schema.Field(default=None, **example("apache-example-0.0.1-*.tar.gz"))
+    # member_rel_path_glob: str | None = schema.Field(default=None, **example("apache-example-0.0.1/*.xml"))
+    # status: sql.CheckResultStatusIgnore | None = schema.Field(
+    #     default=None, **example(sql.CheckResultStatusIgnore.FAILURE)
+    # )
+    # message_glob: str | None = schema.Field(default=None, **example("sha512 matches for apache-example-0.0.1/*.xml"))
+
+
+@APP_CHECKS.command(name="ignore", help="Ignore a check result.")
+def app_checks_ignore(
+    committee: str,
+    /,
+    release: str | None = None,
+    revision: str | None = None,
+    checker: str | None = None,
+    primary_rel_path: str | None = None,
+    member_rel_path: str | None = None,
+    status: models.sql.CheckResultStatusIgnore | None = None,
+    message: str | None = None,
+) -> None:
+    args = models.api.ChecksIgnoreAddArgs(
+        committee_name=committee,
+        release_glob=release,
+        revision_number=revision,
+        checker_glob=checker,
+        primary_rel_path_glob=primary_rel_path,
+        member_rel_path_glob=member_rel_path,
+        status=status,
+        message_glob=message,
+    )
+    api_checks_ignore_add(args)
+    print("Check result ignored for:")
+    print(f"  Committee: {committee}")
+    print(f"  Release (glob): {release}")
+    print(f"  Revision: {revision}")
+    print(f"  Checker (glob): {checker}")
+    print(f"  Primary rel path (glob): {primary_rel_path}")
+    print(f"  Member rel path (glob): {member_rel_path}")
+    print(f"  Status: {status}")
+    print(f"  Message (glob): {message}")
 
 
 @APP_CHECKS.command(name="status", help="Get check status for a release revision.")
