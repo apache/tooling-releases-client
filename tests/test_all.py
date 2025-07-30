@@ -75,7 +75,7 @@ def test_app_checks_status_non_draft_phase(
             },
         )
 
-        client.app_checks_status("test-project", "2.3.0", "00001")
+        client.app_check_status("test-project", "2.3.0", "00001")
 
         captured = capsys.readouterr()
         assert "Checks are not applicable for this release phase." in captured.out
@@ -150,7 +150,7 @@ def test_app_checks_status_verbose(capsys: pytest.CaptureFixture[str], fixture_c
         mock.get(release_url, status=200, payload=release_payload)
         mock.get(checks_url, status=200, payload=checks_payload)
 
-        client.app_checks_status("test-project", "2.3.1", "00003", verbose=True)
+        client.app_check_status("test-project", "2.3.1", "00003", verbose=True)
 
         captured = capsys.readouterr()
         assert "(top-level" in captured.out

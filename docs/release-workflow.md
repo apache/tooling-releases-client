@@ -30,7 +30,7 @@ Your release is in the ① COMPOSE phase.
 
 ```
 atr upload your-project 0.1+test example.txt "$FILE_TO_UPLOAD"
-atr checks wait your-project 0.1+test
+atr check wait your-project 0.1+test
 atr vote start your-project 0.1+test 00002 -m "${ASF_UID}@apache.org"
 ```
 
@@ -93,10 +93,10 @@ Your release is then in the ① COMPOSE phase. You must add a file to be able to
 
 ```
 atr upload your-project 0.1+test example.txt "$FILE_TO_UPLOAD"
-atr checks wait your-project 0.1+test
+atr check wait your-project 0.1+test
 ```
 
-To see the status of the checks here, you could run `atr checks status your-project 0.1+test 00002`. You need to know the revision to get the status, but we plan to make this command use the most recent revision if omitted.
+To see the status of the checks here, you could run `atr check status your-project 0.1+test 00002`. You need to know the revision to get the status, but we plan to make this command use the most recent revision if omitted.
 
 ### Vote
 

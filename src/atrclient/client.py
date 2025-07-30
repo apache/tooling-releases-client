@@ -54,12 +54,13 @@ if TYPE_CHECKING:
     from collections.abc import Callable, Generator, Sequence
 
 APP: cyclopts.App = cyclopts.App()
-APP_CHECKS: cyclopts.App = cyclopts.App(name="checks", help="Check result operations.")
+APP_CHECK: cyclopts.App = cyclopts.App(name="check", help="Check result operations.")
 APP_CONFIG: cyclopts.App = cyclopts.App(name="config", help="Configuration operations.")
 APP_DEV: cyclopts.App = cyclopts.App(name="dev", help="Developer operations.")
 APP_DRAFT: cyclopts.App = cyclopts.App(name="draft", help="Draft operations.")
+APP_IGNORE: cyclopts.App = cyclopts.App(name="ignore", help="Ignore operations.")
 APP_JWT: cyclopts.App = cyclopts.App(name="jwt", help="JWT operations.")
-APP_KEYS: cyclopts.App = cyclopts.App(name="keys", help="Keys operations.")
+APP_KEY: cyclopts.App = cyclopts.App(name="key", help="Key operations.")
 APP_RELEASE: cyclopts.App = cyclopts.App(name="release", help="Release operations.")
 APP_SSH: cyclopts.App = cyclopts.App(name="ssh", help="SSH operations.")
 APP_VOTE: cyclopts.App = cyclopts.App(name="vote", help="Vote operations.")
@@ -156,12 +157,6 @@ def api_post(path: str) -> Callable[[Callable[[ApiPost, A], R]], Callable[[A], R
     return decorator
 
 
-@api_post("/checks/ignore/add")
-def api_checks_ignore_add(api: ApiPost, args: models.api.ChecksIgnoreAddArgs) -> models.api.ChecksIgnoreAddResults:
-    response = api.post(args)
-    return models.api.validate_checks_ignore_add(response)
-
-
 @api_get("/checks/list")
 def api_checks_list(api: ApiGet, project: str, version: str, revision: str) -> models.api.ChecksListResults:
     response = api.get(project, version, revision)
@@ -174,6 +169,24 @@ def api_checks_ongoing(
 ) -> models.api.ChecksOngoingResults:
     response = api.get(project, version, revision=revision)
     return models.api.validate_checks_ongoing(response)
+
+
+@api_post("/ignore/add")
+def api_ignore_add(api: ApiPost, args: models.api.IgnoreAddArgs) -> models.api.IgnoreAddResults:
+    response = api.post(args)
+    return models.api.validate_ignore_add(response)
+
+
+@api_post("/ignore/delete")
+def api_ignore_delete(api: ApiPost, args: models.api.IgnoreDeleteArgs) -> models.api.IgnoreDeleteResults:
+    response = api.post(args)
+    return models.api.validate_ignore_delete(response)
+
+
+@api_get("/ignore/list")
+def api_ignore_list(api: ApiGet, committee: str) -> models.api.IgnoreListResults:
+    response = api.get(committee)
+    return models.api.validate_ignore_list(response)
 
 
 @api_post("/key/add")
@@ -354,8 +367,8 @@ def app_api(path: str, /, **kwargs: str) -> None:
     print(json.dumps(json_data, indent=None))
 
 
-@APP_CHECKS.command(name="exceptions", help="Get check exceptions for a release revision.")
-def app_checks_exceptions(
+@APP_CHECK.command(name="exceptions", help="Get check exceptions for a release revision.")
+def app_check_exceptions(
     project: str,
     version: str,
     revision: str,
@@ -366,8 +379,8 @@ def app_checks_exceptions(
     checks_display_status("exception", checks_list.checks, members=members)
 
 
-@APP_CHECKS.command(name="failures", help="Get check failures for a release revision.")
-def app_checks_failures(
+@APP_CHECK.command(name="failures", help="Get check failures for a release revision.")
+def app_check_failures(
     project: str,
     version: str,
     revision: str,
@@ -377,54 +390,9 @@ def app_checks_failures(
     checks_list = api_checks_list(project, version, revision)
     checks_display_status("failure", checks_list.checks, members=members)
 
-    # committee_name: str = schema.Field(..., **example("example"))
-    # release_glob: str | None = schema.Field(default=None, **example("example-0.0.*"))
-    # revision_number: str | None = schema.Field(default=None, **example("00001"))
-    # checker_glob: str | None = schema.Field(default=None, **example("atr.tasks.checks.license.files"))
-    # primary_rel_path_glob: str | None = schema.Field(default=None, **example("apache-example-0.0.1-*.tar.gz"))
-    # member_rel_path_glob: str | None = schema.Field(default=None, **example("apache-example-0.0.1/*.xml"))
-    # status: sql.CheckResultStatusIgnore | None = schema.Field(
-    #     default=None, **example(sql.CheckResultStatusIgnore.FAILURE)
-    # )
-    # message_glob: str | None = schema.Field(default=None, **example("sha512 matches for apache-example-0.0.1/*.xml"))
 
-
-@APP_CHECKS.command(name="ignore", help="Ignore a check result.")
-def app_checks_ignore(
-    committee: str,
-    /,
-    release: str | None = None,
-    revision: str | None = None,
-    checker: str | None = None,
-    primary_rel_path: str | None = None,
-    member_rel_path: str | None = None,
-    status: models.sql.CheckResultStatusIgnore | None = None,
-    message: str | None = None,
-) -> None:
-    args = models.api.ChecksIgnoreAddArgs(
-        committee_name=committee,
-        release_glob=release,
-        revision_number=revision,
-        checker_glob=checker,
-        primary_rel_path_glob=primary_rel_path,
-        member_rel_path_glob=member_rel_path,
-        status=status,
-        message_glob=message,
-    )
-    api_checks_ignore_add(args)
-    print("Check result ignored for:")
-    print(f"  Committee: {committee}")
-    print(f"  Release (glob): {release}")
-    print(f"  Revision: {revision}")
-    print(f"  Checker (glob): {checker}")
-    print(f"  Primary rel path (glob): {primary_rel_path}")
-    print(f"  Member rel path (glob): {member_rel_path}")
-    print(f"  Status: {status}")
-    print(f"  Message (glob): {message}")
-
-
-@APP_CHECKS.command(name="status", help="Get check status for a release revision.")
-def app_checks_status(
+@APP_CHECK.command(name="status", help="Get check status for a release revision.")
+def app_check_status(
     project: str,
     version: str,
     /,
@@ -450,8 +418,8 @@ def app_checks_status(
     checks_display(checks_list.checks, verbose)
 
 
-@APP_CHECKS.command(name="wait", help="Wait for checks to be completed.")
-def app_checks_wait(
+@APP_CHECK.command(name="wait", help="Wait for checks to be completed.")
+def app_check_wait(
     project: str,
     version: str,
     /,
@@ -477,8 +445,8 @@ def app_checks_wait(
     print("Checks completed.")
 
 
-@APP_CHECKS.command(name="warnings", help="Get check warnings for a release revision.")
-def app_checks_warnings(
+@APP_CHECK.command(name="warnings", help="Get check warnings for a release revision.")
+def app_check_warnings(
     project: str,
     version: str,
     revision: str,
@@ -691,6 +659,63 @@ def app_drop(path: str, /) -> None:
     print(f"Removed {path}.")
 
 
+@APP_IGNORE.command(name="add", help="Add a check ignore.")
+def app_ignore_add(
+    committee: str,
+    /,
+    release: str | None = None,
+    revision: str | None = None,
+    checker: str | None = None,
+    primary_rel_path: str | None = None,
+    member_rel_path: str | None = None,
+    status: models.sql.CheckResultStatusIgnore | None = None,
+    message: str | None = None,
+) -> None:
+    args = models.api.IgnoreAddArgs(
+        committee_name=committee,
+        release_glob=release,
+        revision_number=revision,
+        checker_glob=checker,
+        primary_rel_path_glob=primary_rel_path,
+        member_rel_path_glob=member_rel_path,
+        status=status,
+        message_glob=message,
+    )
+    api_ignore_add(args)
+    print("Check result ignored for:")
+    print(f"  Committee: {committee}")
+    print(f"  Release (glob): {release}")
+    print(f"  Revision: {revision}")
+    print(f"  Checker (glob): {checker}")
+    print(f"  Primary rel path (glob): {primary_rel_path}")
+    print(f"  Member rel path (glob): {member_rel_path}")
+    print(f"  Status: {status}")
+    print(f"  Message (glob): {message}")
+
+
+@APP_IGNORE.command(name="delete", help="Delete a check ignore.")
+def app_ignore_delete(
+    committee: str,
+    id: int,
+    /,
+) -> None:
+    args = models.api.IgnoreDeleteArgs(committee=committee, id=id)
+    api_ignore_delete(args)
+    print("Check ignore deleted for:")
+    print(f"  Committee: {committee}")
+    print(f"  ID: {id}")
+
+
+@APP_IGNORE.command(name="list", help="List check ignores.")
+def app_ignore_list(
+    committee: str,
+    /,
+) -> None:
+    ignores = api_ignore_list(committee)
+    for ignore in ignores.ignores:
+        print(ignore.model_dump_json(indent=None))
+
+
 @APP_JWT.command(name="dump", help="Show decoded JWT payload from stored config.")
 def app_jwt_dump() -> None:
     jwt_value = config_jwt_get()
@@ -735,8 +760,8 @@ def app_jwt_show() -> None:
     return app_show("tokens.jwt")
 
 
-@APP_KEYS.command(name="add", help="Add an OpenPGP key.")
-def app_keys_add(path: str, committees: str = "", /) -> None:
+@APP_KEY.command(name="add", help="Add an OpenPGP key.")
+def app_key_add(path: str, committees: str = "", /) -> None:
     selected_committee_names = []
     if committees:
         selected_committee_names[:] = committees.split(",")
@@ -750,21 +775,21 @@ def app_keys_add(path: str, committees: str = "", /) -> None:
     print(keys_add.fingerprint)
 
 
-@APP_KEYS.command(name="delete", help="Delete an OpenPGP key.")
-def app_keys_delete(fingerprint: str, /) -> None:
+@APP_KEY.command(name="delete", help="Delete an OpenPGP key.")
+def app_key_delete(fingerprint: str, /) -> None:
     keys_delete_args = models.api.KeyDeleteArgs(fingerprint=fingerprint)
     keys_delete = api_key_delete(keys_delete_args)
     print(keys_delete.success)
 
 
-@APP_KEYS.command(name="get", help="Get an OpenPGP key.")
-def app_keys_get(fingerprint: str, /) -> None:
+@APP_KEY.command(name="get", help="Get an OpenPGP key.")
+def app_key_get(fingerprint: str, /) -> None:
     keys_get = api_key_get(fingerprint)
     print(keys_get.key.model_dump_json(indent=None))
 
 
-@APP_KEYS.command(name="upload", help="Upload a KEYS file.")
-def app_keys_upload(path: str, selected_committee_name: str, /) -> None:
+@APP_KEY.command(name="upload", help="Upload a KEYS file.")
+def app_key_upload(path: str, selected_committee_name: str, /) -> None:
     # selected_committee_names = []
     # if selected_committees:
     #     selected_committee_names[:] = selected_committees.split(",")
@@ -777,8 +802,8 @@ def app_keys_upload(path: str, selected_committee_name: str, /) -> None:
     print(f"Failed to upload {keys_upload.error_count} keys.")
 
 
-@APP_KEYS.command(name="user", help="List OpenPGP keys for a user.")
-def app_keys_user(asf_uid: str | None = None) -> None:
+@APP_KEY.command(name="user", help="List OpenPGP keys for a user.")
+def app_key_user(asf_uid: str | None = None) -> None:
     if asf_uid is None:
         with config_lock() as config:
             asf_uid = config_get(config, ["asf", "uid"])
@@ -1428,12 +1453,13 @@ def show_warning(message: str) -> None:
 
 
 def subcommands_register(app: cyclopts.App) -> None:
-    app.command(APP_CHECKS)
+    app.command(APP_CHECK)
     app.command(APP_CONFIG)
     app.command(APP_DEV)
     app.command(APP_DRAFT)
+    app.command(APP_IGNORE)
     app.command(APP_JWT)
-    app.command(APP_KEYS)
+    app.command(APP_KEY)
     app.command(APP_RELEASE)
     app.command(APP_SSH)
     app.command(APP_VOTE)

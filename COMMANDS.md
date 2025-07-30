@@ -27,10 +27,25 @@ Announce a release.
 ╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
 ```
 
-## atr checks
+## atr api
 
 ```
-Usage: checks COMMAND
+Usage: api [ARGS] [OPTIONS]
+
+Call the API directly.
+
+╭─ Arguments ──────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│ *  PATH  [required]                                                                                                  │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+╭─ Parameters ─────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│ --[KEYWORD]                                                                                                          │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+```
+
+## atr check
+
+```
+Usage: check COMMAND
 
 Check result operations.
 
@@ -43,7 +58,7 @@ Check result operations.
 ╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
 ```
 
-### atr checks exceptions
+### atr check exceptions
 
 ```
 Usage: exceptions [ARGS] [OPTIONS]
@@ -60,7 +75,7 @@ Get check exceptions for a release revision.
 ╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
 ```
 
-### atr checks failures
+### atr check failures
 
 ```
 Usage: failures [ARGS] [OPTIONS]
@@ -77,7 +92,7 @@ Get check failures for a release revision.
 ╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
 ```
 
-### atr checks status
+### atr check status
 
 ```
 Usage: status [ARGS] [OPTIONS]
@@ -94,7 +109,7 @@ Get check status for a release revision.
 ╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
 ```
 
-### atr checks wait
+### atr check wait
 
 ```
 Usage: wait [ARGS] [OPTIONS]
@@ -112,7 +127,7 @@ Wait for checks to be completed.
 ╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
 ```
 
-### atr checks warnings
+### atr check warnings
 
 ```
 Usage: warnings [ARGS] [OPTIONS]
@@ -168,7 +183,9 @@ Developer operations.
 ╭─ Commands ───────────────────────────────────────────────────────────────────────────────────────────────────────────╮
 │ delete  Delete a release.                                                                                            │
 │ env     Show the environment variables.                                                                              │
+│ key     Return a test OpenPGP key.                                                                                   │
 │ pat     Read a PAT from development configuration.                                                                   │
+│ pwd     Show the current working directory.                                                                          │
 │ stamp   Update version and exclude-newer in pyproject.toml.                                                          │
 │ token   Generate a random alphabetical token.                                                                        │
 │ user    Show the value of $USER.                                                                                     │
@@ -196,12 +213,28 @@ Usage: env
 Show the environment variables.
 ```
 
+### atr dev key
+
+```
+Usage: key
+
+Return a test OpenPGP key.
+```
+
 ### atr dev pat
 
 ```
 Usage: pat
 
 Read a PAT from development configuration.
+```
+
+### atr dev pwd
+
+```
+Usage: pwd
+
+Show the current working directory.
 ```
 
 ### atr dev stamp
@@ -260,6 +293,53 @@ Remove a configuration key using dot notation.
 ╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
 ```
 
+## atr ignore
+
+```
+Usage: ignore COMMAND
+
+Ignore operations.
+
+╭─ Commands ───────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│ add     Add a check ignore.                                                                                          │
+│ delete  Delete a check ignore.                                                                                       │
+│ list    List check ignores.                                                                                          │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+```
+
+### atr ignore add
+
+```
+Usage: add [ARGS] [OPTIONS]
+
+Add a check ignore.
+
+╭─ Arguments ──────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│ *  COMMITTEE  [required]                                                                                             │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+╭─ Parameters ─────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│ RELEASE --release                                                                                                    │
+│ REVISION --revision                                                                                                  │
+│ CHECKER --checker                                                                                                    │
+│ PRIMARY-REL-PATH --primary-rel-path                                                                                  │
+│ MEMBER-REL-PATH --member-rel-path                                                                                    │
+│ STATUS --status                      [choices: exception, failure, warning]                                          │
+│ MESSAGE --message                                                                                                    │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+```
+
+### atr ignore list
+
+```
+Usage: list [ARGS]
+
+List check ignores.
+
+╭─ Arguments ──────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│ *  COMMITTEE  [required]                                                                                             │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+```
+
 ## atr jwt
 
 ```
@@ -311,28 +391,6 @@ Usage: show
 Show stored JWT token.
 ```
 
-## atr keys
-
-```
-Usage: keys
-
-Keys operations.
-```
-
-## atr list
-
-```
-Usage: list [ARGS]
-
-List all files within a release.
-
-╭─ Arguments ──────────────────────────────────────────────────────────────────────────────────────────────────────────╮
-│ *  PROJECT   [required]                                                                                              │
-│ *  VERSION   [required]                                                                                              │
-│    REVISION                                                                                                          │
-╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
-```
-
 ## atr release
 
 ```
@@ -373,6 +431,21 @@ List all revisions for a release.
 ╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
 ```
 
+## atr rsync
+
+```
+Usage: rsync [ARGS]
+
+Rsync a release.
+
+╭─ Arguments ──────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│ *  PROJECT  [required]                                                                                               │
+│ *  VERSION  [required]                                                                                               │
+│    SOURCE   [default: .]                                                                                             │
+│    TARGET   [default: /]                                                                                             │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+```
+
 ## atr set
 
 ```
@@ -400,18 +473,6 @@ SSH operations.
 ╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
 ```
 
-### atr ssh add
-
-```
-Usage: add [ARGS]
-
-Add an SSH key.
-
-╭─ Arguments ──────────────────────────────────────────────────────────────────────────────────────────────────────────╮
-│ *  TEXT  [required]                                                                                                  │
-╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
-```
-
 ## atr upload
 
 ```
@@ -427,6 +488,21 @@ Upload a file to a release.
 ╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
 ```
 
+## atr verify
+
+```
+Usage: verify [ARGS] [OPTIONS]
+
+Verify an artifact.
+
+╭─ Arguments ──────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│ *  URL  [required]                                                                                                   │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+╭─ Parameters ─────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│ VERBOSE --verbose --no-verbose  [default: False]                                                                     │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+```
+
 ## atr vote
 
 ```
@@ -435,8 +511,9 @@ Usage: vote COMMAND
 Vote operations.
 
 ╭─ Commands ───────────────────────────────────────────────────────────────────────────────────────────────────────────╮
-│ resolve  Resolve a vote.                                                                                             │
-│ start    Start a vote.                                                                                               │
+│ resolve   Resolve a vote.                                                                                            │
+│ start     Start a vote.                                                                                              │
+│ tabulate  Tabulate a vote.                                                                                           │
 ╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
 ```
 
@@ -451,5 +528,18 @@ Resolve a vote.
 │ *  PROJECT --project        [required]                                                                               │
 │ *  VERSION --version        [required]                                                                               │
 │ *  RESOLUTION --resolution  [choices: passed, failed] [required]                                                     │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+```
+
+### atr vote tabulate
+
+```
+Usage: tabulate [ARGS]
+
+Tabulate a vote.
+
+╭─ Arguments ──────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│ *  PROJECT  [required]                                                                                               │
+│ *  VERSION  [required]                                                                                               │
 ╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
 ```
