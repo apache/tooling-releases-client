@@ -25,5 +25,5 @@ The ATR API is not stable, so please do not rely on its schema. The client CLI i
    ```
    atr set asf.uid <your asf id>
    atr set tokens.pat "<pat from ATR site>"
-   atr config file
+   atr jwt refresh
    ```
