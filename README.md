@@ -7,3 +7,23 @@ This project is maintained by ASF Tooling. As of July 2025, we have only just st
 Please feedback to the ASF Tooling mailing list, or the `#apache-trusted-releases` Slack. We welcome contributions already, and you may file issues or create pull requests. To assist us in reviewing your code, please adhere to our style guidelines as noted in the codebase. Thank you.
 
 The ATR API is not stable, so please do not rely on its schema. The client CLI is also not stable, so please do not use it in unattended scripts.
+
+## Quick Start
+
+1. Installation of **atr** client from within a target directory.
+
+   ```
+   python3 -m venv venv
+   source venv/bin/activate
+   pip3 install -U pip setuptools wheel
+   pip3 install git+https://github.com/apache/tooling-releases-client atr
+   atr --version
+   ```
+
+2. Configuration
+
+   ```
+   atr set asf.uid <your asf id>
+   atr set tokens.pat "<pat from ATR site>"
+   atr config file
+   ```
