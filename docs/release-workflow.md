@@ -64,6 +64,14 @@ uv run atr --version
 
 This will install the ATR client to `.venv/bin/atr` in the `tooling-releases-client` directory. You can also add that `atr` to your `$PATH` in various ways, or just set `alias atr="uv run atr"`. The rest of this guide will assume that you have set this alias.
 
+If you have `pip3` available, you can also run the following to install the `atr` client command:
+
+```
+pip3 install git+https://github.com/apache/tooling-releases-client
+```
+
+This will place the `atr` command in the directory that `pip3` is configured to add commands to.
+
 ### Configuration
 
 Add your ASF UID and PAT to configuration.
