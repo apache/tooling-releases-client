@@ -22,6 +22,7 @@
 # https://github.com/fastapi/sqlmodel/pull/778/files
 # from __future__ import annotations
 
+import dataclasses
 import datetime
 import enum
 from typing import Any, Final, Literal, Optional, TypeVar
@@ -47,6 +48,17 @@ sqlmodel.SQLModel.metadata = sqlalchemy.MetaData(
     }
 )
 
+# Data classes
+
+
+@dataclasses.dataclass(frozen=True)
+class DistributionPlatformValue:
+    name: str
+    template_url: str
+    template_staging_url: str | None = None
+    requires_owner_namespace: bool = False
+    default_owner_namespace: str | None = None
+
 
 # Enumerations
 
@@ -62,6 +74,70 @@ class CheckResultStatusIgnore(str, enum.Enum):
     EXCEPTION = "exception"
     FAILURE = "failure"
     WARNING = "warning"
+
+    @classmethod
+    def from_form_field(cls, status: str) -> Optional["CheckResultStatusIgnore"]:
+        match status:
+            case "None":
+                return None
+            case "CheckResultStatusIgnore.EXCEPTION":
+                return cls.EXCEPTION
+            case "CheckResultStatusIgnore.FAILURE":
+                return cls.FAILURE
+            case "CheckResultStatusIgnore.WARNING":
+                return cls.WARNING
+            case _:
+                raise ValueError(f"Invalid status: {status}")
+
+    def to_form_field(self) -> str:
+        return f"CheckResultStatusIgnore.{self.value.upper()}"
+
+
+class DistributionPlatform(enum.Enum):
+    ARTIFACT_HUB = DistributionPlatformValue(
+        name="Artifact Hub",
+        template_url="https://artifacthub.io/api/v1/packages/helm/{owner_namespace}/{package}/{version}",
+        template_staging_url="https://staging.artifacthub.io/api/v1/packages/helm/{owner_namespace}/{package}/{version}",
+        requires_owner_namespace=True,
+    )
+    DOCKER_HUB = DistributionPlatformValue(
+        name="Docker Hub",
+        template_url="https://hub.docker.com/v2/namespaces/{owner_namespace}/repositories/{package}/tags/{version}",
+        # TODO: Need to use staging tags?
+        # template_staging_url="https://hub.docker.com/v2/namespaces/{owner_namespace}/repositories/{package}/tags/{version}",
+        default_owner_namespace="library",
+    )
+    # GITHUB = DistributionPlatformValue(
+    #     name="GitHub",
+    #     template_url="https://api.github.com/repos/{owner_namespace}/{package}/releases/tags/v{version}",
+    #     # Combine with {"prerelease": true}
+    #     template_staging_url="https://api.github.com/repos/{owner_namespace}/{package}/releases",
+    #     requires_owner_namespace=True,
+    # )
+    MAVEN = DistributionPlatformValue(
+        name="Maven Central",
+        template_url="https://search.maven.org/solrsearch/select?q=g:{owner_namespace}+AND+a:{package}+AND+v:{version}&core=gav&rows=20&wt=json",
+        # Java ASF projects use staging URLs along the lines of
+        # https://repository.apache.org/content/repositories/orgapachePROJECT-NNNN/
+        # There's no JSON, but each individual package has maven-metadata.xml
+        requires_owner_namespace=True,
+    )
+    NPM = DistributionPlatformValue(
+        name="npm",
+        # TODO: Need to parse dist-tags
+        template_url="https://registry.npmjs.org/{package}",
+    )
+    NPM_SCOPED = DistributionPlatformValue(
+        name="npm (scoped)",
+        # TODO: Need to parse dist-tags
+        template_url="https://registry.npmjs.org/@{owner_namespace}/{package}",
+        requires_owner_namespace=True,
+    )
+    PYPI = DistributionPlatformValue(
+        name="PyPI",
+        template_url="https://pypi.org/pypi/{package}/{version}/json",
+        template_staging_url="https://test.pypi.org/pypi/{package}/{version}/json",
+    )
 
 
 class ProjectStatus(str, enum.Enum):
@@ -105,7 +181,10 @@ class TaskType(str, enum.Enum):
     MESSAGE_SEND = "message_send"
     PATHS_CHECK = "paths_check"
     RAT_CHECK = "rat_check"
+    SBOM_AUGMENT = "sbom_augment"
     SBOM_GENERATE_CYCLONEDX = "sbom_generate_cyclonedx"
+    SBOM_QS_SCORE = "sbom_qs_score"
+    SBOM_TOOL_SCORE = "sbom_tool_score"
     SIGNATURE_CHECK = "signature_check"
     SVN_IMPORT_FILES = "svn_import_files"
     TARGZ_INTEGRITY = "targz_integrity"
@@ -321,6 +400,17 @@ class TextValue(sqlmodel.SQLModel, table=True):
     value: str = sqlmodel.Field()
 
 
+# WorkflowSSHKey:
+class WorkflowSSHKey(sqlmodel.SQLModel, table=True):
+    fingerprint: str = sqlmodel.Field(primary_key=True, index=True)
+    key: str = sqlmodel.Field()
+    project_name: str = sqlmodel.Field(index=True)
+    asf_uid: str = sqlmodel.Field(index=True)
+    github_uid: str = sqlmodel.Field(index=True)
+    github_nid: int = sqlmodel.Field(index=True)
+    expires: int = sqlmodel.Field()
+
+
 # SQL core models
 
 
@@ -409,9 +499,9 @@ class Project(sqlmodel.SQLModel, table=True):
     # see_also(Release.project)
     releases: list["Release"] = sqlmodel.Relationship(back_populates="project")
 
-    # 1-M: Project -> [DistributionChannel]
-    # M-1: DistributionChannel -> Project
-    distribution_channels: list["DistributionChannel"] = sqlmodel.Relationship(back_populates="project")
+    # # 1-M: Project -> [DistributionChannel]
+    # # M-1: DistributionChannel -> Project
+    # distribution_channels: list["DistributionChannel"] = sqlmodel.Relationship(back_populates="project")
 
     # 1-1: Project -C-> ReleasePolicy
     # 1-1: ReleasePolicy -> Project
@@ -542,13 +632,17 @@ Thanks,
     def policy_binary_artifact_paths(self) -> list[str]:
         if (policy := self.release_policy) is None:
             return []
-        return policy.binary_artifact_paths
+        # TODO: The type of policy.binary_artifact_paths is list[str]
+        # But the production server has None values
+        return policy.binary_artifact_paths or []
 
     @property
     def policy_source_artifact_paths(self) -> list[str]:
         if (policy := self.release_policy) is None:
             return []
-        return policy.source_artifact_paths
+        # TODO: The type of policy.source_artifact_paths is list[str]
+        # But the production server has None values
+        return policy.source_artifact_paths or []
 
     @property
     def policy_strict_checking(self) -> bool:
@@ -557,6 +651,18 @@ Thanks,
         if (policy := self.release_policy) is None:
             return False
         return policy.strict_checking
+
+    @property
+    def policy_github_repository_name(self) -> str:
+        if (policy := self.release_policy) is None:
+            return ""
+        return policy.github_repository_name
+
+    @property
+    def policy_github_workflow_path(self) -> str:
+        if (policy := self.release_policy) is None:
+            return ""
+        return policy.github_workflow_path
 
 
 # Release: Project ReleasePolicy Revision CheckResult
@@ -631,6 +737,12 @@ class Release(sqlmodel.SQLModel, table=True):
         back_populates="release", sa_relationship_kwargs={"cascade": "all, delete-orphan"}
     )
 
+    # 1-M: Release -> [Distribution]
+    # M-1: Distribution -> Release
+    distributions: list["Distribution"] = sqlmodel.Relationship(
+        back_populates="release", sa_relationship_kwargs={"cascade": "all, delete-orphan"}
+    )
+
     # The combination of project_name and version must be unique
     __table_args__ = (sqlmodel.UniqueConstraint("project_name", "version", name="unique_project_version"),)
 
@@ -638,8 +750,9 @@ class Release(sqlmodel.SQLModel, table=True):
     def committee(self) -> Committee | None:
         """Get the committee for the release."""
         project = self.project
-        if project is None:
-            return None
+        # Type checker is sure that it can not be None
+        # if project is None:
+        #     return None
         return project.committee
 
     @property
@@ -742,21 +855,52 @@ class CheckResultIgnore(sqlmodel.SQLModel, table=True):
             self.created = datetime.datetime.fromisoformat(self.created.rstrip("Z"))
 
 
-# DistributionChannel: Project
-class DistributionChannel(sqlmodel.SQLModel, table=True):
-    id: int = sqlmodel.Field(default=None, primary_key=True)
-    name: str = sqlmodel.Field(index=True, unique=True)
-    url: str
-    credentials: str
-    is_test: bool = sqlmodel.Field(default=False)
-    automation_endpoint: str
+# Distribution: Release
+class Distribution(sqlmodel.SQLModel, table=True):
+    release_name: str = sqlmodel.Field(primary_key=True, index=True, foreign_key="release.name", ondelete="CASCADE")
+    release: Release = sqlmodel.Relationship(back_populates="distributions")
+    platform: DistributionPlatform = sqlmodel.Field(primary_key=True, index=True)
+    owner_namespace: str = sqlmodel.Field(primary_key=True, index=True, default="")
+    package: str = sqlmodel.Field(primary_key=True, index=True)
+    version: str = sqlmodel.Field(primary_key=True, index=True)
+    staging: bool = sqlmodel.Field(default=False)
+    upload_date: datetime.datetime | None = sqlmodel.Field(default=None)
+    api_url: str
+    web_url: str | None = sqlmodel.Field(default=None)
+    # The API response can be huge, e.g. from npm
+    # So we do not store it in the database
+    # api_response: Any = sqlmodel.Field(sa_column=sqlalchemy.Column(sqlalchemy.JSON))
 
-    project_name: str = sqlmodel.Field(foreign_key="project.name")
+    @property
+    def identifier(self) -> str:
+        def normal(text: str) -> str:
+            return text.replace(" ", "_").lower()
 
-    # M-1: DistributionChannel -> Project
-    # 1-M: Project -> [DistributionChannel]
-    project: Project = sqlmodel.Relationship(back_populates="distribution_channels")
-    see_also(Project.distribution_channels)
+        name = normal(self.platform.value.name)
+        package = normal(self.package)
+        version = normal(self.version)
+        return f"{name}-{package}-{version}"
+
+    @property
+    def title(self) -> str:
+        return f"{self.platform.value.name} {self.package} {self.version}"
+
+
+# # DistributionChannel: Project
+# class DistributionChannel(sqlmodel.SQLModel, table=True):
+#     id: int = sqlmodel.Field(default=None, primary_key=True)
+#     name: str = sqlmodel.Field(index=True, unique=True)
+#     url: str
+#     credentials: str
+#     is_test: bool = sqlmodel.Field(default=False)
+#     automation_endpoint: str
+#
+#     project_name: str = sqlmodel.Field(foreign_key="project.name")
+#
+#     # M-1: DistributionChannel -> Project
+#     # 1-M: Project -> [DistributionChannel]
+#     project: Project = sqlmodel.Relationship(back_populates="distribution_channels")
+#     see_also(Project.distribution_channels)
 
 
 # PublicSigningKey: Committee
@@ -824,6 +968,8 @@ class ReleasePolicy(sqlmodel.SQLModel, table=True):
         default_factory=list, sa_column=sqlalchemy.Column(sqlalchemy.JSON)
     )
     strict_checking: bool = sqlmodel.Field(default=False)
+    github_repository_name: str = sqlmodel.Field(default="")
+    github_workflow_path: str = sqlmodel.Field(default="")
 
     # 1-1: ReleasePolicy -> Project
     # 1-1: Project -C-> ReleasePolicy
@@ -938,9 +1084,12 @@ def populate_revision_sequence_and_name(
 @event.listens_for(Release, "before_insert")
 def check_release_name(_mapper: orm.Mapper, _connection: sqlalchemy.Connection, release: Release) -> None:
     if release.name == "":
-        if (release.project_name is None) or (release.version is None):
+        # Quiet the type checker
+        project_name = getattr(release, "project_name", None)
+        version = getattr(release, "version", None)
+        if (project_name is None) or (version is None):
             raise ValueError("Cannot generate release name without project_name and version")
-        release.name = release_name(release.project_name, release.version)
+        release.name = release_name(project_name, version)
 
 
 def latest_revision_number_query(release_name: str | None = None) -> expression.ScalarSelect[str]:
