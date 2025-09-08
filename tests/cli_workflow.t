@@ -55,6 +55,9 @@ $ atr vote start tooling-test-example 0.3+cli 00002 -m "<!user!>@apache.org"
 $ atr vote resolve tooling-test-example 0.3+cli passed
 Vote marked as passed.
 
+$ atr distribution record tooling-test-example 0.3+cli NPM None react 18.2.0 False False
+Distribution recorded.
+
 $ atr announce tooling-test-example 0.3+cli 00003 -m "<!user!>@apache.org" -s "[ANNOUNCE] Release tooling-test-example 0.3+cli" -b "Release tooling-test-example 0.3+cli has been announced."
 Announcement sent.
 

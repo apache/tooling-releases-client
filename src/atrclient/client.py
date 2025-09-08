@@ -57,6 +57,7 @@ APP: cyclopts.App = cyclopts.App()
 APP_CHECK: cyclopts.App = cyclopts.App(name="check", help="Check result operations.")
 APP_CONFIG: cyclopts.App = cyclopts.App(name="config", help="Configuration operations.")
 APP_DEV: cyclopts.App = cyclopts.App(name="dev", help="Developer operations.")
+APP_DISTRIBUTION: cyclopts.App = cyclopts.App(name="distribution", help="Distribution operations.")
 APP_DRAFT: cyclopts.App = cyclopts.App(name="draft", help="Draft operations.")
 APP_IGNORE: cyclopts.App = cyclopts.App(name="ignore", help="Ignore operations.")
 APP_JWT: cyclopts.App = cyclopts.App(name="jwt", help="JWT operations.")
@@ -169,6 +170,14 @@ def api_checks_ongoing(
 ) -> models.api.ChecksOngoingResults:
     response = api.get(project, version, revision=revision)
     return models.api.validate_checks_ongoing(response)
+
+
+@api_post("/distribution/record")
+def api_distribution_record(
+    api: ApiPost, args: models.api.DistributionRecordArgs
+) -> models.api.DistributionRecordResults:
+    response = api.post(args)
+    return models.api.validate_distribution_record(response)
 
 
 @api_post("/ignore/add")
@@ -634,6 +643,40 @@ def app_draft_delete(project: str, version: str, /) -> None:
     draft_delete_args = models.api.ReleaseDraftDeleteArgs(project=project, version=version)
     draft_delete = api_release_draft_delete(draft_delete_args)
     print(draft_delete.success)
+
+
+@APP_DISTRIBUTION.command(name="record", help="Record a distribution.")
+def app_distribution_record(
+    project: str,
+    version: str,
+    platform: str,
+    distribution_owner_namespace: str | None,
+    distribution_package: str,
+    distribution_version: str,
+    staging: bool,
+    details: bool,
+) -> None:
+    # if not distribution_owner_namespace:
+    #     distribution_owner_namespace = None
+    if platform not in models.sql.DistributionPlatform.__members__:
+        show_error_and_exit(f"Invalid platform: {platform}")
+    platform_member = models.sql.DistributionPlatform[platform]
+    distribution_record_args = models.api.DistributionRecordArgs(
+        project=project,
+        version=version,
+        platform=platform_member,
+        distribution_owner_namespace=distribution_owner_namespace,
+        distribution_package=distribution_package,
+        distribution_version=distribution_version,
+        staging=staging,
+        details=details,
+    )
+    distribution_record = api_distribution_record(distribution_record_args)
+    if not distribution_record.success:
+        show_error_and_exit("Failed to record distribution.")
+    if not distribution_record.success:
+        show_error_and_exit("Failed to record distribution.")
+    print("Distribution recorded.")
 
 
 @APP.command(name="docs", help="Show comprehensive CLI documentation in Markdown.")
@@ -1456,6 +1499,7 @@ def subcommands_register(app: cyclopts.App) -> None:
     app.command(APP_CHECK)
     app.command(APP_CONFIG)
     app.command(APP_DEV)
+    app.command(APP_DISTRIBUTION)
     app.command(APP_DRAFT)
     app.command(APP_IGNORE)
     app.command(APP_JWT)
@@ -1535,7 +1579,7 @@ async def web_get_url(url: str, verify_ssl: bool = True) -> bytes:
 
 
 async def web_post(url: str, args: models.schema.Strict, jwt_token: str | None, verify_ssl: bool = True) -> JSON:
-    return await web_post_json(url, args.model_dump(), jwt_token, verify_ssl)
+    return await web_post_json(url, args.model_dump(mode="json"), jwt_token, verify_ssl)
 
 
 async def web_post_json(url: str, args: JSON, jwt_token: str | None, verify_ssl: bool = True) -> JSON:
