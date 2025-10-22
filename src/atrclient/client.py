@@ -104,7 +104,9 @@ def app_announce(
     announce = api.release_announce(announce_args)
     if not announce.success:
         show.error_and_exit("Failed to announce release.")
-    print("Announcement sent.")
+    # The result only contains a success bool
+    # Therefore the ReleaseAnnounceArgs actually contain most of the information
+    show.json_or_message(announce_args, "Announcement sent.")
 
 
 @APP.command(name="api", help="Call the API directly.")
@@ -120,11 +122,12 @@ def app_api(path: str, /, **kwargs: str) -> None:
         kwargs["version"] = kwargs["_version"]
         del kwargs["_version"]
     if not basic.is_json(kwargs):
-        show.error_and_exit(f"Unexpected API response: {kwargs}")
+        show.error_and_exit(f"Unexpected API request payload type: {kwargs}")
     if not basic.is_json_dict(kwargs):
-        show.error_and_exit(f"Unexpected API response: {kwargs}")
+        show.error_and_exit(f"Unexpected API request payload type: {kwargs}")
     json_data = asyncio.run(web.post_json(url, kwargs, jwt_value, verify_ssl))
-    print(json.dumps(json_data, indent=None))
+    # Always show JSON output
+    show.json_or_message(json_data)
 
 
 @APP_CHECK.command(name="exceptions", help="Get check exceptions for a release revision.")

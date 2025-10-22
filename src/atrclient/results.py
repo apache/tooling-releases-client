@@ -19,7 +19,4 @@ from __future__ import annotations
 
 import atrclient.models.schema as schema
 
-
-class Announce(schema.Strict):
-    success: bool = schema.example(True)
-    message: str = schema.example("Announcement sent.")
+_ = schema

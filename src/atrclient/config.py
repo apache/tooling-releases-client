@@ -38,11 +38,24 @@ import atrclient.models as models
 import atrclient.show as show
 import atrclient.web as web
 
-YAML_DEFAULTS: dict[str, Any] = {"asf": {}, "atr": {}, "tokens": {}}
+YAML_DEFAULTS: dict[str, Any] = {"asf": {}, "atr": {}, "output": {}, "tokens": {}}
 YAML_SCHEMA: strictyaml.Map = strictyaml.Map(
     {
-        strictyaml.Optional("atr"): strictyaml.Map({strictyaml.Optional("host"): strictyaml.Str()}),
-        strictyaml.Optional("asf"): strictyaml.Map({strictyaml.Optional("uid"): strictyaml.Str()}),
+        strictyaml.Optional("atr"): strictyaml.Map(
+            {
+                strictyaml.Optional("host"): strictyaml.Str(),
+            }
+        ),
+        strictyaml.Optional("asf"): strictyaml.Map(
+            {
+                strictyaml.Optional("uid"): strictyaml.Str(),
+            }
+        ),
+        strictyaml.Optional("output"): strictyaml.Map(
+            {
+                strictyaml.Optional("json"): strictyaml.Bool(),
+            }
+        ),
         strictyaml.Optional("tokens"): strictyaml.Map(
             {
                 strictyaml.Optional("pat"): strictyaml.Str(),

@@ -17,14 +17,31 @@
 
 from __future__ import annotations
 
+import json
 import sys
 from typing import NoReturn
+
+import atrclient.basic as basic
+import atrclient.config as config
+import atrclient.models.schema as schema
 
 
 def error_and_exit(message: str, code: int = 1) -> NoReturn:
     sys.stderr.write(f"atr: error: {message}\n")
     sys.stderr.flush()
     raise SystemExit(code)
+
+
+def json_or_message(data: basic.JSON | schema.Strict, message: str | None = None) -> None:
+    cfg = config.read()
+    output_json = config.get(cfg, ["output", "json"])
+    if (output_json is True) or (message is None):
+        if isinstance(data, schema.Strict):
+            print(json.dumps(data.model_dump(), indent=None))
+        else:
+            print(json.dumps(data, indent=None))
+    else:
+        print(message)
 
 
 def warning(message: str) -> None:
