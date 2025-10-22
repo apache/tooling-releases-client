@@ -179,10 +179,12 @@ class TaskType(str, enum.Enum):
     LICENSE_FILES = "license_files"
     LICENSE_HEADERS = "license_headers"
     MESSAGE_SEND = "message_send"
+    METADATA_UPDATE = "metadata_update"
     PATHS_CHECK = "paths_check"
     RAT_CHECK = "rat_check"
     SBOM_AUGMENT = "sbom_augment"
     SBOM_GENERATE_CYCLONEDX = "sbom_generate_cyclonedx"
+    SBOM_OSV_SCAN = "sbom_osv_scan"
     SBOM_QS_SCORE = "sbom_qs_score"
     SBOM_TOOL_SCORE = "sbom_tool_score"
     SIGNATURE_CHECK = "signature_check"
@@ -280,6 +282,7 @@ class ResultsJSON(sqlalchemy.types.TypeDecorator):
         try:
             return results.ResultsAdapter.validate_python(value)
         except pydantic.ValidationError:
+            # TODO: Should we make this more strict?
             return None
 
 
@@ -552,7 +555,9 @@ On behalf of the Apache [COMMITTEE] project team,
         return """Hello [COMMITTEE],
 
 I'd like to call a vote on releasing the following artifacts as
-Apache [PROJECT] [VERSION].
+Apache [PROJECT] [VERSION]. This vote is being conducted using an
+Alpha version of the Apache Trusted Releases (ATR) platform.
+Please report any bugs or issues to the ASF Tooling team.
 
 The release candidate page, including downloads, can be found at:
 
