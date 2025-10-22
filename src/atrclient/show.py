@@ -17,9 +17,16 @@
 
 from __future__ import annotations
 
-import atrclient.models.schema as schema
+import sys
+from typing import NoReturn
 
 
-class Announce(schema.Strict):
-    success: bool = schema.example(True)
-    message: str = schema.example("Announcement sent.")
+def error_and_exit(message: str, code: int = 1) -> NoReturn:
+    sys.stderr.write(f"atr: error: {message}\n")
+    sys.stderr.flush()
+    raise SystemExit(code)
+
+
+def warning(message: str) -> None:
+    sys.stderr.write(f"atr: warning: {message}\n")
+    sys.stderr.flush()

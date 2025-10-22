@@ -30,6 +30,7 @@ import aioresponses
 import pytest
 
 import atrclient.client as client
+import atrclient.config as config
 
 if TYPE_CHECKING:
     import pytest_console_scripts
@@ -241,31 +242,32 @@ def test_cli_transcripts(
 
 
 def test_config_set_get_roundtrip() -> None:
-    config: dict[str, Any] = {}
-    client.config_set(config, ["abc", "pqr"], 123)
-    assert client.config_get(config, ["abc", "pqr"]) == 123
+    cfg: dict[str, Any] = {}
+    config.set_value(cfg, ["abc", "pqr"], 123)
+    assert config.get(cfg, ["abc", "pqr"]) == 123
 
 
 def test_config_walk_drop() -> None:
-    config: dict[str, Any] = {"a": {"b": 1}}
-    changed, _ = client.config_walk(config, ["a", "b"], "drop")
+    cfg: dict[str, Any] = {"a": {"b": 1}}
+    changed, _ = config.walk(cfg, ["a", "b"], "drop")
     assert changed is True
-    assert config == {}
+    assert cfg == {}
 
 
 def test_config_write_delete(fixture_config_env: pathlib.Path) -> None:
-    client.config_write({"atr": {"host": "example.invalid"}})
-    config_path_obj = client.config_path()
+    config.write({"atr": {"host": "example.invalid"}})
+    config_path_obj = config.path()
     assert config_path_obj.exists() is True
-    client.config_write({})
+    cfg = {}
+    config.write(cfg)
     assert config_path_obj.exists() is False
 
 
 def test_config_write_empty_dict_filter(fixture_config_env: pathlib.Path) -> None:
-    client.config_write({"atr": {}, "asf": {"uid": ""}})
-    config = client.config_read()
-    assert "atr" not in config
-    assert client.config_get(config, ["asf", "uid"]) == ""
+    config.write({"atr": {}, "asf": {"uid": ""}})
+    cfg = config.read()
+    assert "atr" not in cfg
+    assert config.get(cfg, ["asf", "uid"]) == ""
 
 
 def test_timestamp_format_epoch() -> None:

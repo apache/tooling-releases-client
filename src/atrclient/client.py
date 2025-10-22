@@ -24,9 +24,7 @@ from __future__ import annotations
 import asyncio
 import base64
 import contextlib
-import copy
 import datetime
-import functools
 import hashlib
 import importlib.metadata as metadata
 import io
@@ -37,21 +35,21 @@ import re
 import signal
 import sys
 import time
-from typing import TYPE_CHECKING, Annotated, Any, Literal, NoReturn, TypeGuard, TypeVar
+from typing import TYPE_CHECKING, Annotated, Any, Literal
 
-import aiohttp
 import cyclopts
-import filelock
 import jwt
 import pgpy
-import platformdirs
-import pydantic
-import strictyaml
 
+import atrclient.api as api
+import atrclient.basic as basic
+import atrclient.config as config
 import atrclient.models as models
+import atrclient.show as show
+import atrclient.web as web
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, Generator, Sequence
+    from collections.abc import Generator, Sequence
 
 APP: cyclopts.App = cyclopts.App()
 APP_CHECK: cyclopts.App = cyclopts.App(name="check", help="Check result operations.")
@@ -66,44 +64,8 @@ APP_RELEASE: cyclopts.App = cyclopts.App(name="release", help="Release operation
 APP_SSH: cyclopts.App = cyclopts.App(name="ssh", help="SSH operations.")
 APP_VOTE: cyclopts.App = cyclopts.App(name="vote", help="Vote operations.")
 VERSION: str = metadata.version("apache-trusted-releases")
-YAML_DEFAULTS: dict[str, Any] = {"asf": {}, "atr": {}, "tokens": {}}
-YAML_SCHEMA: strictyaml.Map = strictyaml.Map(
-    {
-        strictyaml.Optional("atr"): strictyaml.Map({strictyaml.Optional("host"): strictyaml.Str()}),
-        strictyaml.Optional("asf"): strictyaml.Map({strictyaml.Optional("uid"): strictyaml.Str()}),
-        strictyaml.Optional("tokens"): strictyaml.Map(
-            {
-                strictyaml.Optional("pat"): strictyaml.Str(),
-                strictyaml.Optional("jwt"): strictyaml.Str(),
-            }
-        ),
-    }
-)
 
-JSON = dict[str, Any] | list[Any] | str | int | float | bool | None
-
-
-class ApiCore:
-    def __init__(self, path: str):
-        host, verify_ssl = config_host_get()
-        self.url = f"https://{host}/api{path}"
-        self.verify_ssl = verify_ssl
-
-
-class ApiGet(ApiCore):
-    def get(self, *args: str, **kwargs: str | None) -> JSON:
-        url = self.url + "/" + "/".join(args)
-        for value in kwargs.values():
-            if value is not None:
-                url += f"/{value}"
-        jwt_value = None
-        return asyncio.run(web_get(url, jwt_value, self.verify_ssl))
-
-
-class ApiPost(ApiCore):
-    def post(self, args: models.schema.Strict) -> JSON:
-        jwt_value = config_jwt_usable()
-        return asyncio.run(web_post(self.url, args, jwt_value, self.verify_ssl))
+type JSON = dict[str, Any] | list[Any] | str | int | float | bool | None
 
 
 class ForceUnexpiredOpenPGPKey(pgpy.PGPKey):
@@ -117,217 +79,6 @@ class ForceUnexpiredOpenPGPKey(pgpy.PGPKey):
     @property
     def is_expired(self) -> bool:
         return False
-
-
-A = TypeVar("A", bound=models.schema.Strict)
-R = TypeVar("R", bound=models.api.Results)
-
-
-def api_get(path: str) -> Callable[[Callable[..., R]], Callable[..., R]]:
-    def decorator(func: Callable[..., R]) -> Callable[..., R]:
-        @functools.wraps(func)
-        def wrapper(*args: str, **kwargs: str | None) -> R:
-            api_instance = ApiGet(path)
-            try:
-                response = func(api_instance, *args, **kwargs)
-            except pydantic.ValidationError as e:
-                error_summary = "\n".join([f"  - {err['loc'][1]}: {err['msg']}" for err in e.errors()])
-                show_error_and_exit(f"API response failed validation:\n{error_summary}")
-            except (aiohttp.ClientError, models.api.ResultsTypeError) as e:
-                show_error_and_exit(f"Unexpected API GET response: {e}")
-            else:
-                return response
-
-        return wrapper
-
-    return decorator
-
-
-def api_post(path: str) -> Callable[[Callable[[ApiPost, A], R]], Callable[[A], R]]:
-    def decorator(func: Callable[[ApiPost, A], R]) -> Callable[[A], R]:
-        def wrapper(args: A) -> R:
-            api_instance = ApiPost(path)
-            try:
-                response = func(api_instance, args)
-            except (pydantic.ValidationError, models.api.ResultsTypeError) as e:
-                show_error_and_exit(f"Unexpected API POST response: {e}")
-            return response
-
-        return wrapper
-
-    return decorator
-
-
-@api_get("/checks/list")
-def api_checks_list(api: ApiGet, project: str, version: str, revision: str) -> models.api.ChecksListResults:
-    response = api.get(project, version, revision)
-    return models.api.validate_checks_list(response)
-
-
-@api_get("/checks/ongoing")
-def api_checks_ongoing(
-    api: ApiGet, project: str, version: str, revision: str | None = None
-) -> models.api.ChecksOngoingResults:
-    response = api.get(project, version, revision=revision)
-    return models.api.validate_checks_ongoing(response)
-
-
-@api_post("/distribution/record")
-def api_distribution_record(
-    api: ApiPost, args: models.api.DistributionRecordArgs
-) -> models.api.DistributionRecordResults:
-    response = api.post(args)
-    return models.api.validate_distribution_record(response)
-
-
-@api_post("/ignore/add")
-def api_ignore_add(api: ApiPost, args: models.api.IgnoreAddArgs) -> models.api.IgnoreAddResults:
-    response = api.post(args)
-    return models.api.validate_ignore_add(response)
-
-
-@api_post("/ignore/delete")
-def api_ignore_delete(api: ApiPost, args: models.api.IgnoreDeleteArgs) -> models.api.IgnoreDeleteResults:
-    response = api.post(args)
-    return models.api.validate_ignore_delete(response)
-
-
-@api_get("/ignore/list")
-def api_ignore_list(api: ApiGet, committee: str) -> models.api.IgnoreListResults:
-    response = api.get(committee)
-    return models.api.validate_ignore_list(response)
-
-
-@api_post("/key/add")
-def api_key_add(api: ApiPost, args: models.api.KeyAddArgs) -> models.api.KeyAddResults:
-    response = api.post(args)
-    return models.api.validate_key_add(response)
-
-
-@api_post("/key/delete")
-def api_key_delete(api: ApiPost, args: models.api.KeyDeleteArgs) -> models.api.KeyDeleteResults:
-    response = api.post(args)
-    return models.api.validate_key_delete(response)
-
-
-@api_get("/key/get")
-def api_key_get(api: ApiGet, fingerprint: str) -> models.api.KeyGetResults:
-    response = api.get(fingerprint)
-    return models.api.validate_key_get(response)
-
-
-@api_post("/keys/upload")
-def api_keys_upload(api: ApiPost, args: models.api.KeysUploadArgs) -> models.api.KeysUploadResults:
-    response = api.post(args)
-    return models.api.validate_keys_upload(response)
-
-
-@api_get("/keys/user")
-def api_keys_user(api: ApiGet, asf_uid: str) -> models.api.KeysUserResults:
-    response = api.get(asf_uid)
-    return models.api.validate_keys_user(response)
-
-
-@api_get("/project/releases")
-def api_project_releases(api: ApiGet, project: str) -> models.api.ProjectReleasesResults:
-    response = api.get(project)
-    return models.api.validate_project_releases(response)
-
-
-@api_post("/release/announce")
-def api_release_announce(api: ApiPost, args: models.api.ReleaseAnnounceArgs) -> models.api.ReleaseAnnounceResults:
-    response = api.post(args)
-    return models.api.validate_release_announce(response)
-
-
-@api_post("/release/create")
-def api_release_create(api: ApiPost, args: models.api.ReleaseCreateArgs) -> models.api.ReleaseCreateResults:
-    response = api.post(args)
-    return models.api.validate_release_create(response)
-
-
-@api_post("/release/delete")
-def api_release_delete(api: ApiPost, args: models.api.ReleaseDeleteArgs) -> models.api.ReleaseDeleteResults:
-    response = api.post(args)
-    return models.api.validate_release_delete(response)
-
-
-@api_post("/release/draft/delete")
-def api_release_draft_delete(
-    api: ApiPost, args: models.api.ReleaseDraftDeleteArgs
-) -> models.api.ReleaseDraftDeleteResults:
-    response = api.post(args)
-    return models.api.validate_release_draft_delete(response)
-
-
-@api_get("/release/paths")
-def api_release_paths(
-    api: ApiGet, project: str, version: str, revision: str | None = None
-) -> models.api.ReleasePathsResults:
-    response = api.get(project, version, revision=revision)
-    return models.api.validate_release_paths(response)
-
-
-@api_get("/release/get")
-def api_release_get(api: ApiGet, project: str, version: str) -> models.api.ReleaseGetResults:
-    response = api.get(project, version)
-    return models.api.validate_release_get(response)
-
-
-@api_get("/release/revisions")
-def api_release_revisions(api: ApiGet, project: str, version: str) -> models.api.ReleaseRevisionsResults:
-    response = api.get(project, version)
-    return models.api.validate_release_revisions(response)
-
-
-@api_post("/release/upload")
-def api_release_upload(api: ApiPost, args: models.api.ReleaseUploadArgs) -> models.api.ReleaseUploadResults:
-    response = api.post(args)
-    return models.api.validate_release_upload(response)
-
-
-@api_post("/signature/provenance")
-def api_signature_provenance(
-    api: ApiPost, args: models.api.SignatureProvenanceArgs
-) -> models.api.SignatureProvenanceResults:
-    response = api.post(args)
-    return models.api.validate_signature_provenance(response)
-
-
-@api_post("/ssh-key/add")
-def api_ssh_key_add(api: ApiPost, args: models.api.SshKeyAddArgs) -> models.api.SshKeyAddResults:
-    response = api.post(args)
-    return models.api.validate_ssh_key_add(response)
-
-
-@api_post("/ssh-key/delete")
-def api_ssh_key_delete(api: ApiPost, args: models.api.SshKeyDeleteArgs) -> models.api.SshKeyDeleteResults:
-    response = api.post(args)
-    return models.api.validate_ssh_key_delete(response)
-
-
-@api_get("/ssh-keys/list")
-def api_ssh_keys_list(api: ApiGet, asf_uid: str) -> models.api.SshKeysListResults:
-    response = api.get(asf_uid)
-    return models.api.validate_ssh_keys_list(response)
-
-
-@api_post("/vote/resolve")
-def api_vote_resolve(api: ApiPost, args: models.api.VoteResolveArgs) -> models.api.VoteResolveResults:
-    response = api.post(args)
-    return models.api.validate_vote_resolve(response)
-
-
-@api_post("/vote/start")
-def api_vote_start(api: ApiPost, args: models.api.VoteStartArgs) -> models.api.VoteStartResults:
-    response = api.post(args)
-    return models.api.validate_vote_start(response)
-
-
-@api_post("/vote/tabulate")
-def api_vote_tabulate(api: ApiPost, args: models.api.VoteTabulateArgs) -> models.api.VoteTabulateResults:
-    response = api.post(args)
-    return models.api.validate_vote_tabulate(response)
 
 
 @APP.command(name="announce", help="Announce a release.")
@@ -350,16 +101,16 @@ def app_announce(
         body=body or f"Release {project} {version} has been announced.",
         path_suffix=path_suffix or "",
     )
-    announce = api_release_announce(announce_args)
+    announce = api.release_announce(announce_args)
     if not announce.success:
-        show_error_and_exit("Failed to announce release.")
+        show.error_and_exit("Failed to announce release.")
     print("Announcement sent.")
 
 
 @APP.command(name="api", help="Call the API directly.")
 def app_api(path: str, /, **kwargs: str) -> None:
-    jwt_value = config_jwt_usable()
-    host, verify_ssl = config_host_get()
+    jwt_value = config.jwt_usable()
+    host, verify_ssl = config.host_get()
     url = f"https://{host}/api{path}"
     # if debugging:
     #     print(url)
@@ -368,11 +119,11 @@ def app_api(path: str, /, **kwargs: str) -> None:
         # TODO: There's a bug in Cyclopts where it does not pass --version to **kwargs
         kwargs["version"] = kwargs["_version"]
         del kwargs["_version"]
-    if not is_json(kwargs):
-        show_error_and_exit(f"Unexpected API response: {kwargs}")
-    if not is_json_dict(kwargs):
-        show_error_and_exit(f"Unexpected API response: {kwargs}")
-    json_data = asyncio.run(web_post_json(url, kwargs, jwt_value, verify_ssl))
+    if not basic.is_json(kwargs):
+        show.error_and_exit(f"Unexpected API response: {kwargs}")
+    if not basic.is_json_dict(kwargs):
+        show.error_and_exit(f"Unexpected API response: {kwargs}")
+    json_data = asyncio.run(web.post_json(url, kwargs, jwt_value, verify_ssl))
     print(json.dumps(json_data, indent=None))
 
 
@@ -384,7 +135,7 @@ def app_check_exceptions(
     /,
     members: Annotated[bool, cyclopts.Parameter(alias="-m", name="--members")] = False,
 ) -> None:
-    checks_list = api_checks_list(project, version, revision)
+    checks_list = api.checks_list(project, version, revision)
     checks_display_status("exception", checks_list.checks, members=members)
 
 
@@ -396,7 +147,7 @@ def app_check_failures(
     /,
     members: Annotated[bool, cyclopts.Parameter(alias="-m", name="--members")] = False,
 ) -> None:
-    checks_list = api_checks_list(project, version, revision)
+    checks_list = api.checks_list(project, version, revision)
     checks_display_status("failure", checks_list.checks, members=members)
 
 
@@ -408,7 +159,7 @@ def app_check_status(
     revision: str | None = None,
     verbose: Annotated[bool, cyclopts.Parameter(alias="-v", name="--verbose")] = False,
 ) -> None:
-    releases_version = api_release_get(project, version)
+    releases_version = api.release_get(project, version)
     release = releases_version.release
     # TODO: Handle the not found case better
     if release.phase != "release_candidate_draft":
@@ -418,12 +169,12 @@ def app_check_status(
 
     if revision is None:
         if release.latest_revision_number is None:
-            show_error_and_exit("No revision number found.")
+            show.error_and_exit("No revision number found.")
         if not isinstance(release.latest_revision_number, str):
-            show_error_and_exit(f"Unexpected API response: {release.latest_revision_number}")
+            show.error_and_exit(f"Unexpected API response: {release.latest_revision_number}")
         revision = release.latest_revision_number
 
-    checks_list = api_checks_list(project, version, revision)
+    checks_list = api.checks_list(project, version, revision)
     checks_display(checks_list.checks, verbose)
 
 
@@ -436,21 +187,21 @@ def app_check_wait(
     timeout: Annotated[float, cyclopts.Parameter(alias="-t", name="--timeout")] = 60,
     interval: Annotated[int, cyclopts.Parameter(alias="-i", name="--interval")] = 500,
 ) -> None:
-    _host, verify_ssl = config_host_get()
+    _host, verify_ssl = config.host_get()
     if verify_ssl is True:
         if interval < 500:
-            show_error_and_exit("Interval must be at least 500ms.")
+            show.error_and_exit("Interval must be at least 500ms.")
     interval_seconds = interval / 1000
     if interval_seconds > timeout:
-        show_error_and_exit("Interval must be less than timeout.")
+        show.error_and_exit("Interval must be less than timeout.")
     while True:
-        checks_ongoing = api_checks_ongoing(project, version, revision)
+        checks_ongoing = api.checks_ongoing(project, version, revision)
         if checks_ongoing.ongoing == 0:
             break
         time.sleep(interval_seconds)
         timeout -= interval_seconds
         if timeout <= 0:
-            show_error_and_exit("Timeout waiting for checks to complete.")
+            show.error_and_exit("Timeout waiting for checks to complete.")
     print("Checks completed.")
 
 
@@ -462,15 +213,15 @@ def app_check_warnings(
     /,
     members: Annotated[bool, cyclopts.Parameter(alias="-m", name="--members")] = False,
 ) -> None:
-    checks_list = api_checks_list(project, version, revision)
+    checks_list = api.checks_list(project, version, revision)
     checks_display_status("warning", checks_list.checks, members=members)
 
 
 @APP_CONFIG.command(name="file", help="Display the configuration file contents.")
 def app_config_file() -> None:
-    path = config_path()
+    path = config.path()
     if not path.exists():
-        show_error_and_exit("No configuration file found.")
+        show.error_and_exit("No configuration file found.")
 
     with path.open("r", encoding="utf-8") as fh:
         for chunk in fh:
@@ -479,13 +230,13 @@ def app_config_file() -> None:
 
 @APP_CONFIG.command(name="path", help="Show the configuration file path.")
 def app_config_path() -> None:
-    print(config_path())
+    print(config.path())
 
 
 @APP_DEV.command(name="delete", help="Delete a release.")
 def app_dev_delete(project: str, version: str, /) -> None:
     releases_delete_args = models.api.ReleaseDeleteArgs(project=project, version=version)
-    api_release_delete(releases_delete_args)
+    api.release_delete(releases_delete_args)
     print(f"{project}-{version}")
 
 
@@ -575,7 +326,7 @@ Qx20dp/Ekji4w6nAtopc4CTjL7YeRFdBKQ==
 def app_dev_pat() -> None:
     atr_pat_path = pathlib.Path.home() / ".atr-pat"
     if not atr_pat_path.exists():
-        show_error_and_exit("~/.atr-pat not found.")
+        show.error_and_exit("~/.atr-pat not found.")
     text = atr_pat_path.read_text(encoding="utf-8").removesuffix("\n")
     print(text)
 
@@ -589,7 +340,7 @@ def app_dev_pwd() -> None:
 def app_dev_stamp() -> None:
     path = pathlib.Path("pyproject.toml")
     if not path.exists():
-        show_error_and_exit("pyproject.toml not found.")
+        show.error_and_exit("pyproject.toml not found.")
 
     text_v1 = path.read_text()
 
@@ -608,7 +359,7 @@ def app_dev_stamp() -> None:
 
     path = pathlib.Path("tests/cli_version.t")
     if not path.exists():
-        show_warning("tests/cli_version.t not found.")
+        show.warning("tests/cli_version.t not found.")
         return
     text_v1 = path.read_text(encoding="utf-8")
     text_v2 = re.sub(r"0\.\d{8}\.\d{4}", v, text_v1)
@@ -641,7 +392,7 @@ def app_dev_user() -> None:
 @APP_DRAFT.command(name="delete", help="Delete a draft release.")
 def app_draft_delete(project: str, version: str, /) -> None:
     draft_delete_args = models.api.ReleaseDraftDeleteArgs(project=project, version=version)
-    draft_delete = api_release_draft_delete(draft_delete_args)
+    draft_delete = api.release_draft_delete(draft_delete_args)
     print(draft_delete.success)
 
 
@@ -659,7 +410,7 @@ def app_distribution_record(
     # if not distribution_owner_namespace:
     #     distribution_owner_namespace = None
     if platform not in models.sql.DistributionPlatform.__members__:
-        show_error_and_exit(f"Invalid platform: {platform}")
+        show.error_and_exit(f"Invalid platform: {platform}")
     platform_member = models.sql.DistributionPlatform[platform]
     distribution_record_args = models.api.DistributionRecordArgs(
         project=project,
@@ -671,11 +422,11 @@ def app_distribution_record(
         staging=staging,
         details=details,
     )
-    distribution_record = api_distribution_record(distribution_record_args)
+    distribution_record = api.distribution_record(distribution_record_args)
     if not distribution_record.success:
-        show_error_and_exit("Failed to record distribution.")
+        show.error_and_exit("Failed to record distribution.")
     if not distribution_record.success:
-        show_error_and_exit("Failed to record distribution.")
+        show.error_and_exit("Failed to record distribution.")
     print("Distribution recorded.")
 
 
@@ -692,12 +443,12 @@ def app_docs() -> None:
 def app_drop(path: str, /) -> None:
     parts = path.split(".")
     if not parts:
-        show_error_and_exit("Not a valid configuration key")
+        show.error_and_exit("Not a valid configuration key")
 
-    with config_lock(write=True) as config:
-        present, _ = config_walk(config, parts, "drop")
+    with config.lock(write_to_disk=True) as cfg:
+        present, _ = config.walk(cfg, parts, "drop")
         if not present:
-            show_error_and_exit(f"Could not find {path} in the configuration file")
+            show.error_and_exit(f"Could not find {path} in the configuration file")
 
     print(f"Removed {path}.")
 
@@ -724,7 +475,7 @@ def app_ignore_add(
         status=status,
         message_glob=message,
     )
-    api_ignore_add(args)
+    api.ignore_add(args)
     print("Check result ignored for:")
     print(f"  Committee: {committee}")
     print(f"  Release (glob): {release}")
@@ -743,7 +494,7 @@ def app_ignore_delete(
     /,
 ) -> None:
     args = models.api.IgnoreDeleteArgs(committee=committee, id=id)
-    api_ignore_delete(args)
+    api.ignore_delete(args)
     print("Check ignore deleted for:")
     print(f"  Committee: {committee}")
     print(f"  ID: {id}")
@@ -754,34 +505,34 @@ def app_ignore_list(
     committee: str,
     /,
 ) -> None:
-    ignores = api_ignore_list(committee)
+    ignores = api.ignore_list(committee)
     for ignore in ignores.ignores:
         print(ignore.model_dump_json(indent=None))
 
 
 @APP_JWT.command(name="dump", help="Show decoded JWT payload from stored config.")
 def app_jwt_dump() -> None:
-    jwt_value = config_jwt_get()
+    jwt_value = config.jwt_get()
     if jwt_value is None:
-        show_error_and_exit("No JWT stored in configuration.")
+        show.error_and_exit("No JWT stored in configuration.")
 
     header = jwt.get_unverified_header(jwt_value)
     if header != {"alg": "HS256", "typ": "JWT"}:
-        show_error_and_exit("Invalid JWT header.")
+        show.error_and_exit("Invalid JWT header.")
 
     try:
         payload = jwt.decode(jwt_value, options={"verify_signature": False})
     except jwt.PyJWTError as e:
-        show_error_and_exit(f"Failed to decode JWT: {e}")
+        show.error_and_exit(f"Failed to decode JWT: {e}")
 
     print(json.dumps(payload, indent=None))
 
 
 @APP_JWT.command(name="info", help="Show JWT payload in human-readable form.")
 def app_jwt_info() -> None:
-    jwt_value, payload = config_jwt_payload()
+    jwt_value, payload = config.jwt_payload()
     if jwt_value is None:
-        show_error_and_exit("No JWT stored in configuration.")
+        show.error_and_exit("No JWT stored in configuration.")
 
     lines: list[str] = []
     for key, val in payload.items():
@@ -794,7 +545,7 @@ def app_jwt_info() -> None:
 
 @APP_JWT.command(name="refresh", help="Fetch a JWT using the stored PAT and store it in config.")
 def app_jwt_refresh(asf_uid: str | None = None) -> None:
-    jwt_value = config_jwt_refresh(asf_uid)
+    jwt_value = config.jwt_refresh(asf_uid)
     print(jwt_value)
 
 
@@ -809,25 +560,25 @@ def app_key_add(path: str, committees: str = "", /) -> None:
     if committees:
         selected_committee_names[:] = committees.split(",")
     key = pathlib.Path(path).read_text(encoding="utf-8")
-    with config_lock() as config:
-        asf_uid = config_get(config, ["asf", "uid"])
+    with config.lock() as cfg:
+        asf_uid = config.get(cfg, ["asf", "uid"])
     if asf_uid is None:
-        show_error_and_exit("Please configure asf.uid before adding a key.")
+        show.error_and_exit("Please configure asf.uid before adding a key.")
     keys_add_args = models.api.KeyAddArgs(asfuid=asf_uid, key=key, committees=selected_committee_names)
-    keys_add = api_key_add(keys_add_args)
+    keys_add = api.key_add(keys_add_args)
     print(keys_add.fingerprint)
 
 
 @APP_KEY.command(name="delete", help="Delete an OpenPGP key.")
 def app_key_delete(fingerprint: str, /) -> None:
     keys_delete_args = models.api.KeyDeleteArgs(fingerprint=fingerprint)
-    keys_delete = api_key_delete(keys_delete_args)
+    keys_delete = api.key_delete(keys_delete_args)
     print(keys_delete.success)
 
 
 @APP_KEY.command(name="get", help="Get an OpenPGP key.")
 def app_key_get(fingerprint: str, /) -> None:
-    keys_get = api_key_get(fingerprint)
+    keys_get = api.key_get(fingerprint)
     print(keys_get.key.model_dump_json(indent=None))
 
 
@@ -838,7 +589,7 @@ def app_key_upload(path: str, selected_committee_name: str, /) -> None:
     #     selected_committee_names[:] = selected_committees.split(",")
     key = pathlib.Path(path).read_text(encoding="utf-8")
     keys_upload_args = models.api.KeysUploadArgs(filetext=key, committee=selected_committee_name)
-    keys_upload = api_keys_upload(keys_upload_args)
+    keys_upload = api.keys_upload(keys_upload_args)
     for result in keys_upload.results:
         print(result.model_dump_json(indent=None))
     print(f"Successfully uploaded {keys_upload.success_count} keys.")
@@ -848,45 +599,45 @@ def app_key_upload(path: str, selected_committee_name: str, /) -> None:
 @APP_KEY.command(name="user", help="List OpenPGP keys for a user.")
 def app_key_user(asf_uid: str | None = None) -> None:
     if asf_uid is None:
-        with config_lock() as config:
-            asf_uid = config_get(config, ["asf", "uid"])
+        with config.lock() as cfg:
+            asf_uid = config.get(cfg, ["asf", "uid"])
     if asf_uid is None:
-        show_error_and_exit("No ASF UID provided and asf.uid not configured.")
-    keys_user = api_keys_user(asf_uid)
+        show.error_and_exit("No ASF UID provided and asf.uid not configured.")
+    keys_user = api.keys_user(asf_uid)
     for key in keys_user.keys:
         print(key.model_dump_json(indent=None))
 
 
 @APP.command(name="list", help="List all files within a release.")
 def app_list(project: str, version: str, revision: str | None = None, /) -> None:
-    releases_paths = api_release_paths(project, version, revision)
+    releases_paths = api.release_paths(project, version, revision)
     for rel_path in releases_paths.rel_paths:
         print(rel_path)
 
 
 @APP_RELEASE.command(name="info", help="Show information about a release.")
 def app_release_info(project: str, version: str, /) -> None:
-    releases_version = api_release_get(project, version)
+    releases_version = api.release_get(project, version)
     print(releases_version.release.model_dump_json(indent=None))
 
 
 @APP_RELEASE.command(name="list", help="List releases for a project.")
 def app_release_list(project: str, /) -> None:
     # TODO: Support showing all of a user's releases if no project is provided
-    releases_project = api_project_releases(project)
+    releases_project = api.project_releases(project)
     releases_display(releases_project.releases)
 
 
 @APP_RELEASE.command(name="start", help="Start a release.")
 def app_release_start(project: str, version: str, /) -> None:
     releases_create_args = models.api.ReleaseCreateArgs(project=project, version=version)
-    releases_create = api_release_create(releases_create_args)
+    releases_create = api.release_create(releases_create_args)
     print(releases_create.release.model_dump_json(indent=None))
 
 
 @APP.command(name="revisions", help="List all revisions for a release.")
 def app_revisions(project: str, version: str, /) -> None:
-    revisions = api_release_revisions(project, version)
+    revisions = api.release_revisions(project, version)
     for revision in revisions.revisions:
         print(revision)
 
@@ -895,10 +646,10 @@ def app_revisions(project: str, version: str, /) -> None:
 def app_rsync(project: str, version: str, source: str = ".", target: str = "/", /) -> None:
     import subprocess
 
-    with config_lock() as config:
-        asf_uid = config_get(config, ["asf", "uid"])
+    with config.lock() as cfg:
+        asf_uid = config.get(cfg, ["asf", "uid"])
     if asf_uid is None:
-        show_error_and_exit("Please configure asf.uid before uploading.")
+        show.error_and_exit("Please configure asf.uid before uploading.")
 
     if not source.endswith("/"):
         source += "/"
@@ -911,7 +662,7 @@ def app_rsync(project: str, version: str, source: str = ".", target: str = "/", 
         # Must not do this if target is empty
         target += "/"
 
-    host, _verify_ssl = config_host_get()
+    host, _verify_ssl = config.host_get()
     if ":" in host:
         host, _port = host.split(":", 1)
     remote_target = f"{asf_uid}@{host}:/{project}/{version}/{target}"
@@ -923,10 +674,10 @@ def app_rsync(project: str, version: str, source: str = ".", target: str = "/", 
 def app_set(path: str, value: str, /) -> None:
     parts = path.split(".")
     if not parts:
-        show_error_and_exit("Not a valid configuration key.")
+        show.error_and_exit("Not a valid configuration key.")
 
-    with config_lock(write=True) as config:
-        config_set(config, path.split("."), value)
+    with config.lock(write_to_disk=True) as cfg:
+        config.set_value(cfg, path.split("."), value)
 
     print(f"Set {path} to {json.dumps(value, indent=None)}.")
 
@@ -935,13 +686,13 @@ def app_set(path: str, value: str, /) -> None:
 def app_show(path: str, /) -> None:
     parts = path.split(".")
     if not parts:
-        show_error_and_exit("Not a valid configuration key.")
+        show.error_and_exit("Not a valid configuration key.")
 
-    with config_lock() as config:
-        value = config_get(config, parts)
+    with config.lock() as cfg:
+        value = config.get(cfg, parts)
 
     if value is None:
-        show_error_and_exit(f"Could not find {path} in the configuration file.")
+        show.error_and_exit(f"Could not find {path} in the configuration file.")
 
     print(value)
 
@@ -949,25 +700,25 @@ def app_show(path: str, /) -> None:
 @APP_SSH.command(name="add", help="Add an SSH key.")
 def app_ssh_add(text: str, /) -> None:
     ssh_add_args = models.api.SshKeyAddArgs(text=text)
-    ssh_add = api_ssh_key_add(ssh_add_args)
+    ssh_add = api.ssh_key_add(ssh_add_args)
     print(ssh_add.fingerprint)
 
 
 @APP_SSH.command(name="delete", help="Delete an SSH key.")
 def app_ssh_delete(fingerprint: str, /) -> None:
     ssh_delete_args = models.api.SshKeyDeleteArgs(fingerprint=fingerprint)
-    ssh_delete = api_ssh_key_delete(ssh_delete_args)
+    ssh_delete = api.ssh_key_delete(ssh_delete_args)
     print(ssh_delete.success)
 
 
 @APP_SSH.command(name="list", help="List SSH keys.")
 def app_ssh_list(asf_uid: str | None = None) -> None:
     if asf_uid is None:
-        with config_lock() as config:
-            asf_uid = config_get(config, ["asf", "uid"])
+        with config.lock() as cfg:
+            asf_uid = config.get(cfg, ["asf", "uid"])
     if asf_uid is None:
-        show_error_and_exit("No ASF UID provided and asf.uid not configured.")
-    ssh_list = api_ssh_keys_list(asf_uid)
+        show.error_and_exit("No ASF UID provided and asf.uid not configured.")
+    ssh_list = api.ssh_keys_list(asf_uid)
     print(ssh_list.data)
 
 
@@ -983,7 +734,7 @@ def app_upload(project: str, version: str, path: str, filepath: str, /) -> None:
         content=base64.b64encode(content).decode("utf-8"),
     )
 
-    upload = api_release_upload(upload_args)
+    upload = api.release_upload(upload_args)
     print(upload.revision.model_dump_json(indent=None))
 
 
@@ -1010,10 +761,10 @@ def app_verify(url: str, /, verbose: bool = False) -> None:
     print_if_verbose("")
 
     print_if_verbose("We will now download the artifact and then the signature from these URLs.\n")
-    artifact_data = asyncio.run(web_get_url(artifact_url, verify_ssl=False))
-    signature_data = asyncio.run(web_get_url(signature_url, verify_ssl=False))
+    artifact_data = asyncio.run(web.get_url(artifact_url, verify_ssl=False))
+    signature_data = asyncio.run(web.get_url(signature_url, verify_ssl=False))
     if not signature_data:
-        show_error_and_exit(f"Signature is empty: {signature_url}")
+        show.error_and_exit(f"Signature is empty: {signature_url}")
     artifact_hash = hashlib.sha3_256(artifact_data).hexdigest()
     signature_hash = hashlib.sha3_256(signature_data).hexdigest()
     print_if_verbose(f"The artifact file is {len(artifact_data):,} bytes in size, and its SHA3-256 is:\n")
@@ -1039,7 +790,7 @@ def app_verify(url: str, /, verbose: bool = False) -> None:
     dumped_json["signature_asc_text"] = dumped_json["signature_asc_text"][:32] + "..."
     print_if_verbose(json.dumps(dumped_json, indent=2))
     print_if_verbose("")
-    verify_provenance = api_signature_provenance(verify_provenance_args)
+    verify_provenance = api.signature_provenance(verify_provenance_args)
     print_if_verbose("The ATR found a matching OpenPGP key with the following fingerprint:\n")
     print_if_verbose(verify_provenance.fingerprint.upper() + "\n")
     print_if_verbose("This key is associated with these committees with a project containing the artifact:\n")
@@ -1065,7 +816,7 @@ def app_vote_resolve(
         version=version,
         resolution=resolution,
     )
-    api_vote_resolve(vote_resolve_args)
+    api.vote_resolve(vote_resolve_args)
     print(f"Vote marked as {resolution}.")
 
 
@@ -1094,14 +845,14 @@ def app_vote_start(
         subject=subject or f"[VOTE] Release {project} {version}",
         body=body_text or f"Release {project} {version} is ready for voting.",
     )
-    vote_start = api_vote_start(vote_start_args)
+    vote_start = api.vote_start(vote_start_args)
     print(vote_start.task.model_dump_json(indent=None))
 
 
 @APP_VOTE.command(name="tabulate", help="Tabulate a vote.")
 def app_vote_tabulate(project: str, version: str, /) -> None:
     vote_tabulate_args = models.api.VoteTabulateArgs(project=project, version=version)
-    vote_tabulate = api_vote_tabulate(vote_tabulate_args)
+    vote_tabulate = api.vote_tabulate(vote_tabulate_args)
     print(vote_tabulate.model_dump_json(indent=2))
 
 
@@ -1182,180 +933,6 @@ def checks_display_verbose_details(checks: Sequence[models.sql.CheckResult]) -> 
         print(f"  {checker} → {primary_rel_path}{member_part} : {message}")
 
 
-def config_drop(config: dict[str, Any], parts: list[str]) -> None:
-    config_walk(config, parts, "drop")
-
-
-def config_get(config: dict[str, Any], parts: list[str]) -> Any | None:
-    return config_walk(config, parts, "get")[1]
-
-
-def config_host_get() -> tuple[str, bool]:
-    with config_lock() as config:
-        host = config.get("atr", {}).get("host", "release-test.apache.org")
-    local_domains = ["localhost.apache.org", "127.0.0.1"]
-    domain = host.split(":")[0]
-    verify_ssl = domain not in local_domains
-    return host, verify_ssl
-
-
-def config_jwt_get() -> str | None:
-    with config_lock() as config:
-        jwt_value = config_get(config, ["tokens", "jwt"])
-    return jwt_value
-
-
-def config_jwt_payload() -> tuple[str | None, dict[str, Any]]:
-    jwt_value = config_jwt_get()
-    if jwt_value is None:
-        return None, {}
-    if jwt_value == "dummy_jwt_token":
-        # TODO: Use a better test JWT
-        return jwt_value, {"exp": time.time() + 90 * 60, "sub": "test_asf_uid"}
-
-    try:
-        payload = jwt.decode(jwt_value, options={"verify_signature": False})
-    except jwt.PyJWTError as e:
-        show_error_and_exit(f"Failed to decode JWT: {e}")
-    if not isinstance(payload, dict):
-        show_error_and_exit("Invalid JWT payload.")
-    return jwt_value, payload
-
-
-def config_jwt_refresh(asf_uid: str | None = None) -> str:
-    with config_lock() as config:
-        pat_value = config_get(config, ["tokens", "pat"])
-        if asf_uid is None:
-            asf_uid = config.get("asf", {}).get("uid")
-
-    if pat_value is None:
-        show_error_and_exit("No Personal Access Token stored.")
-    if asf_uid is None:
-        show_error_and_exit("No ASF UID provided and asf.uid not configured.")
-
-    host, verify_ssl = config_host_get()
-    url = f"https://{host}/api/jwt/create"
-    args = models.api.JwtCreateArgs(asfuid=asf_uid, pat=pat_value)
-    response = asyncio.run(web_post(url, args, jwt_token=None, verify_ssl=verify_ssl))
-    try:
-        jwt_results = models.api.validate_jwt_create(response)
-    except (pydantic.ValidationError, models.api.ResultsTypeError) as e:
-        show_error_and_exit(f"Unexpected API response: {response}\n{e}")
-
-    with config_lock(write=True) as config:
-        config_set(config, ["tokens", "jwt"], jwt_results.jwt)
-
-    return jwt_results.jwt
-
-
-def config_jwt_usable() -> str:
-    with config_lock() as config:
-        config_asf_uid = config_get(config, ["asf", "uid"])
-
-    jwt_value, payload = config_jwt_payload()
-    if jwt_value is None:
-        if config_asf_uid is None:
-            show_error_and_exit("No ASF UID stored in configuration.")
-        return config_jwt_refresh(config_asf_uid)
-
-    exp = payload.get("exp") or 0
-    if exp < time.time():
-        payload_asf_uid = payload.get("sub")
-        if not payload_asf_uid:
-            show_error_and_exit("No ASF UID in JWT payload.")
-        if payload_asf_uid != config_asf_uid:
-            # The user probably just changed their configuration
-            # But we will refresh the JWT anyway
-            # It will still fail if the PAT is not valid
-            show_warning(f"JWT ASF UID {payload_asf_uid} does not match configuration ASF UID {config_asf_uid}")
-        return config_jwt_refresh(payload_asf_uid)
-    return jwt_value
-
-
-@contextlib.contextmanager
-def config_lock(write: bool = False) -> Generator[dict[str, Any]]:
-    lock = filelock.FileLock(str(config_path()) + ".lock")
-    with lock:
-        config = config_read()
-        yield config
-        if write is True:
-            config_write(config)
-
-
-def config_path() -> pathlib.Path:
-    if env := os.getenv("ATR_CLIENT_CONFIG_PATH"):
-        return pathlib.Path(env).expanduser()
-    return platformdirs.user_config_path("atr", appauthor="ASF") / "atr.yaml"
-
-
-def config_read() -> dict[str, Any]:
-    config_file = config_path()
-    if config_file.exists():
-        try:
-            data = strictyaml.load(config_file.read_text(), YAML_SCHEMA).data
-            if not isinstance(data, dict):
-                raise RuntimeError("Invalid atr.yaml: not a dictionary")
-            return data
-        except strictyaml.YAMLValidationError as e:
-            raise RuntimeError(f"Invalid atr.yaml: {e}") from e
-    return copy.deepcopy(YAML_DEFAULTS)
-
-
-def config_set(config: dict[str, Any], parts: list[str], val: Any) -> None:
-    config_walk(config, parts, "set", val)
-
-
-def config_walk(
-    config: dict[str, Any],
-    parts: list[str],
-    op: Literal["drop", "get", "set"],
-    value: Any | None = None,
-) -> tuple[bool, Any | None]:
-    match (op, parts):
-        case ("get", [k, *tail]) if tail:
-            # TODO: If config.get(k, {}) is not a dict, this fails
-            return config_walk(config.get(k, {}), tail, op)
-        case ("get", [k]):
-            return (k in config), config.get(k)
-        case ("set", [k, *tail]) if tail:
-            child = config.setdefault(k, {})
-            changed, _ = config_walk(child, tail, op, value)
-            return changed, value
-        case ("set", [k]):
-            changed = config.get(k) != value
-            config[k] = value
-            return changed, value
-        case ("drop", [k, *tail]) if tail:
-            if (k not in config) or (not isinstance(config[k], dict)):
-                return False, None
-            changed, removed_value = config_walk(config[k], tail, op)
-            if changed and not config[k]:
-                config.pop(k)
-            return changed, removed_value
-        case ("drop", [k]):
-            if k in config:
-                removed_value = config.pop(k)
-                return True, removed_value
-            return False, None
-    raise ValueError(f"Invalid operation: {op} with parts: {parts}")
-
-
-def config_write(data: dict[str, Any]) -> None:
-    data = {k: v for k, v in data.items() if not (isinstance(v, dict) and not v)}
-    path = config_path()
-    if not data:
-        if path.exists():
-            path.unlink()
-        return
-    tmp = path.with_suffix(".tmp")
-    tmp.parent.mkdir(parents=True, exist_ok=True)
-    tmp.write_text(
-        strictyaml.as_document(data, YAML_SCHEMA).as_yaml(),
-        encoding="utf-8",
-    )
-    os.replace(tmp, path)
-
-
 def documentation_to_markdown(
     app: cyclopts.App,
     subcommands: list[str] | None = None,
@@ -1408,32 +985,6 @@ def initialised() -> bool:
     return APP.version == VERSION
 
 
-def is_json(data: Any) -> TypeGuard[JSON]:
-    if isinstance(data, str | int | float | bool | None):
-        return True
-    if isinstance(data, dict):
-        if any(not isinstance(key, str) for key in data):
-            return False
-        return all(is_json(value) for value in data.values())
-    if isinstance(data, list):
-        return all(is_json(item) for item in data)
-    return False
-
-
-def is_json_dict(data: JSON) -> TypeGuard[dict[str, JSON]]:
-    # The keys are already validated due to it being a JSON object
-    return isinstance(data, dict)
-
-
-def is_json_list(data: JSON) -> TypeGuard[list[JSON]]:
-    # The items are already validated due to it being a JSON array
-    return isinstance(data, list)
-
-
-def is_json_list_of_dict(data: JSON) -> TypeGuard[list[dict[str, JSON]]]:
-    return is_json_list(data) and all(is_json_dict(item) for item in data)
-
-
 def iso_to_human(ts: str) -> str:
     dt = datetime.datetime.fromisoformat(ts.rstrip("Z"))
     if dt.tzinfo is None:
@@ -1484,17 +1035,6 @@ def releases_display(releases: Sequence[models.sql.Release]) -> None:
         print(f"  {version:<24} {latest:<7} {phase_short:<11} {created_formatted}")
 
 
-def show_error_and_exit(message: str, code: int = 1) -> NoReturn:
-    sys.stderr.write(f"atr: error: {message}\n")
-    sys.stderr.flush()
-    raise SystemExit(code)
-
-
-def show_warning(message: str) -> None:
-    sys.stderr.write(f"atr: warning: {message}\n")
-    sys.stderr.flush()
-
-
 def subcommands_register(app: cyclopts.App) -> None:
     app.command(APP_CHECK)
     app.command(APP_CONFIG)
@@ -1534,69 +1074,12 @@ def verify_summary(
     good_signatures = sum(1 for _ in verification_result.good_signatures)
     if bad_signatures:
         if good_signatures:
-            show_error_and_exit("There was an uncertain mixture of good and bad signatures.")
+            show.error_and_exit("There was an uncertain mixture of good and bad signatures.")
         for bad_signature in verification_result.bad_signatures:
             for issue in bad_signature.issues:
                 print(f"The verification package reported the following issue: {issue.name}")
-        show_error_and_exit("The signature is not valid!")
+        show.error_and_exit("The signature is not valid!")
     if verbose:
         print("The signature is valid! This completes the verification process.")
     else:
         print("The signature is valid!")
-
-
-async def web_get(url: str, jwt_token: str | None, verify_ssl: bool = True) -> JSON:
-    connector = None if verify_ssl else aiohttp.TCPConnector(ssl=False)
-    headers = {}
-    if jwt_token is not None:
-        headers["Authorization"] = f"Bearer {jwt_token}"
-    async with aiohttp.ClientSession(connector=connector, headers=headers) as session:
-        async with session.get(url) as resp:
-            if resp.status != 200:
-                text = await resp.text()
-                try:
-                    error_data = json.loads(text)
-                    if isinstance(error_data, dict) and ("error" in error_data):
-                        error_message = error_data["error"]
-                        show_error_and_exit(f"{error_message} from {url}")
-                    else:
-                        show_error_and_exit(f"Request failed: {resp.status} {url}\n{text}")
-                except json.JSONDecodeError:
-                    show_error_and_exit(f"Request failed: {resp.status} {url}\n{text}")
-            data = await resp.json()
-            if not is_json(data):
-                show_error_and_exit(f"Unexpected API response: {data}")
-            return data
-
-
-async def web_get_url(url: str, verify_ssl: bool = True) -> bytes:
-    connector = None if verify_ssl else aiohttp.TCPConnector(ssl=False)
-    async with aiohttp.ClientSession(connector=connector) as session:
-        async with session.get(url) as response:
-            if response.status != 200:
-                show_error_and_exit(f"URL not found: {url}")
-            return await response.read()
-
-
-async def web_post(url: str, args: models.schema.Strict, jwt_token: str | None, verify_ssl: bool = True) -> JSON:
-    return await web_post_json(url, args.model_dump(mode="json"), jwt_token, verify_ssl)
-
-
-async def web_post_json(url: str, args: JSON, jwt_token: str | None, verify_ssl: bool = True) -> JSON:
-    connector = None if verify_ssl else aiohttp.TCPConnector(ssl=False)
-    headers = {}
-    if jwt_token is not None:
-        headers["Authorization"] = f"Bearer {jwt_token}"
-    async with aiohttp.ClientSession(connector=connector, headers=headers) as session:
-        async with session.post(url, json=args) as resp:
-            if resp.status not in (200, 201):
-                text = await resp.text()
-                show_error_and_exit(f"Error message from the API:\n{resp.status} {url}\n{text}")
-
-            try:
-                data = await resp.json()
-                if not is_json(data):
-                    show_error_and_exit(f"Unexpected API response: {data}")
-                return data
-            except Exception as e:
-                show_error_and_exit(f"Python error getting API response:\n{resp.status} {url}\n{e}")
