@@ -52,6 +52,7 @@ if TYPE_CHECKING:
     from collections.abc import Generator, Sequence
 
 APP: cyclopts.App = cyclopts.App()
+APP_API: cyclopts.App = cyclopts.App(name="api", help="API operations.")
 APP_CHECK: cyclopts.App = cyclopts.App(name="check", help="Check result operations.")
 APP_CONFIG: cyclopts.App = cyclopts.App(name="config", help="Configuration operations.")
 APP_DEV: cyclopts.App = cyclopts.App(name="dev", help="Developer operations.")
@@ -109,8 +110,18 @@ def app_announce(
     show.json_or_message(announce_args, "Announcement sent.")
 
 
-@APP.command(name="api", help="Call the API directly.")
-def app_api(path: str, /, **kwargs: str) -> None:
+@APP_API.command(name="get", help="GET a resource from the API.")
+def app_api_get(path: str) -> None:
+    jwt_value = config.jwt_usable()
+    host, verify_ssl = config.host_get()
+    url = f"https://{host}/api{path}"
+    json_data = asyncio.run(web.get(url, jwt_value, verify_ssl))
+    # Always show JSON output
+    show.json_or_message(json_data)
+
+
+@APP_API.command(name="post", help="POST a resource to the API.")
+def app_api_post(path: str, /, **kwargs: str) -> None:
     jwt_value = config.jwt_usable()
     host, verify_ssl = config.host_get()
     url = f"https://{host}/api{path}"
@@ -1039,6 +1050,7 @@ def releases_display(releases: Sequence[models.sql.Release]) -> None:
 
 
 def subcommands_register(app: cyclopts.App) -> None:
+    app.command(APP_API)
     app.command(APP_CHECK)
     app.command(APP_CONFIG)
     app.command(APP_DEV)
