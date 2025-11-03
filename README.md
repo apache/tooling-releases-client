@@ -27,3 +27,12 @@ The ATR API is not stable, so please do not rely on its schema. The client CLI i
    atr set tokens.pat "<pat from ATR site>"
    atr jwt refresh
    ```
+
+If you do not have a compatible version of Python (we currently require 3.12 or higher), then you can try using the following commands:
+
+```
+curl -LsSf https://astral.sh/uv/install.sh | sh
+uv tool install "apache-trusted-releases @ git+https://github.com/apache/tooling-releases-client"
+```
+
+And you should then have an `atr` command available.
