@@ -20,7 +20,6 @@
 # NOTE: We can't use symbolic annotations here because sqlmodel doesn't support them
 # https://github.com/fastapi/sqlmodel/issues/196
 # https://github.com/fastapi/sqlmodel/pull/778/files
-# from __future__ import annotations
 
 import dataclasses
 import datetime
@@ -29,6 +28,7 @@ from typing import Any, Final, Literal, Optional, TypeVar
 
 import pydantic
 import sqlalchemy
+import sqlalchemy.dialects.sqlite as sqlite
 import sqlalchemy.event as event
 import sqlalchemy.orm as orm
 import sqlalchemy.sql.expression as expression
@@ -54,6 +54,7 @@ sqlmodel.SQLModel.metadata = sqlalchemy.MetaData(
 @dataclasses.dataclass(frozen=True)
 class DistributionPlatformValue:
     name: str
+    gh_slug: str
     template_url: str
     template_staging_url: str | None = None
     requires_owner_namespace: bool = False
@@ -96,12 +97,14 @@ class CheckResultStatusIgnore(str, enum.Enum):
 class DistributionPlatform(enum.Enum):
     ARTIFACT_HUB = DistributionPlatformValue(
         name="Artifact Hub",
+        gh_slug="artifacthub",
         template_url="https://artifacthub.io/api/v1/packages/helm/{owner_namespace}/{package}/{version}",
         template_staging_url="https://staging.artifacthub.io/api/v1/packages/helm/{owner_namespace}/{package}/{version}",
         requires_owner_namespace=True,
     )
     DOCKER_HUB = DistributionPlatformValue(
         name="Docker Hub",
+        gh_slug="dockerhub",
         template_url="https://hub.docker.com/v2/namespaces/{owner_namespace}/repositories/{package}/tags/{version}",
         # TODO: Need to use staging tags?
         # template_staging_url="https://hub.docker.com/v2/namespaces/{owner_namespace}/repositories/{package}/tags/{version}",
@@ -109,6 +112,7 @@ class DistributionPlatform(enum.Enum):
     )
     # GITHUB = DistributionPlatformValue(
     #     name="GitHub",
+    #     gh_slug="github",
     #     template_url="https://api.github.com/repos/{owner_namespace}/{package}/releases/tags/v{version}",
     #     # Combine with {"prerelease": true}
     #     template_staging_url="https://api.github.com/repos/{owner_namespace}/{package}/releases",
@@ -116,28 +120,40 @@ class DistributionPlatform(enum.Enum):
     # )
     MAVEN = DistributionPlatformValue(
         name="Maven Central",
-        template_url="https://search.maven.org/solrsearch/select?q=g:{owner_namespace}+AND+a:{package}+AND+v:{version}&core=gav&rows=20&wt=json",
-        # Java ASF projects use staging URLs along the lines of
+        gh_slug="maven",
+        template_url="https://repo1.maven.org/maven2/{owner_namespace}/{package}/maven-metadata.xml",
+        # Below is the old template using the maven search API - but the index isn't updated quickly enough for us
+        # template_url="https://search.maven.org/solrsearch/select?q=g:{owner_namespace}+AND+a:{package}+AND+v:{version}&core=gav&rows=20&wt=json",
+        template_staging_url="https://repository.apache.org:4443/repository/maven-staging/{owner_namespace}/{package}/maven-metadata.xml",
         # https://repository.apache.org/content/repositories/orgapachePROJECT-NNNN/
         # There's no JSON, but each individual package has maven-metadata.xml
         requires_owner_namespace=True,
     )
     NPM = DistributionPlatformValue(
         name="npm",
+        gh_slug="npm",
         # TODO: Need to parse dist-tags
         template_url="https://registry.npmjs.org/{package}",
     )
     NPM_SCOPED = DistributionPlatformValue(
         name="npm (scoped)",
+        gh_slug="npm",
         # TODO: Need to parse dist-tags
         template_url="https://registry.npmjs.org/@{owner_namespace}/{package}",
         requires_owner_namespace=True,
     )
     PYPI = DistributionPlatformValue(
         name="PyPI",
+        gh_slug="pypi",
         template_url="https://pypi.org/pypi/{package}/{version}/json",
         template_staging_url="https://test.pypi.org/pypi/{package}/{version}/json",
     )
+
+
+class LicenseCheckMode(str, enum.Enum):
+    BOTH = "Both"
+    LIGHTWEIGHT = "Lightweight"
+    RAT = "RAT"
 
 
 class ProjectStatus(str, enum.Enum):
@@ -174,6 +190,7 @@ class TaskStatus(str, enum.Enum):
 
 
 class TaskType(str, enum.Enum):
+    DISTRIBUTION_WORKFLOW = "distribution_workflow"
     HASHING_CHECK = "hashing_check"
     KEYS_IMPORT_FILE = "keys_import_file"
     LICENSE_FILES = "license_files"
@@ -192,6 +209,7 @@ class TaskType(str, enum.Enum):
     TARGZ_INTEGRITY = "targz_integrity"
     TARGZ_STRUCTURE = "targz_structure"
     VOTE_INITIATE = "vote_initiate"
+    WORKFLOW_STATUS = "workflow_status"
     ZIPFORMAT_INTEGRITY = "zipformat_integrity"
     ZIPFORMAT_STRUCTURE = "zipformat_structure"
 
@@ -243,7 +261,7 @@ class UTCDateTime(sqlalchemy.types.TypeDecorator):
 
     cache_ok = True
 
-    def process_bind_param(self, value, dialect):  # type: ignore
+    def process_bind_param(self, value, dialect):
         if value:
             if not isinstance(value, datetime.datetime):
                 raise ValueError(f"Unexpected value type {type(value)}")
@@ -256,7 +274,7 @@ class UTCDateTime(sqlalchemy.types.TypeDecorator):
         else:
             return value
 
-    def process_result_value(self, value, dialect):  # type: ignore
+    def process_result_value(self, value, dialect):
         if isinstance(value, datetime.datetime):
             return value.replace(tzinfo=datetime.UTC)
         else:
@@ -315,6 +333,12 @@ class PersonalAccessToken(sqlmodel.SQLModel, table=True):
     label: str | None = None
 
 
+# RevisionCounter:
+class RevisionCounter(sqlmodel.SQLModel, table=True):
+    release_name: str = sqlmodel.Field(primary_key=True)
+    last_allocated_number: int = sqlmodel.Field(default=0)
+
+
 # SSHKey:
 class SSHKey(sqlmodel.SQLModel, table=True):
     fingerprint: str = sqlmodel.Field(primary_key=True)
@@ -335,6 +359,10 @@ class Task(sqlmodel.SQLModel, table=True):
         default_factory=lambda: datetime.datetime.now(datetime.UTC),
         sa_column=sqlalchemy.Column(UTCDateTime, index=True),
     )
+    scheduled: datetime.datetime | None = sqlmodel.Field(
+        default=None,
+        sa_column=sqlalchemy.Column(UTCDateTime, index=True),
+    )
     started: datetime.datetime | None = sqlmodel.Field(
         default=None,
         sa_column=sqlalchemy.Column(UTCDateTime),
@@ -346,6 +374,8 @@ class Task(sqlmodel.SQLModel, table=True):
     )
     result: results.Results | None = sqlmodel.Field(default=None, sa_column=sqlalchemy.Column(ResultsJSON))
     error: str | None = None
+
+    workflow: "WorkflowStatus" = sqlmodel.Relationship(back_populates="task")
 
     # Used for check tasks
     # We don't put these in task_args because we want to query them efficiently
@@ -536,36 +566,40 @@ class Project(sqlmodel.SQLModel, table=True):
     @property
     def policy_announce_release_default(self) -> str:
         return """\
-The Apache [COMMITTEE] project team is pleased to announce the
-release of [PROJECT] [VERSION].
+The Apache {{COMMITTEE}} project team is pleased to announce the
+release of {{PROJECT}} {{VERSION}}.
 
 This is a stable release available for production use.
 
 Downloads are available from the following URL:
 
-[DOWNLOAD_URL]
+{{DOWNLOAD_URL}}
 
-On behalf of the Apache [COMMITTEE] project team,
+On behalf of the Apache {{COMMITTEE}} project team,
 
-[YOUR_FULL_NAME] ([YOUR_ASF_ID])
+{{YOUR_FULL_NAME}} ({{YOUR_ASF_ID}})
 """
 
     @property
+    def policy_announce_release_subject_default(self) -> str:
+        return "[ANNOUNCE] {{PROJECT}} {{VERSION}} released"
+
+    @property
     def policy_start_vote_default(self) -> str:
-        return """Hello [COMMITTEE],
+        return """Hello {{COMMITTEE}},
 
 I'd like to call a vote on releasing the following artifacts as
-Apache [PROJECT] [VERSION]. This vote is being conducted using an
+Apache {{PROJECT}} {{VERSION}}. This vote is being conducted using an
 Alpha version of the Apache Trusted Releases (ATR) platform.
 Please report any bugs or issues to the ASF Tooling team.
 
 The release candidate page, including downloads, can be found at:
 
-  [REVIEW_URL]
+  {{REVIEW_URL}}
 
 The release artifacts are signed with one or more OpenPGP keys from:
 
-  [KEYS_FILE]
+  {{KEYS_FILE}}
 
 Please review the release candidate and vote accordingly.
 
@@ -575,16 +609,26 @@ Please review the release candidate and vote accordingly.
 
 You can vote on ATR at the URL above, or manually by replying to this email.
 
-This vote will remain open for [DURATION] hours.
+The vote is open for {{DURATION}} hours.
 
-[RELEASE_CHECKLIST]
+{{RELEASE_CHECKLIST}}
 Thanks,
-[YOUR_FULL_NAME] ([YOUR_ASF_ID])
+{{YOUR_FULL_NAME}} ({{YOUR_ASF_ID}})
 """
+
+    @property
+    def policy_start_vote_subject_default(self) -> str:
+        return "[VOTE] Release {{PROJECT}} {{VERSION}}"
 
     @property
     def policy_default_min_hours(self) -> int:
         return 72
+
+    @property
+    def policy_announce_release_subject(self) -> str:
+        if ((policy := self.release_policy) is None) or (policy.announce_release_subject == ""):
+            return self.policy_announce_release_subject_default
+        return policy.announce_release_subject
 
     @property
     def policy_announce_release_template(self) -> str:
@@ -628,6 +672,18 @@ Thanks,
         return policy.release_checklist
 
     @property
+    def policy_vote_comment_template(self) -> str:
+        if ((policy := self.release_policy) is None) or (policy.vote_comment_template == ""):
+            return ""
+        return policy.vote_comment_template
+
+    @property
+    def policy_start_vote_subject(self) -> str:
+        if ((policy := self.release_policy) is None) or (policy.start_vote_subject == ""):
+            return self.policy_start_vote_subject_default
+        return policy.start_vote_subject
+
+    @property
     def policy_start_vote_template(self) -> str:
         if ((policy := self.release_policy) is None) or (policy.start_vote_template == ""):
             return self.policy_start_vote_default
@@ -648,6 +704,24 @@ Thanks,
         # TODO: The type of policy.source_artifact_paths is list[str]
         # But the production server has None values
         return policy.source_artifact_paths or []
+
+    @property
+    def policy_license_check_mode(self) -> LicenseCheckMode:
+        if (policy := self.release_policy) is None:
+            return LicenseCheckMode.BOTH
+        return policy.license_check_mode
+
+    @property
+    def policy_source_excludes_lightweight(self) -> list[str]:
+        if (policy := self.release_policy) is None:
+            return []
+        return policy.source_excludes_lightweight or []
+
+    @property
+    def policy_source_excludes_rat(self) -> list[str]:
+        if (policy := self.release_policy) is None:
+            return []
+        return policy.source_excludes_rat or []
 
     @property
     def policy_strict_checking(self) -> bool:
@@ -792,7 +866,7 @@ class Release(sqlmodel.SQLModel, table=True):
         return number
 
     # TODO: How do we give an example for this?
-    @pydantic.computed_field  # type: ignore[prop-decorator]
+    @pydantic.computed_field
     @property
     def latest_revision_number(self) -> str | None:
         """Get the latest revision number for the release."""
@@ -833,7 +907,9 @@ class CheckResult(sqlmodel.SQLModel, table=True):
 
     # M-1: CheckResult -> Release
     # 1-M: Release -C-> [CheckResult]
-    release_name: str = sqlmodel.Field(foreign_key="release.name", ondelete="CASCADE", **example("example-0.0.1"))
+    release_name: str = sqlmodel.Field(
+        foreign_key="release.name", ondelete="CASCADE", index=True, **example("example-0.0.1")
+    )
     release: Release = sqlmodel.Relationship(back_populates="check_results")
 
     # We don't call this latest_revision_number, because it might not be the latest
@@ -852,6 +928,7 @@ class CheckResult(sqlmodel.SQLModel, table=True):
     data: Any = sqlmodel.Field(
         sa_column=sqlalchemy.Column(sqlalchemy.JSON), **example({"expected": "...", "found": "..."})
     )
+    input_hash: str | None = sqlmodel.Field(default=None, index=True, **example("blake3:7f83b1657ff1fc..."))
 
 
 class CheckResultIgnore(sqlmodel.SQLModel, table=True):
@@ -981,14 +1058,24 @@ class ReleasePolicy(sqlmodel.SQLModel, table=True):
     manual_vote: bool = sqlmodel.Field(default=False)
     min_hours: int | None = sqlmodel.Field(default=None)
     release_checklist: str = sqlmodel.Field(default="")
+    vote_comment_template: str = sqlmodel.Field(default="")
     pause_for_rm: bool = sqlmodel.Field(default=False)
+    start_vote_subject: str = sqlmodel.Field(default="")
     start_vote_template: str = sqlmodel.Field(default="")
+    announce_release_subject: str = sqlmodel.Field(default="")
     announce_release_template: str = sqlmodel.Field(default="")
     binary_artifact_paths: list[str] = sqlmodel.Field(
         default_factory=list, sa_column=sqlalchemy.Column(sqlalchemy.JSON)
     )
     source_artifact_paths: list[str] = sqlmodel.Field(
         default_factory=list, sa_column=sqlalchemy.Column(sqlalchemy.JSON)
+    )
+    license_check_mode: LicenseCheckMode = sqlmodel.Field(default=LicenseCheckMode.BOTH)
+    source_excludes_lightweight: list[str] = sqlmodel.Field(
+        default_factory=list, sa_column=sqlalchemy.Column(sqlalchemy.JSON, nullable=False)
+    )
+    source_excludes_rat: list[str] = sqlmodel.Field(
+        default_factory=list, sa_column=sqlalchemy.Column(sqlalchemy.JSON, nullable=False)
     )
     strict_checking: bool = sqlmodel.Field(default=False)
     github_repository_name: str = sqlmodel.Field(default="")
@@ -1006,6 +1093,32 @@ class ReleasePolicy(sqlmodel.SQLModel, table=True):
     # 1-1: ReleasePolicy -> Project
     # 1-1: Project -C-> ReleasePolicy
     project: Project = sqlmodel.Relationship(back_populates="release_policy")
+
+    def duplicate(self) -> "ReleasePolicy":
+        # Cannot call this .copy because that's an existing BaseModel method
+        return ReleasePolicy(
+            mailto_addresses=list(self.mailto_addresses),
+            manual_vote=self.manual_vote,
+            min_hours=self.min_hours,
+            release_checklist=self.release_checklist,
+            vote_comment_template=self.vote_comment_template,
+            pause_for_rm=self.pause_for_rm,
+            start_vote_subject=self.start_vote_subject,
+            start_vote_template=self.start_vote_template,
+            announce_release_subject=self.announce_release_subject,
+            announce_release_template=self.announce_release_template,
+            binary_artifact_paths=list(self.binary_artifact_paths),
+            source_artifact_paths=list(self.source_artifact_paths),
+            license_check_mode=self.license_check_mode,
+            source_excludes_lightweight=list(self.source_excludes_lightweight),
+            source_excludes_rat=list(self.source_excludes_rat),
+            strict_checking=self.strict_checking,
+            github_repository_name=self.github_repository_name,
+            github_compose_workflow_path=list(self.github_compose_workflow_path),
+            github_vote_workflow_path=list(self.github_vote_workflow_path),
+            github_finish_workflow_path=list(self.github_finish_workflow_path),
+            preserve_download_files=self.preserve_download_files,
+        )
 
 
 # Revision: Release
@@ -1053,6 +1166,7 @@ class Revision(sqlmodel.SQLModel, table=True):
     child: Optional["Revision"] = sqlmodel.Relationship(back_populates="parent")
 
     description: str | None = sqlmodel.Field(default=None, **example("This is a description"))
+    tag: str | None = sqlmodel.Field(default=None, **example("rc1"))
 
     def model_post_init(self, _context):
         if isinstance(self.created, str):
@@ -1067,13 +1181,24 @@ class Revision(sqlmodel.SQLModel, table=True):
     )
 
 
+# WorkflowStatus:
+class WorkflowStatus(sqlmodel.SQLModel, table=True):
+    workflow_id: str = sqlmodel.Field(primary_key=True, index=True)
+    run_id: int = sqlmodel.Field(primary_key=True, index=True)
+    project_name: str = sqlmodel.Field(index=True)
+    task_id: int | None = sqlmodel.Field(default=None, foreign_key="task.id", ondelete="SET NULL")
+    task: Task = sqlmodel.Relationship(back_populates="workflow")
+    status: str = sqlmodel.Field()
+    message: str | None = sqlmodel.Field(default=None)
+
+
 def revision_name(release_name: str, number: str) -> str:
     return f"{release_name} {number}"
 
 
 @event.listens_for(Revision, "before_insert")
 def populate_revision_sequence_and_name(
-    mapper: orm.Mapper, connection: sqlalchemy.engine.Connection, revision: Revision
+    _mapper: orm.Mapper, connection: sqlalchemy.engine.Connection, revision: Revision
 ) -> None:
     # We require Revision.release_name to have been set
     if not revision.release_name:
@@ -1081,36 +1206,36 @@ def populate_revision_sequence_and_name(
         # Otherwise, Revision.name would be "", Revision.seq 0, and Revision.number ""
         raise RuntimeError("Cannot populate revision sequence and name without release_name")
 
-    # Get the Revision with the maximum existing Revision.seq and the same Revision.release_name
-    stmt = (
-        sqlmodel.select(Revision.seq, Revision.name)
-        .where(Revision.release_name == revision.release_name)
+    # Allocate the next sequence number from the counter table
+    # This ensures that sequence numbers are never reused, even after release deletion
+    # Uses ON CONFLICT DO UPDATE with RETURNING
+    upsert_stmt = (
+        sqlite.insert(RevisionCounter)
+        .values(release_name=revision.release_name, last_allocated_number=1)
+        .on_conflict_do_update(
+            index_elements=["release_name"],
+            set_={"last_allocated_number": sqlalchemy.text("last_allocated_number + 1")},
+        )
+        .returning(sqlalchemy.literal_column("last_allocated_number"))
+    )
+    result = connection.execute(upsert_stmt)
+    new_seq = result.scalar_one()
+
+    revision.seq = new_seq
+    revision.number = str(new_seq).zfill(5)
+    revision.name = revision_name(revision.release_name, revision.number)
+
+    # Find the actual parent for the parent_name foreign key
+    # We cannot assume that the parent exists
+    parent_stmt = (
+        sqlmodel.select(validate_instrumented_attribute(Revision.name))
+        .where(validate_instrumented_attribute(Revision.release_name) == revision.release_name)
         .order_by(sqlalchemy.desc(validate_instrumented_attribute(Revision.seq)))
         .limit(1)
     )
-    parent_row = connection.execute(stmt).fetchone()
-
-    # We cannot happy path this, because we must recalculate the Revision.name afterwards
-    if parent_row is None:
-        # This is the first Revision for this Revision.release_name
-        # Revision.seq is 0, but we use a 1-based system
-        revision.seq = 1
-        revision.number = str(revision.seq).zfill(5)
-    else:
-        # We don't have the ORM available in this event listener
-        # Therefore we must construct a new Revision object from the database row
-        parent_row_seq = parent_row.seq
-        parent_row_name = parent_row.name
-        # Compute the next sequence number
-        revision.seq = parent_row_seq + 1
-        revision.number = str(revision.seq).zfill(5)
-        # Set the parent_name foreign key. SQLAlchemy will handle the relationship.
-        revision.parent_name = parent_row_name
-        # Do NOT set revision.parent directly here
-
-    # Recalculate the Revision.name
-    # This field has a unique constraint, which eliminates the potential for race conditions
-    revision.name = revision_name(revision.release_name, revision.number)
+    parent_row = connection.execute(parent_stmt).fetchone()
+    if parent_row is not None:
+        revision.parent_name = parent_row[0]
 
 
 @event.listens_for(Release, "before_insert")

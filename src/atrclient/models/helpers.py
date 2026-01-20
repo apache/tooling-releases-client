@@ -80,8 +80,8 @@ def _get_dict_to_list_inner_type_adapter(source_type: Any, key: str) -> pydantic
 
     # Create proper field definitions for create_model
     kargs = {k: (v.annotation, v) for k, v in other_fields.items()}
-    inner_model = pydantic.create_model(model_name, **kargs)  # type: ignore
-    return pydantic.TypeAdapter(dict[Annotated[str, key_field], inner_model])  # type: ignore
+    inner_model = pydantic.create_model(model_name, **kargs)  # pyright: ignore[reportCallIssue, reportArgumentType]
+    return pydantic.TypeAdapter(dict[Annotated[str, key_field], inner_model])
 
 
 def _get_dict_to_list_validator(inner_adapter: pydantic.TypeAdapter[dict[Any, Any]], key: str) -> Any:

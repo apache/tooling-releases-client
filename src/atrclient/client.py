@@ -89,7 +89,6 @@ def app_announce(
     revision: str,
     /,
     mailing_list: Annotated[str, cyclopts.Parameter(alias="-m", name="--mailing-list")],
-    subject: Annotated[str | None, cyclopts.Parameter(alias="-s", name="--subject")] = None,
     body: Annotated[str | None, cyclopts.Parameter(alias="-b", name="--body")] = None,
     path_suffix: Annotated[str | None, cyclopts.Parameter(alias="-p", name="--path-suffix")] = None,
 ) -> None:
@@ -98,7 +97,6 @@ def app_announce(
         version=version,
         revision=revision,
         email_to=mailing_list,
-        subject=subject or f"[ANNOUNCE] Release {project} {version}",
         body=body or f"Release {project} {version} has been announced.",
         path_suffix=path_suffix or "",
     )

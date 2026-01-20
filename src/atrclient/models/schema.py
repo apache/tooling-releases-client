@@ -25,11 +25,23 @@ Field = pydantic.Field
 
 
 class Lax(pydantic.BaseModel):
-    model_config = pydantic.ConfigDict(extra="allow", strict=False, validate_assignment=True)
+    model_config = pydantic.ConfigDict(extra="allow", strict=False, validate_assignment=True, validate_by_name=True)
 
 
 class Strict(pydantic.BaseModel):
     model_config = pydantic.ConfigDict(extra="forbid", strict=True, validate_assignment=True)
+
+
+class Form(pydantic.BaseModel):
+    model_config = pydantic.ConfigDict(
+        extra="forbid",
+        strict=False,
+        validate_assignment=True,
+        arbitrary_types_allowed=True,
+        str_strip_whitespace=True,
+    )
+
+    csrf_token: str | None = None
 
 
 def alias(alias_name: str) -> Any:

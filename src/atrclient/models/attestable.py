@@ -15,7 +15,19 @@
 # specific language governing permissions and limitations
 # under the License.
 
-from . import api, distribution, helpers, results, schema, sql, tabulate
+from typing import Annotated, Literal
 
-# If we use .__name__, pyright gives a warning
-__all__ = ["api", "distribution", "helpers", "results", "schema", "sql", "tabulate"]
+import pydantic
+
+from . import schema
+
+
+class HashEntry(schema.Strict):
+    size: int
+    uploaders: list[Annotated[tuple[str, str], pydantic.BeforeValidator(tuple)]]
+
+
+class AttestableV1(schema.Strict):
+    version: Literal[1] = 1
+    paths: dict[str, str] = schema.factory(dict)
+    hashes: dict[str, HashEntry] = schema.factory(dict)

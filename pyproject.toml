@@ -11,7 +11,7 @@ build-backend = "hatchling.build"
 
 [project]
 name            = "apache-trusted-releases"
-version         = "0.20251103.1642"
+version         = "0.20260120.1518"
 description     = "ATR CLI and Python API"
 readme          = "README.md"
 requires-python = ">=3.12"
@@ -42,9 +42,11 @@ dependencies = [
 dev = [
   "aioresponses",
   "pre-commit",
+  "pyright",
   "pytest-asyncio",
   "pytest-console-scripts",
   "pytest",
+  "ruff",
 ]
 
 [project.scripts]
@@ -80,4 +82,4 @@ filterwarnings = [
 ]
 
 [tool.uv]
-exclude-newer = "2025-11-03T16:42:00Z"
+exclude-newer = "2026-01-20T15:18:00Z"

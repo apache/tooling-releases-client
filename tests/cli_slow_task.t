@@ -14,19 +14,19 @@ $ atr set tokens.pat <!pat!>
 Set tokens.pat to "<!pat!>".
 
 <# delete any existing draft, ignoring errors #>
-* atr dev delete tooling-test-example 0.3+slow
+* atr dev delete test-client 0.3+slow
 <.etc.>
 
-$ atr release start tooling-test-example 0.3+slow
+$ atr release start test-client 0.3+slow
 <.skip.>created<.skip.>
 
 $ atr config path
 <?config_rel_path?>
 
-$ atr upload tooling-test-example 0.3+slow /deliberately_slow_ATR_task_filename.txt <!config_rel_path!>
+$ atr upload test-client 0.3+slow deliberately_slow_ATR_task_filename.txt <!config_rel_path!>
 <.skip.>created<.skip.>
 
-! atr vote start tooling-test-example 0.3+slow 00002 -m "<!user!>@apache.org"
+! atr vote start test-client 0.3+slow 00002 -m "<!user!>@apache.org"
 <.stderr.>
 atr: error: Error message from the API:
 400 https://localhost.apache.org:8080/api/vote/start
@@ -35,5 +35,5 @@ atr: error: Error message from the API:
 }
 
 <# tidy up #>
-* atr dev delete tooling-test-example 0.3+slow
+* atr dev delete test-client 0.3+slow
 <.etc.>
