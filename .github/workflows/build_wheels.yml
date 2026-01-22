@@ -19,7 +19,7 @@ jobs:
         with:
           persist-credentials: false
       - run: uv build --sdist --wheel
-      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+      - uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
         with:
           name: ${{ matrix.name }}
           path: 'dist/*'
@@ -32,7 +32,7 @@ jobs:
           persist-credentials: false
       - uses: astral-sh/setup-uv@e92bafb6253dcd438e0484186d7669ea7a8ca1cc # v6.4.3
       - run: uv build --sdist --wheel
-      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+      - uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
         with:
           name: macos-aarch64
           path: 'dist/*'
