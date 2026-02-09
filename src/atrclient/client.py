@@ -467,7 +467,7 @@ def app_drop(path: str, /) -> None:
 
 @APP_IGNORE.command(name="add", help="Add a check ignore.")
 def app_ignore_add(
-    committee: str,
+    project: str,
     /,
     release: str | None = None,
     revision: str | None = None,
@@ -478,7 +478,7 @@ def app_ignore_add(
     message: str | None = None,
 ) -> None:
     args = models.api.IgnoreAddArgs(
-        committee_name=committee,
+        project_name=project,
         release_glob=release,
         revision_number=revision,
         checker_glob=checker,
@@ -489,7 +489,7 @@ def app_ignore_add(
     )
     api.ignore_add(args)
     print("Check result ignored for:")
-    print(f"  Committee: {committee}")
+    print(f"  Project: {project}")
     print(f"  Release (glob): {release}")
     print(f"  Revision: {revision}")
     print(f"  Checker (glob): {checker}")
@@ -501,14 +501,14 @@ def app_ignore_add(
 
 @APP_IGNORE.command(name="delete", help="Delete a check ignore.")
 def app_ignore_delete(
-    committee: str,
+    project: str,
     id: int,
     /,
 ) -> None:
-    args = models.api.IgnoreDeleteArgs(committee=committee, id=id)
+    args = models.api.IgnoreDeleteArgs(project_name=project, id=id)
     api.ignore_delete(args)
     print("Check ignore deleted for:")
-    print(f"  Committee: {committee}")
+    print(f"  Project: {project}")
     print(f"  ID: {id}")
 
 

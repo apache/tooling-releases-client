@@ -64,14 +64,15 @@ class DistributionPlatformValue:
 # Enumerations
 
 
-class CheckResultStatus(str, enum.Enum):
+class CheckResultStatus(enum.StrEnum):
+    BLOCKER = "blocker"
     EXCEPTION = "exception"
     FAILURE = "failure"
     SUCCESS = "success"
     WARNING = "warning"
 
 
-class CheckResultStatusIgnore(str, enum.Enum):
+class CheckResultStatusIgnore(enum.StrEnum):
     EXCEPTION = "exception"
     FAILURE = "failure"
     WARNING = "warning"
@@ -150,20 +151,20 @@ class DistributionPlatform(enum.Enum):
     )
 
 
-class LicenseCheckMode(str, enum.Enum):
+class LicenseCheckMode(enum.StrEnum):
     BOTH = "Both"
     LIGHTWEIGHT = "Lightweight"
     RAT = "RAT"
 
 
-class ProjectStatus(str, enum.Enum):
+class ProjectStatus(enum.StrEnum):
     ACTIVE = "active"
     DORMANT = "dormant"
     RETIRED = "retired"
     STANDING = "standing"
 
 
-class ReleasePhase(str, enum.Enum):
+class ReleasePhase(enum.StrEnum):
     # TODO: Rename these to the UI names?
     # COMPOSE, VOTE, FINISH, "DISTRIBUTE"
     # Compose a draft
@@ -180,7 +181,7 @@ class ReleasePhase(str, enum.Enum):
     RELEASE = "release"
 
 
-class TaskStatus(str, enum.Enum):
+class TaskStatus(enum.StrEnum):
     """Status of a task in the task queue."""
 
     QUEUED = "queued"
@@ -189,7 +190,9 @@ class TaskStatus(str, enum.Enum):
     FAILED = "failed"
 
 
-class TaskType(str, enum.Enum):
+class TaskType(enum.StrEnum):
+    COMPARE_SOURCE_TREES = "compare_source_trees"
+    DISTRIBUTION_STATUS = "distribution_status"
     DISTRIBUTION_WORKFLOW = "distribution_workflow"
     HASHING_CHECK = "hashing_check"
     KEYS_IMPORT_FILE = "keys_import_file"
@@ -214,7 +217,7 @@ class TaskType(str, enum.Enum):
     ZIPFORMAT_STRUCTURE = "zipformat_structure"
 
 
-class UserRole(str, enum.Enum):
+class UserRole(enum.StrEnum):
     COMMITTEE_MEMBER = "committee_member"
     RELEASE_MANAGER = "release_manager"
     COMMITTER = "committer"
@@ -441,6 +444,9 @@ class WorkflowSSHKey(sqlmodel.SQLModel, table=True):
     asf_uid: str = sqlmodel.Field(index=True)
     github_uid: str = sqlmodel.Field(index=True)
     github_nid: int = sqlmodel.Field(index=True)
+    github_payload: dict[str, Any] = sqlmodel.Field(
+        default_factory=dict, sa_column=sqlalchemy.Column(sqlalchemy.JSON, nullable=False)
+    )
     expires: int = sqlmodel.Field()
 
 
@@ -738,10 +744,22 @@ Thanks,
         return policy.github_repository_name
 
     @property
+    def policy_github_repository_branch(self) -> str:
+        if (policy := self.release_policy) is None:
+            return ""
+        return policy.github_repository_branch
+
+    @property
     def policy_github_compose_workflow_path(self) -> list[str]:
         if (policy := self.release_policy) is None:
             return []
         return policy.github_compose_workflow_path or []
+
+    @property
+    def policy_file_tag_mappings(self) -> dict[str, Any]:
+        if (policy := self.release_policy) is None:
+            return {}
+        return policy.file_tag_mappings or {}
 
     @property
     def policy_github_vote_workflow_path(self) -> list[str]:
@@ -929,6 +947,7 @@ class CheckResult(sqlmodel.SQLModel, table=True):
         sa_column=sqlalchemy.Column(sqlalchemy.JSON), **example({"expected": "...", "found": "..."})
     )
     input_hash: str | None = sqlmodel.Field(default=None, index=True, **example("blake3:7f83b1657ff1fc..."))
+    cached: bool = sqlmodel.Field(default=False, **example(False))
 
 
 class CheckResultIgnore(sqlmodel.SQLModel, table=True):
@@ -938,7 +957,7 @@ class CheckResultIgnore(sqlmodel.SQLModel, table=True):
         sa_column=sqlalchemy.Column(UTCDateTime),
         **example(datetime.datetime(2025, 5, 1, 1, 2, 3, tzinfo=datetime.UTC)),
     )
-    committee_name: str = sqlmodel.Field(**example("example"))
+    project_name: str = sqlmodel.Field(foreign_key="project.name", **example("example"))
     release_glob: str | None = sqlmodel.Field(**example("example-0.0.*"))
     revision_number: str | None = sqlmodel.Field(**example("00001"))
     checker_glob: str | None = sqlmodel.Field(**example("atr.tasks.checks.license.files"))
@@ -964,9 +983,12 @@ class Distribution(sqlmodel.SQLModel, table=True):
     package: str = sqlmodel.Field(primary_key=True, index=True)
     version: str = sqlmodel.Field(primary_key=True, index=True)
     staging: bool = sqlmodel.Field(default=False)
+    pending: bool = sqlmodel.Field(default=False)
+    retries: int = sqlmodel.Field(default=0)
     upload_date: datetime.datetime | None = sqlmodel.Field(default=None)
-    api_url: str
+    api_url: str | None = sqlmodel.Field(default=None)
     web_url: str | None = sqlmodel.Field(default=None)
+    created_by: str | None = sqlmodel.Field(default=None)
     # The API response can be huge, e.g. from npm
     # So we do not store it in the database
     # api_response: Any = sqlmodel.Field(sa_column=sqlalchemy.Column(sqlalchemy.JSON))
@@ -1079,8 +1101,12 @@ class ReleasePolicy(sqlmodel.SQLModel, table=True):
     )
     strict_checking: bool = sqlmodel.Field(default=False)
     github_repository_name: str = sqlmodel.Field(default="")
+    github_repository_branch: str = sqlmodel.Field(default="")
     github_compose_workflow_path: list[str] = sqlmodel.Field(
         default_factory=list, sa_column=sqlalchemy.Column(sqlalchemy.JSON, nullable=False)
+    )
+    file_tag_mappings: dict[str, Any] = sqlmodel.Field(
+        default_factory=dict, sa_column=sqlalchemy.Column(sqlalchemy.JSON, nullable=False)
     )
     github_vote_workflow_path: list[str] = sqlmodel.Field(
         default_factory=list, sa_column=sqlalchemy.Column(sqlalchemy.JSON, nullable=False)
@@ -1114,6 +1140,7 @@ class ReleasePolicy(sqlmodel.SQLModel, table=True):
             source_excludes_rat=list(self.source_excludes_rat),
             strict_checking=self.strict_checking,
             github_repository_name=self.github_repository_name,
+            github_repository_branch=self.github_repository_branch,
             github_compose_workflow_path=list(self.github_compose_workflow_path),
             github_vote_workflow_path=list(self.github_vote_workflow_path),
             github_finish_workflow_path=list(self.github_finish_workflow_path),
@@ -1167,6 +1194,7 @@ class Revision(sqlmodel.SQLModel, table=True):
 
     description: str | None = sqlmodel.Field(default=None, **example("This is a description"))
     tag: str | None = sqlmodel.Field(default=None, **example("rc1"))
+    use_check_cache: bool = sqlmodel.Field(default=True, **example(True))
 
     def model_post_init(self, _context):
         if isinstance(self.created, str):

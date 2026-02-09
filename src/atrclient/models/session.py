@@ -15,7 +15,21 @@
 # specific language governing permissions and limitations
 # under the License.
 
-from . import api, basic, distribution, helpers, results, schema, session, sql, tabulate, validation
+from typing import Any
 
-# If we use .__name__, pyright gives a warning
-__all__ = ["api", "basic", "distribution", "helpers", "results", "schema", "session", "sql", "tabulate", "validation"]
+from . import schema
+
+
+class CookieData(schema.Strict):
+    uid: str
+    dn: str | None = None
+    fullname: str | None = None
+    email: str | None = None
+    isMember: bool = False
+    isChair: bool = False
+    isRoot: bool = False
+    pmcs: list[str] = schema.factory(list)
+    projects: list[str] = schema.factory(list)
+    mfa: bool = False
+    roleaccount: bool = False
+    metadata: dict[str, Any] = schema.factory(dict)

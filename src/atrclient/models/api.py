@@ -21,7 +21,7 @@ from typing import Annotated, Any, Literal, TypeVar
 
 import pydantic
 
-from . import schema, sql, tabulate
+from . import schema, sql, tabulate, validation
 
 T = TypeVar("T")
 
@@ -164,7 +164,7 @@ class DistributionRecordResults(schema.Strict):
 
 
 class IgnoreAddArgs(schema.Strict):
-    committee_name: str = schema.example("example")
+    project_name: str = schema.example("example")
     release_glob: str | None = schema.default_example(None, "example-0.0.*")
     revision_number: str | None = schema.default_example(None, "00001")
     checker_glob: str | None = schema.default_example(None, "atr.tasks.checks.license.files")
@@ -173,6 +173,20 @@ class IgnoreAddArgs(schema.Strict):
     status: sql.CheckResultStatusIgnore | None = schema.default_example(None, sql.CheckResultStatusIgnore.FAILURE)
     message_glob: str | None = schema.default_example(None, "sha512 matches for apache-example-0.0.1/*.xml")
 
+    @pydantic.model_validator(mode="after")
+    def validate_patterns(self) -> "IgnoreAddArgs":
+        for pattern in [
+            self.release_glob,
+            self.checker_glob,
+            self.primary_rel_path_glob,
+            self.member_rel_path_glob,
+            self.message_glob,
+        ]:
+            if pattern is None:
+                continue
+            validation.validate_ignore_pattern(pattern)
+        return self
+
 
 class IgnoreAddResults(schema.Strict):
     endpoint: Literal["/ignore/add"] = schema.alias("endpoint")
@@ -180,7 +194,7 @@ class IgnoreAddResults(schema.Strict):
 
 
 class IgnoreDeleteArgs(schema.Strict):
-    committee: str = schema.example("example")
+    project_name: str = schema.example("example")
     id: int = schema.example(1)
 
 
@@ -281,6 +295,7 @@ class ProjectPolicyResults(schema.Strict):
     policy_binary_artifact_paths: list[str]
     policy_github_compose_workflow_path: list[str]
     policy_github_finish_workflow_path: list[str]
+    policy_github_repository_branch: str
     policy_github_repository_name: str
     policy_github_vote_workflow_path: list[str]
     policy_license_check_mode: sql.LicenseCheckMode

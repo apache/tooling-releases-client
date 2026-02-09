@@ -22,6 +22,12 @@ import pydantic
 from . import schema
 
 
+class DistributionStatusCheck(schema.Strict):
+    """Result of the task to check pending distribution statuses."""
+
+    kind: Literal["distribution_status"] = schema.Field(alias="kind")
+
+
 class DistributionWorkflow(schema.Strict):
     """Result of the task to run a Github workflow."""
 
@@ -70,6 +76,7 @@ class VulnerabilityDetails(schema.Lax):
     severity: list[dict[str, Any]] | None = None
     published: str | None = None
     modified: str
+    affected: list[dict[str, Any]] | None = None
     database_specific: dict[str, Any] = schema.Field(default={})
 
 
@@ -227,7 +234,8 @@ class MetadataUpdate(schema.Strict):
 
 
 Results = Annotated[
-    DistributionWorkflow
+    DistributionStatusCheck
+    | DistributionWorkflow
     | DistributionWorkflowStatus
     | HashingCheck
     | MessageSend

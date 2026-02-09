@@ -40,4 +40,5 @@ class Rat(schema.Lax):
     warning: str | None = schema.default(None)
     unapproved_files: list[RatFileEntry] = schema.factory(list)
     unknown_license_files: list[RatFileEntry] = schema.factory(list)
-    command: list[str] = schema.factory(list)
+    command: str = schema.default("")
+    directory: str = schema.default("")

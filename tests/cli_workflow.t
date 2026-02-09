@@ -37,11 +37,11 @@ Checks completed.
 
 $ atr check status test-client 0.3+cli
 Total checks: 1
-  warning: 1
+  failure: 1
 
 $ atr check status test-client 0.3+cli 00002
 Total checks: 1
-  warning: 1
+  failure: 1
 
 $ atr vote start test-client 0.3+cli 00002 -m "<!user!>@apache.org"
 <.skip.>"email_to":"<!user!>@apache.org"<.skip.>
