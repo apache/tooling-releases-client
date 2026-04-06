@@ -419,8 +419,8 @@ def app_distribution_record(
     staging: bool,
     details: bool,
 ) -> None:
-    # if not distribution_owner_namespace:
-    #     distribution_owner_namespace = None
+    if not distribution_owner_namespace or distribution_owner_namespace == "None":
+        distribution_owner_namespace = None
     if platform not in models.sql.DistributionPlatform.__members__:
         show.error_and_exit(f"Invalid platform: {platform}")
     platform_member = models.sql.DistributionPlatform[platform]
@@ -435,8 +435,6 @@ def app_distribution_record(
         details=details,
     )
     distribution_record = api.distribution_record(distribution_record_args)
-    if not distribution_record.success:
-        show.error_and_exit("Failed to record distribution.")
     if not distribution_record.success:
         show.error_and_exit("Failed to record distribution.")
     print("Distribution recorded.")
