@@ -93,12 +93,12 @@ def app_announce(
     path_suffix: Annotated[str | None, cyclopts.Parameter(alias="-p", name="--path-suffix")] = None,
 ) -> None:
     announce_args = models.api.ReleaseAnnounceArgs(
-        project=project,
-        version=version,
-        revision=revision,
+        project=models.safe.ProjectKey(project),
+        version=models.safe.VersionKey(version),
+        revision=models.safe.RevisionNumber(revision),
         email_to=mailing_list,
         body=body or f"Release {project} {version} has been announced.",
-        path_suffix=path_suffix or "",
+        path_suffix=models.safe.RelPath(path_suffix) if path_suffix else None,
     )
     announce = api.release_announce(announce_args)
     if not announce.success:
@@ -247,7 +247,9 @@ def app_config_path() -> None:
 
 @APP_DEV.command(name="delete", help="Delete a release.")
 def app_dev_delete(project: str, version: str, /) -> None:
-    releases_delete_args = models.api.ReleaseDeleteArgs(project=project, version=version)
+    releases_delete_args = models.api.ReleaseDeleteArgs(
+        project=models.safe.ProjectKey(project), version=models.safe.VersionKey(version)
+    )
     api.release_delete(releases_delete_args)
     print(f"{project}-{version}")
 
@@ -403,7 +405,9 @@ def app_dev_user() -> None:
 
 @APP_DRAFT.command(name="delete", help="Delete a draft release.")
 def app_draft_delete(project: str, version: str, /) -> None:
-    draft_delete_args = models.api.ReleaseDraftDeleteArgs(project=project, version=version)
+    draft_delete_args = models.api.ReleaseDraftDeleteArgs(
+        project=models.safe.ProjectKey(project), version=models.safe.VersionKey(version)
+    )
     draft_delete = api.release_draft_delete(draft_delete_args)
     print(draft_delete.success)
 
@@ -425,12 +429,14 @@ def app_distribution_record(
         show.error_and_exit(f"Invalid platform: {platform}")
     platform_member = models.sql.DistributionPlatform[platform]
     distribution_record_args = models.api.DistributionRecordArgs(
-        project=project,
-        version=version,
+        project=models.safe.ProjectKey(project),
+        version=models.safe.VersionKey(version),
         platform=platform_member,
-        distribution_owner_namespace=distribution_owner_namespace,
-        distribution_package=distribution_package,
-        distribution_version=distribution_version,
+        distribution_owner_namespace=models.safe.Alphanumeric(distribution_owner_namespace)
+        if distribution_owner_namespace
+        else None,
+        distribution_package=models.safe.Alphanumeric(distribution_package),
+        distribution_version=models.safe.VersionKey(distribution_version),
         staging=staging,
         details=details,
     )
@@ -476,9 +482,9 @@ def app_ignore_add(
     message: str | None = None,
 ) -> None:
     args = models.api.IgnoreAddArgs(
-        project_name=project,
+        project_key=models.safe.ProjectKey(project),
         release_glob=release,
-        revision_number=revision,
+        revision_number=models.safe.RevisionNumber(revision) if revision else None,
         checker_glob=checker,
         primary_rel_path_glob=primary_rel_path,
         member_rel_path_glob=member_rel_path,
@@ -503,7 +509,7 @@ def app_ignore_delete(
     id: int,
     /,
 ) -> None:
-    args = models.api.IgnoreDeleteArgs(project_name=project, id=id)
+    args = models.api.IgnoreDeleteArgs(project_key=models.safe.ProjectKey(project), id=id)
     api.ignore_delete(args)
     print("Check ignore deleted for:")
     print(f"  Project: {project}")
@@ -640,7 +646,9 @@ def app_release_list(project: str, /) -> None:
 
 @APP_RELEASE.command(name="start", help="Start a release.")
 def app_release_start(project: str, version: str, /) -> None:
-    releases_create_args = models.api.ReleaseCreateArgs(project=project, version=version)
+    releases_create_args = models.api.ReleaseCreateArgs(
+        project=models.safe.ProjectKey(project), version=models.safe.VersionKey(version)
+    )
     releases_create = api.release_create(releases_create_args)
     print(releases_create.release.model_dump_json(indent=None))
 
@@ -738,9 +746,9 @@ def app_upload(project: str, version: str, path: str, filepath: str, /) -> None:
         content = fh.read()
 
     upload_args = models.api.ReleaseUploadArgs(
-        project=project,
-        version=version,
-        relpath=path,
+        project=models.safe.ProjectKey(project),
+        version=models.safe.VersionKey(version),
+        relpath=models.safe.RelPath(path),
         content=base64.b64encode(content).decode("utf-8"),
     )
 
@@ -822,8 +830,8 @@ def app_vote_resolve(
     resolution: Literal["passed", "failed"],
 ) -> None:
     vote_resolve_args = models.api.VoteResolveArgs(
-        project=project,
-        version=version,
+        project=models.safe.ProjectKey(project),
+        version=models.safe.VersionKey(version),
         resolution=resolution,
     )
     api.vote_resolve(vote_resolve_args)
@@ -847,9 +855,9 @@ def app_vote_start(
             body_text = fh.read()
 
     vote_start_args = models.api.VoteStartArgs(
-        project=project,
-        version=version,
-        revision=revision,
+        project=models.safe.ProjectKey(project),
+        version=models.safe.VersionKey(version),
+        revision=models.safe.RevisionNumber(revision),
         email_to=mailing_list,
         vote_duration=duration,
         subject=subject or f"[VOTE] Release {project} {version}",
@@ -861,7 +869,9 @@ def app_vote_start(
 
 @APP_VOTE.command(name="tabulate", help="Tabulate a vote.")
 def app_vote_tabulate(project: str, version: str, /) -> None:
-    vote_tabulate_args = models.api.VoteTabulateArgs(project=project, version=version)
+    vote_tabulate_args = models.api.VoteTabulateArgs(
+        project=models.safe.ProjectKey(project), version=models.safe.VersionKey(version)
+    )
     vote_tabulate = api.vote_tabulate(vote_tabulate_args)
     print(vote_tabulate.model_dump_json(indent=2))
 

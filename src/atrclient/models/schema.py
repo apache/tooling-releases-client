@@ -32,6 +32,10 @@ class Strict(pydantic.BaseModel):
     model_config = pydantic.ConfigDict(extra="forbid", strict=True, validate_assignment=True)
 
 
+class Subset(pydantic.BaseModel):
+    model_config = pydantic.ConfigDict(extra="ignore", strict=False, validate_assignment=True, validate_by_name=True)
+
+
 class Form(pydantic.BaseModel):
     model_config = pydantic.ConfigDict(
         extra="forbid",
@@ -41,7 +45,7 @@ class Form(pydantic.BaseModel):
         str_strip_whitespace=True,
     )
 
-    csrf_token: str | None = None
+    csrf_token: str
 
 
 def alias(alias_name: str) -> Any:

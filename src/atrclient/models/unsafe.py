@@ -14,21 +14,23 @@
 # KIND, either express or implied.  See the License for the
 # specific language governing permissions and limitations
 # under the License.
+from typing import NewType
 
-from . import api, basic, distribution, github, helpers, results, safe, schema, session, sql, tabulate, validation
 
-# If we use .__name__, pyright gives a warning
-__all__ = [
-    "api",
-    "basic",
-    "distribution",
-    "github",
-    "helpers",
-    "results",
-    "safe",
-    "schema",
-    "session",
-    "sql",
-    "tabulate",
-    "validation",
-]
+class UnsafeStr:
+    """A raw string from URL routing that has not been validated."""
+
+    __slots__ = ("_value",)
+
+    def __init__(self, value: str) -> None:
+        self._value = value
+
+    def __repr__(self) -> str:
+        return f"UnsafeStr({self._value!r})"
+
+    def __str__(self) -> str:
+        return self._value
+
+
+# The Path type exists so we can give Quart a hint for type conversions
+Path = NewType("Path", UnsafeStr)

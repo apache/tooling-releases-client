@@ -19,7 +19,7 @@ from typing import Annotated, Any, Literal
 
 import pydantic
 
-from . import schema
+from . import safe, schema
 
 
 class DistributionStatusCheck(schema.Strict):
@@ -105,14 +105,14 @@ class OSVComponent(schema.Strict):
 
 class SBOMOSVScan(schema.Strict):
     kind: Literal["sbom_osv_scan"] = schema.Field(alias="kind")
-    project_name: str = schema.description("Project name")
-    version_name: str = schema.description("Version name")
-    revision_number: str = schema.description("Revision number")
+    project_key: safe.ProjectKey = schema.description("Project name")
+    version_key: safe.VersionKey = schema.description("Version name")
+    revision_number: safe.RevisionNumber = schema.description("Revision number")
     bom_version: int | None = schema.Field(
         default=None, strict=False, description="BOM Version produced with scan results"
     )
-    file_path: str = schema.description("Relative path to the scanned SBOM file")
-    new_file_path: str = schema.Field(default="", strict=False, description="Relative path to the updated SBOM file")
+    file_path: str = schema.description("Absolute path to the scanned SBOM file")
+    new_file_path: str = schema.Field(default="", strict=False, description="Absolute path to the updated SBOM file")
     components: list[OSVComponent] = schema.description("Components with vulnerabilities")
     ignored: list[str] = schema.description("Components ignored")
 
@@ -163,25 +163,35 @@ class SBOMAugment(schema.Strict):
     )
 
 
+class SBOMConvert(schema.Strict):
+    kind: Literal["sbom_convert"] = schema.Field(alias="kind")
+    path: str = schema.description("The path to the converted SBOM file")
+    bom_version: int | None = schema.Field(
+        default=None,
+        strict=False,
+        description="BOM Version produced by the convert task",
+    )
+
+
 class SBOMQsScore(schema.Strict):
     kind: Literal["sbom_qs_score"] = schema.Field(alias="kind")
-    project_name: str = schema.description("Project name")
-    version_name: str = schema.description("Version name")
-    revision_number: str = schema.description("Revision number")
-    file_path: str = schema.description("Relative path to the scored SBOM file")
+    project_key: safe.ProjectKey = schema.description("Project name")
+    version_key: safe.VersionKey = schema.description("Version name")
+    revision_number: safe.RevisionNumber = schema.description("Revision number")
+    file_path: safe.RelPath = schema.description("Relative path to the scored SBOM file")
     report: SbomQsReport
 
 
 class SBOMToolScore(schema.Strict):
     kind: Literal["sbom_tool_score"] = schema.Field(alias="kind")
-    project_name: str = schema.description("Project name")
-    version_name: str = schema.description("Version name")
-    revision_number: str = schema.description("Revision number")
+    project_key: safe.ProjectKey = schema.description("Project name")
+    version_key: safe.VersionKey = schema.description("Version name")
+    revision_number: safe.RevisionNumber = schema.description("Revision number")
     bom_version: int | None = schema.Field(default=None, strict=False, description="BOM Version scanned")
     prev_bom_version: int | None = schema.Field(
         default=None, strict=False, description="BOM Version from previous release"
     )
-    file_path: str = schema.description("Relative path to the scored SBOM file")
+    file_path: safe.RelPath = schema.description("Relative path to the scored SBOM file")
     warnings: list[str] = schema.description("Warnings from the SBOM tool")
     errors: list[str] = schema.description("Errors from the SBOM tool")
     outdated: list[str] | str | None = schema.description("Outdated tool(s) from the SBOM tool")
@@ -218,7 +228,7 @@ class VoteInitiate(schema.Strict):
 
     kind: Literal["vote_initiate"] = schema.Field(alias="kind")
     message: str = schema.description("The message from the vote initiation")
-    email_to: str = schema.description("The email address the vote was sent to")
+    email_to: str = schema.description("The email To address the vote was sent to")
     vote_end: str = schema.description("The date and time the vote ends")
     subject: str = schema.description("The subject of the vote email")
     mid: str | None = schema.description("The message ID of the vote email")
@@ -241,6 +251,7 @@ Results = Annotated[
     | MessageSend
     | MetadataUpdate
     | SBOMAugment
+    | SBOMConvert
     | SBOMGenerateCycloneDX
     | SBOMOSVScan
     | SBOMQsScore
