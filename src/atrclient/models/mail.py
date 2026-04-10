@@ -15,21 +15,10 @@
 # specific language governing permissions and limitations
 # under the License.
 
-from typing import Any
-
-from . import schema
+import enum
 
 
-class CookieData(schema.Strict):
-    uid: str
-    dn: str | None = None
-    fullname: str | None = None
-    email: str | None = None
-    isMember: bool = False
-    isChair: bool = False
-    isRoot: bool = False
-    pmcs: list[str] = schema.factory(list)
-    projects: list[str] = schema.factory(list)
-    mfa: bool = False
-    roleaccount: bool = False
-    metadata: dict[str, Any] = schema.factory(dict)
+class MailFooterCategory(enum.StrEnum):
+    NONE = "none"
+    USER = "user"
+    AUTO = "auto"

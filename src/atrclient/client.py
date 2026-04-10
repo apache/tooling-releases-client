@@ -791,14 +791,11 @@ def app_verify(url: str, /, verbose: bool = False) -> None:
     print_if_verbose(signature_hash)
     print_if_verbose("")
 
-    artifact_file_name = artifact_url.split("/")[-1]
     signature_asc_text = signature_data.decode("utf-8", errors="ignore")
     signature_file_name = signature_url.split("/")[-1]
 
     print_if_verbose("To verify the signature, we need the OpenPGP signing key from the ATR.\n")
     verify_provenance_args = models.api.SignatureProvenanceArgs(
-        artifact_file_name=artifact_file_name,
-        artifact_sha3_256=artifact_hash,
         signature_file_name=signature_file_name,
         signature_asc_text=signature_asc_text,
         signature_sha3_256=signature_hash,

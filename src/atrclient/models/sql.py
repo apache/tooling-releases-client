@@ -208,6 +208,7 @@ class TaskType(enum.StrEnum):
     KEYS_IMPORT_FILE = "keys_import_file"
     LICENSE_FILES = "license_files"
     LICENSE_HEADERS = "license_headers"
+    MAINTENANCE = "maintenance"
     MESSAGE_SEND = "message_send"
     METADATA_UPDATE = "metadata_update"
     PATHS_CHECK = "paths_check"
@@ -251,6 +252,17 @@ class QuarantineFileEntryV1(schema.Strict):
     size_bytes: int
     content_hash: str
     errors: list[str] = schema.factory(list)
+
+
+class ColourBlindnessMode(enum.StrEnum):
+    NONE = "None"
+    DEUTERANOPIA = "Deuteranopia"
+    PROTANOPIA = "Protanopia"
+    TRITANOPIA = "Tritanopia"
+
+
+class UserPreferencesEntry(schema.Subset):
+    colour_blindness_mode: ColourBlindnessMode = ColourBlindnessMode.NONE
 
 
 class VoteEntry(schema.Strict):
@@ -406,6 +418,26 @@ class QuarantineFileMetadataJSON(sqlalchemy.types.TypeDecorator):
         return _QUARANTINE_FILE_METADATA_ADAPTER.validate_python(value)
 
 
+_USER_PREFERENCES_ADAPTER: Final = pydantic.TypeAdapter(UserPreferencesEntry)
+
+
+class UserPreferencesJSON(sqlalchemy.types.TypeDecorator):
+    impl = sqlalchemy.JSON
+    cache_ok = True
+
+    def process_bind_param(self, value, dialect):
+        if value is None:
+            return None
+        if isinstance(value, dict):
+            return value
+        return _USER_PREFERENCES_ADAPTER.dump_python(value, mode="json")
+
+    def process_result_value(self, value, dialect):
+        if value is None:
+            return None
+        return _USER_PREFERENCES_ADAPTER.validate_python(value)
+
+
 # SQL models
 
 
@@ -545,6 +577,35 @@ class TextValue(sqlmodel.SQLModel, table=True):
     ns: str = sqlmodel.Field(primary_key=True, index=True)
     key: str = sqlmodel.Field(primary_key=True, index=True)
     value: str = sqlmodel.Field()
+
+
+# UserSession:
+class UserSession(sqlmodel.SQLModel, table=True):
+    sid_hash: str = sqlmodel.Field(default="", primary_key=True)
+    uid: str = sqlmodel.Field(index=True)
+    dn: str | None = sqlmodel.Field(default=None)
+    fullname: str | None = sqlmodel.Field(default=None)
+    email: str | None = sqlmodel.Field(default=None)
+    is_member: bool = sqlmodel.Field(default=False)
+    is_chair: bool = sqlmodel.Field(default=False)
+    is_root: bool = sqlmodel.Field(default=False)
+    committees: list[str] = sqlmodel.Field(
+        default_factory=list, sa_column=sqlalchemy.Column(sqlalchemy.JSON, nullable=False)
+    )
+    projects: list[str] = sqlmodel.Field(
+        default_factory=list, sa_column=sqlalchemy.Column(sqlalchemy.JSON, nullable=False)
+    )
+    mfa: bool = sqlmodel.Field(default=False)
+    is_role: bool = sqlmodel.Field(default=False)
+    admin_uid: str | None = sqlmodel.Field(default=None, index=True)
+    last_account_check: float | None = sqlmodel.Field(default=None)
+    downgrade_admin_to_user: bool = sqlmodel.Field(default=False)
+    cts: float = sqlmodel.Field(default=0.0, nullable=False)
+    uts: float = sqlmodel.Field(default=0.0, nullable=False)
+
+    def model_post_init(self, _context: Any) -> None:
+        if (self.email is None) and self.uid:
+            self.email = f"{self.uid}@apache.org"
 
 
 # WorkflowSSHKey:
@@ -1445,6 +1506,14 @@ class Revision(sqlmodel.SQLModel, table=True):
     __table_args__ = (
         sqlmodel.UniqueConstraint("release_key", "seq", name="uq_revision_release_seq"),
         sqlmodel.UniqueConstraint("release_key", "number", name="uq_revision_release_number"),
+    )
+
+
+# User
+class User(sqlmodel.SQLModel, table=True):
+    asfuid: str = sqlmodel.Field(primary_key=True, default=None, **example("user"))
+    preferences: UserPreferencesEntry = sqlmodel.Field(
+        default_factory=UserPreferencesEntry, sa_column=sqlalchemy.Column(UserPreferencesJSON, nullable=False)
     )
 
 

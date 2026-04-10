@@ -75,6 +75,7 @@ class DistributeSshRegisterArgs(schema.Strict):
     asf_uid: str = schema.example("user")
     project_key: safe.ProjectKey = schema.example("tooling")
     version: safe.VersionKey = schema.example("0.0.1")
+    task_id: str = schema.example("32")
 
 
 class DistributeSshRegisterResults(schema.Strict):
@@ -137,6 +138,7 @@ class DistributionRecordFromWorkflowArgs(schema.Strict):
     phase: str = schema.Field(strict=False, default="compose", json_schema_extra={"examples": ["compose", "finish"]})
     staging: bool = schema.example(False)
     details: bool = schema.example(False)
+    task_id: str = schema.example("32")
 
     @pydantic.field_validator("platform", mode="before")
     @classmethod
@@ -519,8 +521,6 @@ class ReleasesListResults(schema.Strict):
 
 
 class SignatureProvenanceArgs(schema.Strict):
-    artifact_file_name: str = schema.example("example-0.0.1-bin.tar.gz")
-    artifact_sha3_256: str = schema.example("0123456789abcdef0123456789abcdef01234567")
     signature_file_name: str = schema.example("example-0.0.1-bin.tar.gz.asc")
     signature_asc_text: str = schema.example("-----BEGIN PGP SIGNATURE-----\n\n...\n-----END PGP SIGNATURE-----\n")
     signature_sha3_256: str = schema.example("0123456789abcdef0123456789abcdef01234567")
