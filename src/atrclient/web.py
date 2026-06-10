@@ -70,7 +70,7 @@ async def post_json(url: str, args: basic.JSON, jwt_token: str | None, verify_ss
         headers["Authorization"] = f"Bearer {jwt_token}"
     async with aiohttp.ClientSession(connector=connector, headers=headers) as session:
         async with session.post(url, json=args) as resp:
-            if resp.status not in (200, 201):
+            if resp.status not in (200, 201, 202):
                 text = await resp.text()
                 show.error_and_exit(f"Error message from the API:\n{resp.status} {url}\n{text}")
 

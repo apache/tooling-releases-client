@@ -16,8 +16,10 @@
 # under the License.
 
 import dataclasses
+import datetime
+import re
 from collections.abc import Callable, Sequence
-from typing import Annotated, Any, Literal, TypeVar
+from typing import Annotated, Any, Literal, Self, TypeVar
 
 import pydantic
 
@@ -25,15 +27,68 @@ from . import safe, schema, sql, tabulate, validation
 
 T = TypeVar("T")
 
+type TrustedWorkflowPhase = Literal["compose", "vote", "finish"]
+
 
 class ResultsTypeError(TypeError):
     pass
 
 
+class CatalogArtifact(schema.Strict):
+    artifact_path: str
+    classification: str | None
+    signature_path: str | None
+    checksum_path: str | None
+    sbom_path: str | None
+    key_fingerprint: str | None
+    svn_revision: int | None
+    downloadable: bool
+    # Public download URLs: the artifact via the mirror network, its signature,
+    # checksum and SBOM from downloads.apache.org. None when the version is not downloadable.
+    artifact_url: str | None
+    signature_url: str | None
+    checksum_url: str | None
+    sbom_url: str | None
+
+
+class CatalogVersion(schema.Strict):
+    version: safe.VersionKey
+    status: Literal["released", "archived"]
+    released: datetime.datetime | None
+    svn_revision: int | None
+    # The cycle's display label (e.g. "2.x"), or None for versions outside any cycle.
+    cycle: str | None
+    # The per-version CLE feed, or None when no released-phase record backs this version.
+    cle_url: str | None = None
+    artifacts: Sequence[CatalogArtifact]
+
+    @pydantic.field_validator("released", mode="before")
+    @classmethod
+    def released_from_iso(cls, v):
+        # Strict mode won't coerce on its own, so accept the ISO string a JSON
+        # round-trip leaves behind (e.g. validate_response re-reading our dump).
+        return datetime.datetime.fromisoformat(v) if isinstance(v, str) else v
+
+
+class CatalogCycle(schema.Strict):
+    cycle: str
+    lifecycle: str | None
+    versions: Sequence[CatalogVersion]
+
+
+class CatalogProjectResults(schema.Strict):
+    endpoint: Literal["/catalog/project"] = schema.alias("endpoint")
+    project: safe.ProjectKey
+    # The project-wide CLE feed covering every cycle and release.
+    cle_url: str | None = None
+    versions: Sequence[CatalogVersion]
+    cycles: Sequence[CatalogCycle]
+
+
 class ChecksListResults(schema.Strict):
     endpoint: Literal["/checks/list"] = schema.alias("endpoint")
     checks: Sequence[sql.CheckResult]
-    checks_revision: str = schema.example("00005")
+    checks_revision: safe.RevisionNumber = schema.example("00005")
     current_phase: sql.ReleasePhase = schema.example(sql.ReleasePhase.RELEASE_CANDIDATE)
 
     @pydantic.field_validator("current_phase", mode="before")
@@ -71,7 +126,7 @@ class DistributeSshRegisterArgs(schema.Strict):
     publisher: str = schema.example("user")
     jwt: str = schema.example("eyJhbGciOiJIUzI1[...]mMjLiuyu5CSpyHI=")
     ssh_key: str = schema.example("ssh-ed25519 AAAAC3NzaC1lZDI1NTEgH5C9okWi0dh25AAAAIOMqqnkVzrm0SdG6UOoqKLsabl9GKJl")
-    phase: str = schema.Field(strict=False, default="compose", json_schema_extra={"examples": ["compose", "finish"]})
+    phase: TrustedWorkflowPhase = schema.Field(default="compose", json_schema_extra={"examples": ["compose", "finish"]})
     asf_uid: str = schema.example("user")
     project_key: safe.ProjectKey = schema.example("tooling")
     version: safe.VersionKey = schema.example("0.0.1")
@@ -104,7 +159,7 @@ class DistributionRecordArgs(schema.Strict):
     project: safe.ProjectKey = schema.example("example")
     version: safe.VersionKey = schema.example("0.0.1")
     platform: sql.DistributionPlatform = schema.example(sql.DistributionPlatform.ARTIFACT_HUB)
-    distribution_owner_namespace: safe.Alphanumeric | None = schema.default_example(None, "example")
+    distribution_owner_namespace: safe.OwnerNamespace | None = schema.default_example(None, "example")
     distribution_package: safe.Alphanumeric = schema.example("example")
     distribution_version: safe.VersionKey = schema.example("0.0.1")
     staging: bool = schema.example(False)
@@ -132,10 +187,10 @@ class DistributionRecordFromWorkflowArgs(schema.Strict):
     project: safe.ProjectKey = schema.example("example")
     version: safe.VersionKey = schema.example("0.0.1")
     platform: sql.DistributionPlatform = schema.example(sql.DistributionPlatform.ARTIFACT_HUB)
-    distribution_owner_namespace: safe.Alphanumeric | None = schema.default_example(None, "example")
+    distribution_owner_namespace: safe.OwnerNamespace | None = schema.default_example(None, "example")
     distribution_package: safe.Alphanumeric = schema.example("example")
     distribution_version: safe.VersionKey = schema.example("0.0.1")
-    phase: str = schema.Field(strict=False, default="compose", json_schema_extra={"examples": ["compose", "finish"]})
+    phase: TrustedWorkflowPhase = schema.Field(default="compose", json_schema_extra={"examples": ["compose", "finish"]})
     staging: bool = schema.example(False)
     details: bool = schema.example(False)
     task_id: str = schema.example("32")
@@ -172,7 +227,7 @@ class IgnoreAddArgs(schema.Strict):
     checker_glob: str | None = schema.default_example(None, "atr.tasks.checks.license.files")
     primary_rel_path_glob: str | None = schema.default_example(None, "apache-example-0.0.1-*.tar.gz")
     member_rel_path_glob: str | None = schema.default_example(None, "apache-example-0.0.1/*.xml")
-    status: sql.CheckResultStatusIgnore | None = schema.default_example(None, sql.CheckResultStatusIgnore.FAILURE)
+    status: sql.CheckResultStatusIgnore | None = schema.default_example(None, sql.CheckResultStatusIgnore.CONCERN)
     message_glob: str | None = schema.default_example(None, "sha512 matches for apache-example-0.0.1/*.xml")
 
     @pydantic.model_validator(mode="after")
@@ -276,7 +331,7 @@ class KeysUploadResults(schema.Strict):
     results: Sequence[KeysUploadResult | KeysUploadException]
     success_count: int = schema.example(1)
     error_count: int = schema.example(0)
-    submitted_committee: str = schema.example("example")
+    submitted_committee: safe.CommitteeKey = schema.example("example")
 
 
 class KeysUserResults(schema.Strict):
@@ -289,7 +344,30 @@ class ProjectGetResults(schema.Strict):
     project: sql.Project
 
 
+class RecipientDefaults(schema.Strict):
+    # Default email recipients for one action. A whole block replaces the
+    # stored defaults for that action, so an absent cc/bcc clears them.
+    to: pydantic.EmailStr | None = None
+    cc: list[pydantic.EmailStr] = schema.factory(list)
+    bcc: list[pydantic.EmailStr] = schema.factory(list)
+
+    def addresses(self) -> list[str]:
+        return [str(address) for address in (self.to, *self.cc, *self.bcc) if address]
+
+
 class PolicyGetResults(schema.Strict):
+    # quart_schema.validate_response runs the response dict (produced by
+    # model_dump(mode="json")) back through this model. mode="json" serialises
+    # StrEnum values to plain strings, but schema.Strict has strict=True, which
+    # rejects strings where a LicenseCheckMode or VoteMode instance is
+    # expected. Override to allow string -> enum coercion on revalidation. We
+    # keep extra="forbid".
+    model_config = pydantic.ConfigDict(
+        extra="forbid",
+        strict=False,
+        validate_assignment=True,
+    )
+
     endpoint: Literal["/policy/get"] = schema.alias("endpoint")
     project_key: safe.ProjectKey
     policy_announce_release_subject: str
@@ -301,19 +379,25 @@ class PolicyGetResults(schema.Strict):
     policy_github_repository_name: str
     policy_github_vote_workflow_path: list[str]
     policy_license_check_mode: sql.LicenseCheckMode
-    policy_mailto_addresses: list[str]
+    policy_vote_recipients: RecipientDefaults
+    policy_announce_recipients: RecipientDefaults
     policy_manual_vote: bool
     policy_min_hours: int
+    policy_vote_mode: sql.VoteMode = schema.example(sql.VoteMode.EMAIL)
     policy_preserve_download_files: bool
     policy_release_checklist: str
     policy_source_artifact_paths: list[str]
     policy_start_vote_subject: str
     policy_start_vote_template: str
+    policy_finish_vote_template: str
     policy_vote_comment_template: str
 
 
-class PolicyUpdateArgs(schema.Strict):
-    project: safe.ProjectKey = schema.example("example")
+class PolicyArgsBase(schema.Strict):
+    """
+    Base class to allow one endpoint to take a project key and another not
+    """
+
     announce_release_subject: str | None = None
     announce_release_template: str | None = None
     binary_artifact_paths: list[str] | None = None
@@ -324,7 +408,8 @@ class PolicyUpdateArgs(schema.Strict):
     github_repository_name: str | None = None
     github_vote_workflow_path: list[str] | None = None
     license_check_mode: sql.LicenseCheckMode | None = None
-    mailto_addresses: list[str] | None = None
+    vote_recipients: RecipientDefaults | None = None
+    announce_recipients: RecipientDefaults | None = None
     manual_vote: bool | None = None
     min_hours: int | None = None
     preserve_download_files: bool | None = None
@@ -334,12 +419,142 @@ class PolicyUpdateArgs(schema.Strict):
     source_excludes_rat: list[str] | None = None
     start_vote_subject: str | None = None
     start_vote_template: str | None = None
+    finish_vote_template: str | None = None
     vote_comment_template: str | None = None
+    vote_mode: sql.VoteMode | None = None
+
+    @pydantic.field_validator("license_check_mode", mode="before")
+    @classmethod
+    def license_check_mode_to_enum(cls, v):
+        if isinstance(v, str):
+            try:
+                return sql.LicenseCheckMode(v)
+            except ValueError:
+                raise ValueError(f"'{v}' is not a valid LicenseCheckMode")
+        return v
+
+    @pydantic.field_validator("vote_mode", mode="before")
+    @classmethod
+    def vote_mode_to_enum(cls, v):
+        if isinstance(v, str):
+            try:
+                return sql.VoteMode(v)
+            except ValueError:
+                raise ValueError(f"'{v}' is not a valid VoteMode")
+        return v
+
+    @pydantic.model_validator(mode="after")
+    def validate_policy_fields(self) -> Self:
+        if ("manual_vote" in self.model_fields_set) and ("vote_mode" in self.model_fields_set):
+            raise ValueError("Specify either 'manual_vote' or 'vote_mode', not both")
+
+        if self.min_hours is not None:
+            validation.validate_policy_min_hours(self.min_hours)
+
+        github_repository_name = self.github_repository_name
+        if github_repository_name is not None:
+            validation.validate_github_repository_name(github_repository_name.strip())
+
+        workflow_paths: list[str] = []
+        for paths in (
+            self.github_compose_workflow_path,
+            self.github_vote_workflow_path,
+            self.github_finish_workflow_path,
+        ):
+            if paths is None:
+                continue
+            workflow_paths.extend(path.strip() for path in paths if path.strip())
+        validation.validate_trusted_publishing_workflow_paths(workflow_paths)
+
+        return self
+
+
+class PolicyUpdateArgs(PolicyArgsBase):
+    project: safe.ProjectKey = schema.example("example")
 
 
 class PolicyUpdateResults(schema.Strict):
     endpoint: Literal["/policy/update"] = schema.alias("endpoint")
     success: Literal[True] = schema.example(True)
+
+
+class ProjectConfigProjectArgs(schema.Strict):
+    name: str | None = None
+    description: str | None = None
+    short_description: str | None = None
+    homepage: pydantic.HttpUrl | None = None
+    lifecycle_page: pydantic.HttpUrl | None = None
+    download_page: pydantic.HttpUrl | None = None
+    bug_database: pydantic.HttpUrl | None = None
+    mailing_lists: pydantic.HttpUrl | None = None
+    repositories: list[str] | None = None
+    standards: list[str] | None = None
+    categories: list[str] | None = None
+    programming_languages: list[str] | None = None
+    # Changing any of these four reassigns existing releases to the cycle
+    # their version string now maps to.
+    version_method: sql.VersionMethod | None = None
+    version_pattern: str | None = None
+    cycle_match: str | None = None
+    branch_template: str | None = None
+
+    @pydantic.field_validator("version_method", mode="before")
+    @classmethod
+    def version_method_to_enum(cls, v):
+        if isinstance(v, str):
+            try:
+                return sql.VersionMethod(v)
+            except ValueError:
+                raise ValueError(f"'{v}' is not a valid VersionMethod")
+        return v
+
+    @pydantic.model_validator(mode="after")
+    def _validate_version_scheme(self) -> Self:
+        if ("version_method" in self.model_fields_set) and (self.version_method is None):
+            raise ValueError("Field 'version_method' does not accept null")
+        for field in ("version_pattern", "cycle_match"):
+            value = getattr(self, field)
+            if not (isinstance(value, str) and value.strip()):
+                continue
+            try:
+                compiled = re.compile(value.strip())
+            except re.error as exc:
+                raise ValueError(f"Invalid {field} regex: {exc}") from exc
+            if (field == "cycle_match") and (compiled.groups < 1):
+                raise ValueError("cycle_match must contain at least one capture group")
+        return self
+
+
+class ProjectConfigPolicyArgs(PolicyArgsBase):
+    pass
+
+
+class ProjectConfigArgs(schema.Strict):
+    project_key: safe.ProjectKey = schema.example("example")
+    committee_key: safe.CommitteeKey = schema.example("example")
+    project: ProjectConfigProjectArgs | None = None
+    policy: ProjectConfigPolicyArgs | None = None
+
+    @pydantic.model_validator(mode="after")
+    def _validate_recipient_domains(self) -> Self:
+        # This is the .asf.yaml route, where recipients arrive verbatim, so we
+        # keep vote mail on the committee's own lists and announce mail on
+        # apache.org. The UI route has its own constraints and doesn't come
+        # through here.
+        if self.policy is None:
+            return self
+        committee_key = str(self.committee_key)
+        if self.policy.vote_recipients is not None:
+            validation.validate_vote_recipients(committee_key, self.policy.vote_recipients.addresses())
+        if self.policy.announce_recipients is not None:
+            validation.validate_announce_recipients(self.policy.announce_recipients.addresses())
+        return self
+
+
+class ProjectConfigResults(schema.Strict):
+    endpoint: Literal["/project/config"] = schema.alias("endpoint")
+    success: Literal[True] = schema.example(True)
+    created: bool = schema.example(False)
 
 
 class ProjectReleasesResults(schema.Strict):
@@ -357,7 +572,7 @@ class PublisherDistributionRecordArgs(schema.Strict):
     jwt: str = schema.example("eyJhbGciOiJIUzI1[...]mMjLiuyu5CSpyHI=")
     version: safe.VersionKey = schema.example("0.0.1")
     platform: sql.DistributionPlatform = schema.example(sql.DistributionPlatform.ARTIFACT_HUB)
-    distribution_owner_namespace: safe.Alphanumeric | None = schema.default_example(None, "example")
+    distribution_owner_namespace: safe.OwnerNamespace | None = schema.default_example(None, "example")
     distribution_package: safe.Alphanumeric = schema.example("example")
     distribution_version: safe.VersionKey = schema.example("0.0.1")
     staging: bool = schema.example(False)
@@ -524,6 +739,8 @@ class SignatureProvenanceArgs(schema.Strict):
     signature_file_name: str = schema.example("example-0.0.1-bin.tar.gz.asc")
     signature_asc_text: str = schema.example("-----BEGIN PGP SIGNATURE-----\n\n...\n-----END PGP SIGNATURE-----\n")
     signature_sha3_256: str = schema.example("0123456789abcdef0123456789abcdef01234567")
+    project_key: safe.ProjectKey | None = schema.default_example(None, "example")
+    version_key: safe.VersionKey | None = schema.default_example(None, "0.0.1")
 
 
 class SignatureProvenanceKey(schema.Strict):
@@ -579,7 +796,7 @@ class TasksListQuery:
 
 
 class TasksListResults(schema.Strict):
-    endpoint: Literal["/tasks/list"] = schema.alias("endpoint")
+    endpoint: Literal["/admin/tasks/list"] = schema.alias("endpoint")
     data: Sequence[sql.Task]
     count: int = schema.example(10)
 
@@ -593,6 +810,29 @@ class UserInfoResults(schema.Strict):
 class UsersListResults(schema.Strict):
     endpoint: Literal["/users/list"] = schema.alias("endpoint")
     users: Sequence[str] = schema.example(["user1", "user2"])
+
+
+class VoteCastArgs(schema.Strict):
+    project: safe.ProjectKey = schema.example("example")
+    version: safe.VersionKey = schema.example("0.0.1")
+    choice: sql.VoteChoice = schema.example(sql.VoteChoice.YES)
+    comment: str = schema.default_example("", "Looks good to me")
+
+    @pydantic.field_validator("choice", mode="before")
+    @classmethod
+    def choice_to_enum(cls, v):
+        if isinstance(v, str):
+            try:
+                return sql.VoteChoice(v)
+            except ValueError:
+                raise ValueError(f"'{v}' is not a valid VoteChoice")
+        return v
+
+
+class VoteCastResults(schema.Strict):
+    endpoint: Literal["/vote/cast"] = schema.alias("endpoint")
+    success: Literal[True] = schema.example(True)
+    receipt_email_to: list[str] = schema.example(["dev@example.apache.org"])
 
 
 class VoteResolveArgs(schema.Strict):
@@ -609,16 +849,44 @@ class VoteResolveResults(schema.Strict):
 class VoteStartArgs(schema.Strict):
     project: safe.ProjectKey = schema.example("example")
     version: safe.VersionKey = schema.example("0.0.1")
-    revision: safe.RevisionNumber = schema.example("00005")
+    revision: safe.RevisionNumber | None = schema.default_example(None, "00005")
     email_to: str = schema.example("dev@example.apache.org")
-    vote_duration: int = schema.example(10)
+    email_cc: list[str] = schema.default_example([], ["dev@example.apache.org"])
+    email_bcc: list[str] = schema.default_example([], ["dev@example.apache.org"])
+    vote_duration: int = schema.example(72)
     subject: str = schema.example("[VOTE] Apache Example 0.0.1 release")
     body: str = schema.example("The Apache Example team is pleased to announce the release of Example 0.0.1...")
+    second_round_email_to: str | None = schema.default_example(None, "general@incubator.apache.org")
+    notify_when_finished: bool = schema.default_example(False, False)
+    automatic_resolve_when_finished: bool = schema.default_example(False, False)
+    concerns_noted: list[str] = schema.default_example([], ["atr.tasks.checks.license.headers"])
 
 
 class VoteStartResults(schema.Strict):
     endpoint: Literal["/vote/start"] = schema.alias("endpoint")
     task: sql.Task
+
+
+class TrustedBallotEntry(schema.Strict):
+    voter_asf_uid: str = schema.example("user")
+    voter_fullname: str = schema.example("Example User")
+    choice: sql.VoteChoice = schema.example(sql.VoteChoice.YES)
+    comment: str = schema.default_example("", "Looks good to me")
+    is_binding: bool = schema.example(True)
+    is_carried: bool = schema.default_example(False, False)
+    vote_round: int | None = schema.default_example(None, 1)
+    revision_number_at_cast: safe.RevisionNumber = schema.example("00005")
+    receipt_message_id: str = schema.example("102ed8a-503db792-79bc789-b8ca87ce@apache.org")
+    cast_at: datetime.datetime = schema.example(datetime.datetime(2025, 5, 1, 12, 0, tzinfo=datetime.UTC))
+
+
+class TrustedVoteSummary(schema.Strict):
+    binding_votes_yes: int = schema.example(3)
+    binding_votes_no: int = schema.example(0)
+    binding_votes_abstain: int = schema.example(0)
+    non_binding_votes_yes: int = schema.example(1)
+    non_binding_votes_no: int = schema.example(0)
+    non_binding_votes_abstain: int = schema.example(0)
 
 
 class VoteTabulateArgs(schema.Strict):
@@ -628,7 +896,12 @@ class VoteTabulateArgs(schema.Strict):
 
 class VoteTabulateResults(schema.Strict):
     endpoint: Literal["/vote/tabulate"] = schema.alias("endpoint")
-    details: tabulate.VoteDetails
+    details: tabulate.VoteDetails | None = None
+    vote_mode: sql.VoteMode = schema.example(sql.VoteMode.EMAIL)
+    vote_seq: int | None = schema.default_example(None, 1)
+    trusted_ballots: list[TrustedBallotEntry] | None = None
+    trusted_summary: TrustedVoteSummary | None = None
+    trusted_passed: bool | None = None
 
 
 # This is for *Results classes only
@@ -673,6 +946,7 @@ type Results = Annotated[
     | TasksListResults
     | UserInfoResults
     | UsersListResults
+    | VoteCastResults
     | VoteResolveResults
     | VoteStartResults
     | VoteTabulateResults,
@@ -732,6 +1006,7 @@ validate_ssh_keys_list = validator(SshKeysListResults)
 validate_tasks_list = validator(TasksListResults)
 validate_user_info = validator(UserInfoResults)
 validate_users_list = validator(UsersListResults)
+validate_vote_cast = validator(VoteCastResults)
 validate_vote_resolve = validator(VoteResolveResults)
 validate_vote_start = validator(VoteStartResults)
 validate_vote_tabulate = validator(VoteTabulateResults)

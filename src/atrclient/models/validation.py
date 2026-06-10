@@ -16,7 +16,7 @@
 # under the License.
 
 import re
-from typing import Final
+from typing import Any, Final
 
 import hyperscan
 
@@ -67,6 +67,37 @@ def compile_ignore_pattern(pattern: str):
     return HyperscanPattern(db)
 
 
+def pagination_args_validate(query_args: Any) -> None:
+    # Users could request any amount using limit=N with arbitrarily high N
+    # We therefore limit the maximum limit to 1000
+    if hasattr(query_args, "limit"):
+        limit = query_args.limit
+        if limit > 1000:
+            raise ValueError("Maximum limit of 1000 exceeded")
+        elif limit < 1:
+            raise ValueError("Minimum limit less than 1 is nonsense")
+    # Users could request any amount using offset=N with arbitrarily high N
+    # We therefore limit the maximum offset to 1000000
+    if hasattr(query_args, "offset"):
+        offset = query_args.offset
+        if offset > 1000000:
+            raise ValueError("Maximum offset of 1000000 exceeded")
+        elif offset < 0:
+            raise ValueError("Minimum offset less than 0 is nonsense")
+
+
+def validate_announce_recipients(recipients: list[str]) -> None:
+    for recipient in recipients:
+        domain = _email_domain(recipient)
+        if (domain != "apache.org") and (not domain.endswith(".apache.org")):
+            raise ValueError(f"Announce recipient '{recipient}' must be an apache.org address.")
+
+
+def validate_github_repository_name(github_repository_name: str | None) -> None:
+    if github_repository_name and ("/" in github_repository_name):
+        raise ValueError("GitHub repository name must not contain a slash.")
+
+
 def validate_ignore_pattern(pattern: str) -> None:
     """Raise an exception if the pattern is invalid."""
     if pattern == "!":
@@ -75,3 +106,25 @@ def validate_ignore_pattern(pattern: str) -> None:
     if raw_pattern.startswith("!"):
         raw_pattern = raw_pattern[1:]
     compile_ignore_pattern(raw_pattern)
+
+
+def validate_policy_min_hours(min_hours: int) -> None:
+    if (min_hours != 0) and ((min_hours < 72) or (min_hours > 144)):
+        raise ValueError("Minimum voting period must be 0 or between 72 and 144 hours inclusive.")
+
+
+def validate_trusted_publishing_workflow_paths(paths: list[str]) -> None:
+    for path in paths:
+        if not path.startswith(".github/workflows/"):
+            raise ValueError("GitHub workflow paths must start with '.github/workflows/'.")
+
+
+def validate_vote_recipients(committee_key: str, recipients: list[str]) -> None:
+    expected = f"{committee_key}.apache.org"
+    for recipient in recipients:
+        if _email_domain(recipient) != expected:
+            raise ValueError(f"Vote recipient '{recipient}' must be on '{expected}'.")
+
+
+def _email_domain(address: str) -> str:
+    return address.rpartition("@")[2].lower()

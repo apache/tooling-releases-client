@@ -19,7 +19,7 @@ asf:
 ! atr drop --path asf.uid
 <.stderr.>
 <.skip.>
-<.skip.>Unknown option: "--path"<.skip.>
+<.skip.>Unknown option: --path.<.skip.>
 <.etc.>
 
 $ atr drop asf.uid

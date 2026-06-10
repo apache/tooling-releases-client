@@ -25,8 +25,11 @@ from typing import Annotated, Any, Final
 import pydantic
 
 _ALPHANUM: Final = frozenset(string.ascii_letters + string.digits + "-")
+_PROJECT_CHARS: Final = _ALPHANUM | frozenset("+")
+_ASF_UID_CHARS: Final = frozenset(string.ascii_lowercase + string.digits + "-_")
 _NUMERIC: Final = frozenset(string.digits)
 _PATH_CHARS: Final = frozenset(string.ascii_letters + string.digits + "-._+~/()")
+_OWNER_NAMESPACE_CHARS: Final = _ALPHANUM | frozenset(".")
 _VERSION_CHARS: Final = _ALPHANUM | frozenset(".+")
 
 
@@ -42,13 +45,16 @@ class SafeType:
         pass
 
     def __init__(self, value: str) -> None:
+        label = self.__class__.__name__
         if not value:
-            raise ValueError("Value cannot be empty")
+            raise ValueError(f"{label} cannot be empty")
 
         _assert_standard_safe_syntax(value)
 
-        if not all(c in self._valid_chars() for c in value):
-            raise ValueError("Value contains invalid characters")
+        invalid = sorted(set(value) - self._valid_chars())
+        if invalid:
+            chars = ", ".join(repr(c) for c in invalid)
+            raise ValueError(f"{label} {value!r} contains invalid characters: {chars}")
 
         self._additional_validations(value)
 
@@ -178,6 +184,26 @@ class Alphanumeric(SafeType):
         return _ALPHANUM
 
 
+class OwnerNamespace(SafeType):
+    @classmethod
+    def _valid_chars(cls) -> frozenset[str]:
+        return _OWNER_NAMESPACE_CHARS
+
+
+class AsfUid(SafeType):
+    """An ASF user ID validated to contain only lowercase letters, digits, hyphens, and underscores."""
+
+    @classmethod
+    def _valid_chars(cls) -> frozenset[str]:
+        return _ASF_UID_CHARS
+
+    def _additional_validations(self, value: str) -> None:
+        if len(value) < 3:
+            raise ValueError("ASF UID must be at least 3 characters")
+        if value[0] not in string.ascii_lowercase:
+            raise ValueError("ASF UID must start with a lowercase letter")
+
+
 class CommitteeKey(Alphanumeric):
     pass
 
@@ -189,8 +215,16 @@ class Numeric(SafeType):
         return _NUMERIC
 
 
-class ProjectKey(Alphanumeric):
+class ProjectKey(SafeType):
     """A project name that has been validated for safety."""
+
+    @classmethod
+    def _valid_chars(cls) -> frozenset[str]:
+        return _PROJECT_CHARS
+
+    def _additional_validations(self, value: str) -> None:
+        if value != value.lower():
+            raise ValueError("Project key must be lowercase")
 
 
 class ReleaseKey(Alphanumeric):
@@ -300,6 +334,11 @@ type OptionalAlphanumeric = Annotated[
     pydantic.BeforeValidator(_strip_slashes_or_none),
 ]
 
+type OptionalOwnerNamespace = Annotated[
+    OwnerNamespace | None,
+    pydantic.BeforeValidator(_strip_slashes_or_none),
+]
+
 type OptionalRelPath = Annotated[
     RelPath | None,
     pydantic.BeforeValidator(_strip_slashes_or_none),
@@ -307,6 +346,11 @@ type OptionalRelPath = Annotated[
 
 type OptionalRevisionNumber = Annotated[
     RevisionNumber | None,
+    pydantic.BeforeValidator(_empty_to_none),
+]
+
+type OptionalVersionKey = Annotated[
+    VersionKey | None,
     pydantic.BeforeValidator(_empty_to_none),
 ]
 

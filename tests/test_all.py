@@ -23,6 +23,7 @@ import os
 import pathlib
 import re
 import shlex
+import shutil
 import tempfile
 from typing import TYPE_CHECKING, Any, Final
 
@@ -238,6 +239,9 @@ def test_cli_transcripts(
 ) -> None:
     with tempfile.TemporaryDirectory() as tmpdir:
         os.chdir(tmpdir)
+        files_dir = transcript_path.parent / "files"
+        for file_path in files_dir.iterdir():
+            shutil.copy(file_path, tmpdir)
         return transcript_capture(transcript_path, script_runner, fixture_config_env)
 
 

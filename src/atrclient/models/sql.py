@@ -21,10 +21,12 @@
 # https://github.com/fastapi/sqlmodel/issues/196
 # https://github.com/fastapi/sqlmodel/pull/778/files
 
+import copy
 import dataclasses
 import datetime
 import enum
-from typing import TYPE_CHECKING, Any, Final, Literal, Optional, TypeVar, overload
+import ipaddress
+from typing import TYPE_CHECKING, Any, Final, Literal, Optional, TypeVar, assert_never, overload
 
 import pydantic
 import sqlalchemy
@@ -69,28 +71,28 @@ class DistributionPlatformValue:
 
 class CheckResultStatus(enum.StrEnum):
     BLOCKER = "blocker"
+    CONCERN = "concern"
     EXCEPTION = "exception"
-    FAILURE = "failure"
-    SUCCESS = "success"
-    WARNING = "warning"
+    NOTE = "note"
+    SUGGESTION = "suggestion"
 
 
 class CheckResultStatusIgnore(enum.StrEnum):
+    CONCERN = "concern"
     EXCEPTION = "exception"
-    FAILURE = "failure"
-    WARNING = "warning"
+    SUGGESTION = "suggestion"
 
     @classmethod
     def from_form_field(cls, status: str) -> Optional["CheckResultStatusIgnore"]:
         match status:
             case "None":
                 return None
+            case "CheckResultStatusIgnore.CONCERN":
+                return cls.CONCERN
             case "CheckResultStatusIgnore.EXCEPTION":
                 return cls.EXCEPTION
-            case "CheckResultStatusIgnore.FAILURE":
-                return cls.FAILURE
-            case "CheckResultStatusIgnore.WARNING":
-                return cls.WARNING
+            case "CheckResultStatusIgnore.SUGGESTION":
+                return cls.SUGGESTION
             case _:
                 raise ValueError(f"Invalid status: {status}")
 
@@ -128,7 +130,8 @@ class DistributionPlatform(enum.Enum):
         template_url="https://repo1.maven.org/maven2/{owner_namespace}/{package}/maven-metadata.xml",
         # Below is the old template using the maven search API - but the index isn't updated quickly enough for us
         # template_url="https://search.maven.org/solrsearch/select?q=g:{owner_namespace}+AND+a:{package}+AND+v:{version}&core=gav&rows=20&wt=json",
-        template_staging_url="https://repository.apache.org:4443/repository/maven-staging/{owner_namespace}/{package}/maven-metadata.xml",
+        template_staging_url="https://repository.apache.org/content/groups/staging/{owner_namespace}/{package}/maven-metadata.xml",
+        # template_staging_url="https://repository.apache.org:4443/repository/maven-staging/{owner_namespace}/{package}/maven-metadata.xml",
         # https://repository.apache.org/content/repositories/orgapachePROJECT-NNNN/
         # There's no JSON, but each individual package has maven-metadata.xml
         requires_owner_namespace=True,
@@ -160,11 +163,23 @@ class LicenseCheckMode(enum.StrEnum):
     RAT = "RAT"
 
 
+class NotificationLevel(enum.StrEnum):
+    INFO = "info"
+    WARNING = "warning"
+    ERROR = "error"
+
+
 class ProjectStatus(enum.StrEnum):
     ACTIVE = "active"
     DORMANT = "dormant"
     RETIRED = "retired"
     STANDING = "standing"
+
+
+class UpdateType(enum.StrEnum):
+    MANUAL = "manual"
+    BOOTSTRAP = "bootstrap"
+    ASFYAML = "asfyaml"
 
 
 class QuarantineStatus(enum.Enum):
@@ -222,12 +237,81 @@ class TaskType(enum.StrEnum):
     SBOM_TOOL_SCORE = "sbom_tool_score"
     SIGNATURE_CHECK = "signature_check"
     SVN_IMPORT_FILES = "svn_import_files"
+    SVN_PUBLISH = "svn_publish"
     TARGZ_INTEGRITY = "targz_integrity"
     TARGZ_STRUCTURE = "targz_structure"
+    VOTE_AUTO_RESOLVE = "vote_auto_resolve"
+    VOTE_END_NOTIFY = "vote_end_notify"
     VOTE_INITIATE = "vote_initiate"
     WORKFLOW_STATUS = "workflow_status"
     ZIPFORMAT_INTEGRITY = "zipformat_integrity"
     ZIPFORMAT_STRUCTURE = "zipformat_structure"
+
+    @property
+    def label(self) -> str:  # noqa: C901
+        match self:
+            case TaskType.COMPARE_SOURCE_TREES:
+                return "Compare source trees"
+            case TaskType.DISTRIBUTION_STATUS:
+                return "Distribution status"
+            case TaskType.DISTRIBUTION_WORKFLOW:
+                return "Distribution workflow"
+            case TaskType.HASHING_CHECK:
+                return "Hashing check"
+            case TaskType.KEYS_IMPORT_FILE:
+                return "Key import"
+            case TaskType.LICENSE_FILES:
+                return "License files"
+            case TaskType.LICENSE_HEADERS:
+                return "License headers"
+            case TaskType.MAINTENANCE:
+                return "Maintenance"
+            case TaskType.MESSAGE_SEND:
+                return "Email send"
+            case TaskType.METADATA_UPDATE:
+                return "Metadata update"
+            case TaskType.PATHS_CHECK:
+                return "Paths check"
+            case TaskType.QUARANTINE_VALIDATE:
+                return "Quarantine validation"
+            case TaskType.RAT_CHECK:
+                return "Rat check"
+            case TaskType.SBOM_AUGMENT:
+                return "SBOM augmentation"
+            case TaskType.SBOM_CONVERT:
+                return "SBOM conversion"
+            case TaskType.SBOM_GENERATE_CYCLONEDX:
+                return "SBOM generation"
+            case TaskType.SBOM_OSV_SCAN:
+                return "SBOM vulnerability scan"
+            case TaskType.SBOM_QS_SCORE:
+                return "SBOM QS score"
+            case TaskType.SBOM_TOOL_SCORE:
+                return "SBOM tool score"
+            case TaskType.SIGNATURE_CHECK:
+                return "Signature check"
+            case TaskType.SVN_IMPORT_FILES:
+                return "SVN import"
+            case TaskType.SVN_PUBLISH:
+                return "SVN publish"
+            case TaskType.TARGZ_INTEGRITY:
+                return "Targz integrity"
+            case TaskType.TARGZ_STRUCTURE:
+                return "Targz structure"
+            case TaskType.VOTE_AUTO_RESOLVE:
+                return "Vote auto-resolution"
+            case TaskType.VOTE_END_NOTIFY:
+                return "Vote end notification"
+            case TaskType.VOTE_INITIATE:
+                return "Vote initiation"
+            case TaskType.WORKFLOW_STATUS:
+                return "Workflow status"
+            case TaskType.ZIPFORMAT_INTEGRITY:
+                return "Zipformat integrity"
+            case TaskType.ZIPFORMAT_STRUCTURE:
+                return "Zipformat structure"
+            case _:
+                assert_never(self)
 
 
 class UserRole(enum.StrEnum):
@@ -239,11 +323,40 @@ class UserRole(enum.StrEnum):
     SYSADMIN = "sysadmin"
 
 
+class VersionMethod(enum.StrEnum):
+    SIMPLE = "simple"
+    SEMVER = "semver"
+    CALVER = "calver"
+
+
+class VoteMode(enum.StrEnum):
+    MANUAL = "manual"
+    EMAIL = "email"
+    TRUSTED = "trusted"
+
+
+class VoteChoice(enum.StrEnum):
+    YES = "+1"
+    ABSTAIN = "0"
+    NO = "-1"
+
+
+class RecipientAction(enum.StrEnum):
+    # Keys under ReleasePolicy.recipient_defaults
+    VOTE = "vote"
+    ANNOUNCE = "announce"
+
+
+class LifecycleEventType(enum.StrEnum):
+    RELEASE = "release"
+    ARCHIVE = "archive"
+    WITHDRAW = "withdraw"
+    EOD = "eod"
+    EOS = "eos"
+    EOL = "eol"
+
+
 # Pydantic models
-
-
-def pydantic_example(value: Any) -> dict[Literal["json_schema_extra"], dict[str, Any]]:
-    return {"json_schema_extra": {"example": value}}
 
 
 class QuarantineFileEntryV1(schema.Strict):
@@ -263,19 +376,7 @@ class ColourBlindnessMode(enum.StrEnum):
 
 class UserPreferencesEntry(schema.Subset):
     colour_blindness_mode: ColourBlindnessMode = ColourBlindnessMode.NONE
-
-
-class VoteEntry(schema.Strict):
-    result: bool = schema.Field(alias="result", **pydantic_example(True))
-    summary: str = schema.Field(alias="summary", **pydantic_example("This is a summary"))
-    binding_votes: int = schema.Field(alias="binding_votes", **pydantic_example(10))
-    community_votes: int = schema.Field(alias="community_votes", **pydantic_example(10))
-    start: datetime.datetime = schema.Field(
-        alias="start", **pydantic_example(datetime.datetime(2025, 5, 5, 1, 2, 3, tzinfo=datetime.UTC))
-    )
-    end: datetime.datetime = schema.Field(
-        alias="end", **pydantic_example(datetime.datetime(2025, 5, 7, 1, 2, 3, tzinfo=datetime.UTC))
-    )
+    nav_pinned: bool = True
 
 
 # Type decorators
@@ -454,10 +555,28 @@ class KeyLink(sqlmodel.SQLModel, table=True):
     key_fingerprint: str = sqlmodel.Field(foreign_key="publicsigningkey.fingerprint", primary_key=True)
 
 
+# Notification:
+class Notification(sqlmodel.SQLModel, table=True):
+    id: int | None = sqlmodel.Field(default=None, primary_key=True)
+    asf_uid: str = sqlmodel.Field()
+    created: datetime.datetime = sqlmodel.Field(
+        default_factory=lambda: datetime.datetime.now(datetime.UTC),
+        sa_column=sqlalchemy.Column(UTCDateTime, nullable=False),
+    )
+    level: NotificationLevel = sqlmodel.Field(default=NotificationLevel.ERROR)
+    message: str = sqlmodel.Field()
+
+    __table_args__ = (sqlalchemy.Index("ix_notification_asf_uid_created", "asf_uid", "created"),)
+
+
 # PersonalAccessToken:
 class PersonalAccessToken(sqlmodel.SQLModel, table=True):
     id: int | None = sqlmodel.Field(default=None, primary_key=True)
-    asfuid: str = sqlmodel.Field(index=True)
+    # asfuid is the authentication subject (null for a system PAT, which has no
+    # owning user). created_by is always set, so we can still revoke all
+    # tokens a given admin minted even when asfuid is null.
+    asfuid: str | None = sqlmodel.Field(default=None, index=True)
+    created_by: str = sqlmodel.Field(index=True)
     token_hash: str = sqlmodel.Field(unique=True)
     created: datetime.datetime = sqlmodel.Field(
         default_factory=lambda: datetime.datetime.now(datetime.UTC),
@@ -466,10 +585,37 @@ class PersonalAccessToken(sqlmodel.SQLModel, table=True):
     expires: datetime.datetime = sqlmodel.Field(sa_column=sqlalchemy.Column(UTCDateTime, nullable=False))
     last_used: datetime.datetime | None = sqlmodel.Field(default=None, sa_column=sqlalchemy.Column(UTCDateTime))
     label: str | None = None
+    # System tokens are admin-minted for service callers (e.g. the .asf.yaml
+    # processor). The JWTs they mint carry the fixed system identity, skip
+    # the LDAP check, and gain system privileges.
+    is_system: bool = sqlmodel.Field(default=False)
+    # Optional single IP or CIDR the token may be exchanged from. Null means no
+    # restriction.
+    allowed_ip: str | None = None
+
+    @property
+    def is_expired(self) -> bool:
+        return self.expires < datetime.datetime.now(datetime.UTC)
+
+    def allows_ip(self, client_ip: str | None) -> bool:
+        if self.allowed_ip is None:
+            return True
+        if client_ip is None:
+            return False
+        try:
+            return ipaddress.ip_address(client_ip) in ipaddress.ip_network(self.allowed_ip, strict=False)
+        except ValueError:
+            return False
 
 
 # RevisionCounter:
 class RevisionCounter(sqlmodel.SQLModel, table=True):
+    release_key: str = sqlmodel.Field(primary_key=True)
+    last_allocated_number: int = sqlmodel.Field(default=0)
+
+
+# VoteCounter:
+class VoteCounter(sqlmodel.SQLModel, table=True):
     release_key: str = sqlmodel.Field(primary_key=True)
     last_allocated_number: int = sqlmodel.Field(default=0)
 
@@ -597,6 +743,7 @@ class UserSession(sqlmodel.SQLModel, table=True):
     )
     mfa: bool = sqlmodel.Field(default=False)
     is_role: bool = sqlmodel.Field(default=False)
+    ip_address: str | None = sqlmodel.Field(default=None, nullable=True)
     admin_uid: str | None = sqlmodel.Field(default=None, index=True)
     last_account_check: float | None = sqlmodel.Field(default=None)
     downgrade_admin_to_user: bool = sqlmodel.Field(default=False)
@@ -606,6 +753,16 @@ class UserSession(sqlmodel.SQLModel, table=True):
     def model_post_init(self, _context: Any) -> None:
         if (self.email is None) and self.uid:
             self.email = f"{self.uid}@apache.org"
+
+
+# SessionFormError:
+class SessionFormError(sqlmodel.SQLModel, table=True):
+    sid_hash: str = sqlmodel.Field(default="", primary_key=True, foreign_key="usersession.sid_hash", ondelete="CASCADE")
+    path: str = sqlmodel.Field(default="", primary_key=True)
+    payload: dict[str, Any] = sqlmodel.Field(
+        default_factory=dict, sa_column=sqlalchemy.Column(sqlalchemy.JSON, nullable=False)
+    )
+    cts: float = sqlmodel.Field(default=0.0, nullable=False)
 
 
 # WorkflowSSHKey:
@@ -620,6 +777,7 @@ class WorkflowSSHKey(sqlmodel.SQLModel, table=True):
         default_factory=dict, sa_column=sqlalchemy.Column(sqlalchemy.JSON, nullable=False)
     )
     expires: int = sqlmodel.Field()
+    revoked: bool = sqlmodel.Field(default=False)
 
 
 # SQL core models
@@ -629,6 +787,7 @@ class WorkflowSSHKey(sqlmodel.SQLModel, table=True):
 class Committee(sqlmodel.SQLModel, table=True):
     key: str = sqlmodel.Field(unique=True, primary_key=True, **example("example"))
     name: str | None = sqlmodel.Field(default=None, **example("Example"))
+    charter: str | None = sqlmodel.Field(default=None, **example("Example"))
     # True only if this is an incubator podling with a PPMC
     is_podling: bool = sqlmodel.Field(default=False)
 
@@ -669,11 +828,20 @@ class Committee(sqlmodel.SQLModel, table=True):
         back_populates="committees", link_model=KeyLink
     )
 
+    updated: datetime.datetime | None = sqlmodel.Field(default=None, sa_column=sqlalchemy.Column(UTCDateTime))
+    updated_by: str | None = sqlmodel.Field(default=None)
+    update_type: UpdateType = sqlmodel.Field(default=UpdateType.MANUAL, **example(UpdateType.MANUAL))
+
     @property
     def display_name(self) -> str:
         """Get the display name for the committee."""
         name = self.name or self.key.title()
         return f"{name} (Incubating)" if self.is_podling else name
+
+    def mark_updated(self, *, by: str, update_type: UpdateType) -> None:
+        self.updated = datetime.datetime.now(datetime.UTC)
+        self.updated_by = by
+        self.update_type = update_type
 
 
 def see_also(arg: Any) -> None:
@@ -696,8 +864,30 @@ class Project(sqlmodel.SQLModel, table=True):
     super_project: Optional["Project"] = sqlmodel.Relationship()
 
     description: str | None = sqlmodel.Field(default=None, **example("Example is a simple example project"))
-    category: str | None = sqlmodel.Field(default=None, **example("data,storage"))
+    categories: str | None = sqlmodel.Field(default=None, **example("data,storage"))
     programming_languages: str | None = sqlmodel.Field(default=None, **example("c,python"))
+
+    short_description: str | None = sqlmodel.Field(default=None, **example("A simple example project"))
+    homepage: str | None = sqlmodel.Field(default=None, **example("https://example.apache.org/"))
+    lifecycle_page: str | None = sqlmodel.Field(default=None, **example("https://example.apache.org/lifecycle"))
+    download_page: str | None = sqlmodel.Field(default=None, **example("https://example.apache.org/download"))
+    bug_database: str | None = sqlmodel.Field(default=None, **example("https://issues.apache.org/jira/browse/EXAMPLE"))
+    mailing_lists: str | None = sqlmodel.Field(
+        default=None, **example("https://example.apache.org/community/mailing-lists")
+    )
+    repositories: list[str] = sqlmodel.Field(
+        default_factory=list, sa_column=sqlalchemy.Column(sqlalchemy.JSON, nullable=False)
+    )
+    standards: list[str] = sqlmodel.Field(
+        default_factory=list, sa_column=sqlalchemy.Column(sqlalchemy.JSON, nullable=False)
+    )
+
+    # Version-scheme metadata (#912). For "simple" projects the pattern fields are null
+    # and the project keeps a single "default" cycle.
+    version_method: VersionMethod = sqlmodel.Field(default=VersionMethod.SIMPLE, **example(VersionMethod.SIMPLE))
+    version_pattern: str | None = sqlmodel.Field(default=None, **example(r"^\d+\.\d+\.\d+$"))
+    cycle_match: str | None = sqlmodel.Field(default=None, **example(r"^(\d+)\.\d+\.\d+$"))
+    branch_template: str | None = sqlmodel.Field(default=None, **example("release-{cycle}"))
 
     # M-1: Project -> Committee
     # 1-M: Committee -> [Project]
@@ -709,6 +899,14 @@ class Project(sqlmodel.SQLModel, table=True):
     # M-1: Release -> Project
     # see_also(Release.project)
     releases: list["Release"] = sqlmodel.Relationship(back_populates="project")
+
+    # 1-M: Project -C-> [ProjectCycle]
+    # M-1: ProjectCycle -> Project
+    cycles: list["ProjectCycle"] = sqlmodel.Relationship(
+        back_populates="project",
+        cascade_delete=True,
+        sa_relationship_kwargs={"cascade": "all, delete-orphan"},
+    )
 
     # # 1-M: Project -> [DistributionChannel]
     # # M-1: DistributionChannel -> Project
@@ -728,6 +926,10 @@ class Project(sqlmodel.SQLModel, table=True):
     )
     created_by: str | None = sqlmodel.Field(default=None, **example("user"))
 
+    updated: datetime.datetime | None = sqlmodel.Field(default=None, sa_column=sqlalchemy.Column(UTCDateTime))
+    updated_by: str | None = sqlmodel.Field(default=None)
+    update_type: UpdateType = sqlmodel.Field(default=UpdateType.MANUAL, **example(UpdateType.MANUAL))
+
     @property
     def display_name(self) -> str:
         """Get the display name for the Project."""
@@ -737,6 +939,27 @@ class Project(sqlmodel.SQLModel, table=True):
         return base
 
     @property
+    def updated_by_display(self) -> str:
+        """Who or what last updated the project, for display."""
+        match self.update_type:
+            case UpdateType.BOOTSTRAP:
+                return "bootstrap"
+            case UpdateType.ASFYAML:
+                return ".asf.yaml"
+            case UpdateType.MANUAL:
+                return self.updated_by or "unknown"
+
+    def mark_updated(self, *, by: str, update_type: UpdateType) -> None:
+        self.updated = datetime.datetime.now(datetime.UTC)
+        self.updated_by = by
+        self.update_type = update_type
+
+    @property
+    def is_active(self) -> bool:
+        """Whether the project's status is active."""
+        return self.status == ProjectStatus.ACTIVE
+
+    @property
     def safe_key(self) -> safe.ProjectKey:
         """Get the typesafe validated name for the Project"""
         return safe.ProjectKey(self.key)
@@ -744,20 +967,23 @@ class Project(sqlmodel.SQLModel, table=True):
     @property
     def short_display_name(self) -> str:
         """Get the short display name for the Project."""
-        return self.display_name.removeprefix("Apache ")
+        name = self.display_name
+        if name.startswith("Apache Software Foundation "):
+            return name.removeprefix("Apache Software Foundation ")
+        return name.removeprefix("Apache ")
 
     @property
     def policy_announce_release_default(self) -> str:
         return """\
 The Apache {{COMMITTEE}} project team is pleased to announce the
-release of {{PROJECT}} {{VERSION}}.
+release of {{PROJECT_NAME}} {{VERSION}}.
 
 This is a stable release available for production use.
 
 Downloads are available from the following URL:
 
 {{DOWNLOAD_URL}}
-
+{{DISCLAIMER}}
 On behalf of the Apache {{COMMITTEE}} project team,
 
 {{YOUR_FULL_NAME}} ({{YOUR_ASF_ID}})
@@ -765,14 +991,14 @@ On behalf of the Apache {{COMMITTEE}} project team,
 
     @property
     def policy_announce_release_subject_default(self) -> str:
-        return "[ANNOUNCE] {{PROJECT}} {{VERSION}} released"
+        return "[ANNOUNCE] {{PROJECT_NAME}} {{VERSION}} released"
 
     @property
     def policy_start_vote_default(self) -> str:
         return """Hello {{COMMITTEE}},
 
 I'd like to call a vote on releasing the following artifacts as
-Apache {{PROJECT}} {{VERSION}}. This vote is being conducted using an
+Apache {{PROJECT_NAME}} {{VERSION}}. This vote is being conducted using an
 Alpha version of the Apache Trusted Releases (ATR) platform.
 Please report any bugs or issues to the ASF Tooling team.
 
@@ -801,7 +1027,21 @@ Thanks,
 
     @property
     def policy_start_vote_subject_default(self) -> str:
-        return "[VOTE] Release {{PROJECT}} {{VERSION}}"
+        return "[VOTE] Release {{PROJECT_NAME}} {{VERSION}}"
+
+    @property
+    def policy_finish_vote_default(self) -> str:
+        return """Dear {{COMMITTEE}} participants,
+
+The vote on {{PROJECT_NAME}} {{VERSION}} {{OUTCOME}}.
+
+{{ATR_TALLY}}
+
+Thank you for your participation.
+
+Sincerely,
+{{YOUR_FULL_NAME}} ({{YOUR_ASF_ID}})
+"""
 
     @property
     def policy_default_min_hours(self) -> int:
@@ -819,21 +1059,26 @@ Thanks,
             return self.policy_announce_release_default
         return policy.announce_release_template
 
-    @property
-    def policy_mailto_addresses(self) -> list[str]:
-        if ((policy := self.release_policy) is None) or (not policy.mailto_addresses):
-            if self.committee is not None:
-                return [f"dev@{self.committee.key}.apache.org", f"private@{self.committee.key}.apache.org"]
-            else:
-                # TODO: Or raise an error?
-                return [f"dev@{self.key}.apache.org", f"private@{self.key}.apache.org"]
-        return policy.mailto_addresses
+    def policy_recipients(self, action: RecipientAction) -> tuple[str, list[str], list[str]]:
+        # Raw stored defaults for an action; empty when nothing has been set.
+        policy = self.release_policy
+        entry: dict[str, Any] = {}
+        if policy is not None:
+            entry = policy.recipient_defaults.get(action.value) or {}
+        to = entry.get("to") or ""
+        cc = [str(address) for address in (entry.get("cc") or [])]
+        bcc = [str(address) for address in (entry.get("bcc") or [])]
+        return to, cc, bcc
 
     @property
     def policy_manual_vote(self) -> bool:
+        return self.policy_vote_mode == VoteMode.MANUAL
+
+    @property
+    def policy_vote_mode(self) -> VoteMode:
         if (policy := self.release_policy) is None:
-            return False
-        return policy.manual_vote
+            return VoteMode.EMAIL
+        return policy.vote_mode
 
     @property
     def policy_min_hours(self) -> int:
@@ -865,6 +1110,12 @@ Thanks,
         if ((policy := self.release_policy) is None) or (policy.start_vote_template == ""):
             return self.policy_start_vote_default
         return policy.start_vote_template
+
+    @property
+    def policy_finish_vote_template(self) -> str:
+        if ((policy := self.release_policy) is None) or (policy.finish_vote_template == ""):
+            return self.policy_finish_vote_default
+        return policy.finish_vote_template
 
     @property
     def policy_binary_artifact_paths(self) -> list[str]:
@@ -948,6 +1199,73 @@ Thanks,
             return False
         return policy.preserve_download_files
 
+    @property
+    def policy_auto_archive_prior_release(self) -> bool:
+        if (policy := self.release_policy) is None:
+            return False
+        return policy.auto_archive_prior_release
+
+
+# ProjectCycle: Project Release
+class ProjectCycle(sqlmodel.SQLModel, table=True):
+    """A release cycle within a project, e.g. "2.x", "default", or "2026".
+
+    Every project has at least one cycle. Projects whose `version_method` is
+    "simple" keep a single cycle named "default" and never expose cycle UI.
+
+    The lifecycle date columns (eod, eos, eol) mirror the most recent
+    LifecycleEvent of that kind for the cycle. The events table is the
+    source of truth; these columns are kept as denormalised caches so that
+    "what is currently planned" reads cheaply.
+    """
+
+    # We guarantee that "{project_key}-{cycle}" is unique
+    # Therefore we can use that for the key
+    cycle_key: str = sqlmodel.Field(default="", primary_key=True, unique=True, **example("example-default"))
+    cycle: str = sqlmodel.Field(**example("default"))
+
+    # M-1: ProjectCycle -> Project
+    # 1-M: Project -> [ProjectCycle]
+    project_key: str = sqlmodel.Field(foreign_key="project.key", ondelete="CASCADE", **example("example"))
+    project: Project = sqlmodel.Relationship(back_populates="cycles")
+    see_also(Project.cycles)
+
+    # Release-derived cache, updated as releases reach the relevant phases.
+    start: datetime.datetime | None = sqlmodel.Field(
+        default=None,
+        sa_column=sqlalchemy.Column(UTCDateTime),
+    )
+    begin: datetime.datetime | None = sqlmodel.Field(
+        default=None,
+        sa_column=sqlalchemy.Column(UTCDateTime),
+    )
+    latest: datetime.datetime | None = sqlmodel.Field(
+        default=None,
+        sa_column=sqlalchemy.Column(UTCDateTime),
+    )
+
+    # Mirrors the latest LifecycleEvent of the matching kind for this cycle.
+    # Writers update both the column and the event row in the same transaction.
+    eod: datetime.datetime | None = sqlmodel.Field(
+        default=None,
+        sa_column=sqlalchemy.Column(UTCDateTime),
+    )
+    eos: datetime.datetime | None = sqlmodel.Field(
+        default=None,
+        sa_column=sqlalchemy.Column(UTCDateTime),
+    )
+    eol: datetime.datetime | None = sqlmodel.Field(
+        default=None,
+        sa_column=sqlalchemy.Column(UTCDateTime),
+    )
+    lts: bool = sqlmodel.Field(default=False)
+
+    # 1-M: ProjectCycle -> [Release]
+    # M-1: Release -> ProjectCycle
+    releases: list["Release"] = sqlmodel.Relationship(back_populates="cycle")
+
+    __table_args__ = (sqlmodel.UniqueConstraint("project_key", "cycle", name="unique_project_cycle"),)
+
 
 # Release: Project ReleasePolicy Revision CheckResult
 class Release(sqlmodel.SQLModel, table=True):
@@ -966,6 +1284,23 @@ class Release(sqlmodel.SQLModel, table=True):
         sa_column=sqlalchemy.Column(UTCDateTime),
         **example(datetime.datetime(2025, 6, 1, 1, 2, 3, tzinfo=datetime.UTC)),
     )
+    # Mirrors the latest archive LifecycleEvent for this release. Null for
+    # releases that haven't been archived. Sourced by whatever archival flow
+    # #507 eventually settles on.
+    archived: datetime.datetime | None = sqlmodel.Field(
+        default=None,
+        sa_column=sqlalchemy.Column(UTCDateTime),
+        **example(datetime.datetime(2026, 1, 15, 1, 2, 3, tzinfo=datetime.UTC)),
+    )
+    activity_at: datetime.datetime = sqlmodel.Field(
+        default_factory=lambda: datetime.datetime.now(datetime.UTC),
+        sa_column=sqlalchemy.Column(UTCDateTime, nullable=False),
+        **example(datetime.datetime(2025, 5, 1, 1, 2, 3, tzinfo=datetime.UTC)),
+    )
+    inactivity_notice_key: str | None = sqlmodel.Field(default=None)
+    # Set at start time when the user opts in to archiving the prior release
+    # in this cycle when this release is announced.
+    archive_prior_release: bool = sqlmodel.Field(default=False)
 
     check_cache_key: str | None = sqlmodel.Field(default=None, **example("ef0ccb0a-3514-4b65-abcd-879850349f74"))
 
@@ -974,6 +1309,16 @@ class Release(sqlmodel.SQLModel, table=True):
     project_key: str = sqlmodel.Field(foreign_key="project.key", **example("example"))
     project: Project = sqlmodel.Relationship(back_populates="releases")
     see_also(Project.releases)
+
+    # M-1: Release -> ProjectCycle
+    # 1-M: ProjectCycle -> [Release]
+    # cycle_key defaults to "{project_key}-default" via model_post_init below. That
+    # fallback is correct for "simple" projects (every project today) and an inert
+    # default for semver/calver projects, where writers will compute a real
+    # cycle_key from the version string and override it.
+    cycle_key: str = sqlmodel.Field(default="", foreign_key="projectcycle.cycle_key", **example("example-default"))
+    cycle: "ProjectCycle" = sqlmodel.Relationship(back_populates="releases")
+    see_also(ProjectCycle.releases)
 
     package_managers: list[str] = sqlmodel.Field(
         default_factory=list, sa_column=sqlalchemy.Column(sqlalchemy.JSON, nullable=False), **example([])
@@ -994,11 +1339,8 @@ class Release(sqlmodel.SQLModel, table=True):
         cascade_delete=True, sa_relationship_kwargs={"cascade": "all, delete-orphan", "single_parent": True}
     )
 
-    # VoteEntry is a Pydantic model, not a SQL model
-    votes: list[VoteEntry] = sqlmodel.Field(
-        default_factory=list, sa_column=sqlalchemy.Column(sqlalchemy.JSON, nullable=False)
-    )
-    vote_manual: bool = sqlmodel.Field(default=False, **example(False))
+    vote_mode: VoteMode | None = sqlmodel.Field(default=None, **example(VoteMode.EMAIL))
+    current_vote_seq: int | None = sqlmodel.Field(default=None, index=True)
     vote_started: datetime.datetime | None = sqlmodel.Field(
         default=None,
         sa_column=sqlalchemy.Column(UTCDateTime),
@@ -1028,10 +1370,22 @@ class Release(sqlmodel.SQLModel, table=True):
         back_populates="release", sa_relationship_kwargs={"cascade": "all, delete-orphan"}
     )
 
+    # 1-M: Release -C-> [BallotPaper]
+    # M-1: BallotPaper -> Release
+    ballot_papers: list["BallotPaper"] = sqlmodel.Relationship(
+        back_populates="release", sa_relationship_kwargs={"cascade": "all, delete-orphan"}
+    )
+
     # 1-M: Release -> [Distribution]
     # M-1: Distribution -> Release
     distributions: list["Distribution"] = sqlmodel.Relationship(
         back_populates="release", sa_relationship_kwargs={"cascade": "all, delete-orphan"}
+    )
+
+    # 1-M: Release -> [Artifact]
+    # M-1: Artifact -> Release
+    artifacts: list["Artifact"] = sqlmodel.Relationship(
+        back_populates="release", sa_relationship_kwargs={"cascade": "all, delete", "passive_deletes": True}
     )
 
     # The combination of key and version must be unique
@@ -1045,6 +1399,27 @@ class Release(sqlmodel.SQLModel, table=True):
         # if project is None:
         #     return None
         return project.committee
+
+    @property
+    def days_since_active(self) -> int:
+        """Get the number of whole days since the release was last active."""
+        activity = [self.created]
+        if self.revisions:
+            activity.append(self.revisions[-1].created)
+        if self.vote_started is not None:
+            activity.append(self.vote_started)
+        if self.vote_resolved is not None:
+            activity.append(self.vote_resolved)
+        if self.released is not None:
+            activity.append(self.released)
+        now = datetime.datetime.now(datetime.UTC)
+        return (now - max(activity)).days
+
+    @property
+    def effective_vote_mode(self) -> VoteMode:
+        if (self.phase != ReleasePhase.RELEASE_CANDIDATE_DRAFT) and (self.vote_mode is not None):
+            return self.vote_mode
+        return self.project.policy_vote_mode
 
     @property
     def safe_latest_revision_number(self) -> safe.RevisionNumber:
@@ -1091,11 +1466,18 @@ class Release(sqlmodel.SQLModel, table=True):
         return number
 
     def model_post_init(self, _context):
-        if isinstance(self.created, str):
-            self.created = datetime.datetime.fromisoformat(self.created.rstrip("Z"))
+        for name in ("activity_at", "archived", "created", "released", "vote_resolved", "vote_started"):
+            value = getattr(self, name)
+            if isinstance(value, str):
+                setattr(self, name, datetime.datetime.fromisoformat(value.rstrip("Z")))
 
         if isinstance(self.phase, str):
             self.phase = ReleasePhase(self.phase)
+
+        # Fall back to the project's "default" cycle when no cycle_key is set.
+        # See the field comment above for why this is the right phase-1 default.
+        if (not self.cycle_key) and self.project_key:
+            self.cycle_key = f"{self.project_key}-default"
 
     # NOTE: This does not work
     # But it we set it with Release.latest_revision_number_query = ..., it might work
@@ -1112,6 +1494,111 @@ class Release(sqlmodel.SQLModel, table=True):
 
 
 # SQL models referencing Committee, Project, or Release
+
+
+# LifecycleEvent: append-only log of project / cycle / release lifecycle moments.
+# Cache columns on Release and ProjectCycle (released, archived, eod, eos, eol)
+# mirror the most recent event of each kind for fast read paths; this table is
+# the source of truth for ECMA-428 output and audit. See issues #912 and #914.
+#
+# Search invariants for #914's three shapes (project, project+cycle, project+cycle+version):
+#   - version-scoped events (release, archive, withdraw) carry both version_key
+#     and cycle_key (the release's cycle), so cycle history queries find them.
+#   - cycle-scoped events (eod, eos, eol) carry cycle_key only.
+#   - project-scoped events (none today) would carry neither.
+class LifecycleEvent(sqlmodel.SQLModel, table=True):
+    id: int | None = sqlmodel.Field(default=None, primary_key=True)
+
+    project_key: str = sqlmodel.Field(foreign_key="project.key", ondelete="CASCADE", **example("example"))
+
+    cycle_key: str | None = sqlmodel.Field(
+        default=None, foreign_key="projectcycle.cycle_key", **example("example-default")
+    )
+
+    version_key: str | None = sqlmodel.Field(
+        default=None, foreign_key="release.key", ondelete="CASCADE", **example("example-0.0.1")
+    )
+
+    event: LifecycleEventType = sqlmodel.Field(**example(LifecycleEventType.RELEASE))
+
+    # When the event takes effect. Past for things that have happened, future for
+    # planned milestones such as a planned eol date years out.
+    effective: datetime.datetime = sqlmodel.Field(
+        sa_column=sqlalchemy.Column(UTCDateTime, nullable=False),
+        **example(datetime.datetime(2026, 1, 15, 1, 2, 3, tzinfo=datetime.UTC)),
+    )
+
+    # When the row was recorded. Maps to ECMA-428 `published` and orders the
+    # spec id sequence, so retroactive entries get later ids than older ones.
+    published: datetime.datetime = sqlmodel.Field(
+        default_factory=lambda: datetime.datetime.now(datetime.UTC),
+        sa_column=sqlalchemy.Column(UTCDateTime, nullable=False),
+    )
+
+    # Set only on withdraw rows; points at the event being retracted.
+    target_event_id: int | None = sqlmodel.Field(default=None, foreign_key="lifecycleevent.id", index=True)
+
+    # Supporting links: vote thread, announce@ message, GitHub issue, etc.
+    reference_urls: list[str] = sqlmodel.Field(
+        default_factory=list,
+        sa_column=sqlalchemy.Column(sqlalchemy.JSON, nullable=False),
+        **example([]),
+    )
+
+    __table_args__ = (
+        sqlalchemy.Index("ix_lifecycleevent_project_event", "project_key", "event"),
+        sqlalchemy.Index("ix_lifecycleevent_cycle_event", "cycle_key", "event"),
+        sqlalchemy.Index("ix_lifecycleevent_version_event", "version_key", "event"),
+    )
+
+
+# BallotPaper: Release
+class BallotPaper(sqlmodel.SQLModel, table=True):
+    id: int | None = sqlmodel.Field(default=None, primary_key=True)
+
+    # M-1: BallotPaper -> Release
+    # 1-M: Release -C-> [BallotPaper]
+    release_key: str = sqlmodel.Field(foreign_key="release.key", ondelete="CASCADE", index=True)
+    release: Release = sqlmodel.Relationship(back_populates="ballot_papers")
+
+    vote_seq: int
+    vote_round: int | None = None
+    voter_asf_uid: str
+    voter_fullname: str
+    choice: VoteChoice
+    comment: str = sqlmodel.Field(default="")
+    is_binding_at_cast: bool
+    revision_number_at_cast: str
+    receipt_message_id: str
+    created: datetime.datetime = sqlmodel.Field(
+        default_factory=lambda: datetime.datetime.now(datetime.UTC),
+        sa_column=sqlalchemy.Column(UTCDateTime, nullable=False),
+    )
+
+    def model_post_init(self, _context):
+        if isinstance(self.choice, str):
+            self.choice = VoteChoice(self.choice)
+
+        if isinstance(self.created, str):
+            self.created = datetime.datetime.fromisoformat(self.created.rstrip("Z"))
+
+    @property
+    def safe_revision_number_at_cast(self) -> safe.RevisionNumber:
+        """Get the typesafe validated revision number recorded when the ballot was cast"""
+        return safe.RevisionNumber(self.revision_number_at_cast)
+
+    __table_args__ = (
+        sqlalchemy.Index(
+            "ix_ballotpaper_release_vote_round_voter_id",
+            "release_key",
+            "vote_seq",
+            "vote_round",
+            "voter_asf_uid",
+            "id",
+        ),
+        sqlalchemy.Index("ix_ballotpaper_receipt_message_id", "receipt_message_id", unique=True),
+        sqlalchemy.Index("ix_ballotpaper_release_vote_seq", "release_key", "vote_seq"),
+    )
 
 
 # CheckResult: Release
@@ -1139,7 +1626,7 @@ class CheckResult(sqlmodel.SQLModel, table=True):
         sa_column=sqlalchemy.Column(UTCDateTime, nullable=False),
         **example(datetime.datetime(2025, 5, 1, 1, 2, 3, tzinfo=datetime.UTC)),
     )
-    status: CheckResultStatus = sqlmodel.Field(default=CheckResultStatus.SUCCESS, **example(CheckResultStatus.SUCCESS))
+    status: CheckResultStatus = sqlmodel.Field(default=CheckResultStatus.NOTE, **example(CheckResultStatus.NOTE))
     message: str = sqlmodel.Field(**example("sha512 matches for apache-example-0.0.1/pom.xml"))
     data: Any = sqlmodel.Field(
         sa_column=sqlalchemy.Column(sqlalchemy.JSON), **example({"expected": "...", "found": "..."})
@@ -1168,7 +1655,7 @@ class CheckResultIgnore(sqlmodel.SQLModel, table=True):
     member_rel_path_glob: str | None = sqlmodel.Field(**example("apache-example-0.0.1/*.xml"))
     status: CheckResultStatusIgnore | None = sqlmodel.Field(
         default=None,
-        **example(CheckResultStatusIgnore.FAILURE),
+        **example(CheckResultStatusIgnore.CONCERN),
     )
     message_glob: str | None = sqlmodel.Field(**example("sha512 matches for apache-example-0.0.1/*.xml"))
 
@@ -1202,7 +1689,7 @@ class Distribution(sqlmodel.SQLModel, table=True):
 
         return distribution.Data(
             platform=self.platform,
-            owner_namespace=safe.Alphanumeric(self.owner_namespace),
+            owner_namespace=safe.OwnerNamespace(self.owner_namespace),
             package=safe.Alphanumeric(self.package),
             version=safe.VersionKey(self.version),
             details=details,
@@ -1351,6 +1838,9 @@ class ReleaseFileState(sqlmodel.SQLModel, table=True):
     present: bool = sqlmodel.Field(**example(True))
     content_hash: str | None = sqlmodel.Field(default=None, **example("blake3:7f83b1657ff1fc..."))
     classification: str | None = sqlmodel.Field(default=None, **example("source"))
+    provenance: dict[str, Any] | None = sqlmodel.Field(
+        default=None, sa_column=sqlalchemy.Column(SafeJSON, nullable=True)
+    )
 
     __table_args__ = (
         sqlalchemy.ForeignKeyConstraint(
@@ -1363,7 +1853,7 @@ class ReleaseFileState(sqlmodel.SQLModel, table=True):
             (
                 (present = 1 AND content_hash IS NOT NULL AND classification IS NOT NULL)
                 OR
-                (present = 0 AND content_hash IS NULL AND classification IS NULL)
+                (present = 0 AND content_hash IS NULL AND classification IS NULL AND provenance IS NULL)
             )
             """,
             name="valid_release_file_state",
@@ -1371,18 +1861,64 @@ class ReleaseFileState(sqlmodel.SQLModel, table=True):
     )
 
 
+# Artifact: Project, Release, Signing Key
+class Artifact(sqlmodel.SQLModel, table=True):
+    project_key: str = sqlmodel.Field(
+        primary_key=True, foreign_key="project.key", ondelete="CASCADE", **example("example")
+    )
+    version: str = sqlmodel.Field(primary_key=True, **example("0.0.1"))
+    artifact_path: str = sqlmodel.Field(primary_key=True, **example("apache-example-0.0.1.tar.gz"))
+    # Link to ATR release record when one exists - null for historical SVN artifacts
+    release_key: str | None = sqlmodel.Field(
+        default=None, foreign_key="release.key", ondelete="CASCADE", index=True, **example("example-0.0.1")
+    )
+    # Fingerprint of the GPG public key used to sign the artifact
+    key_fingerprint: str | None = sqlmodel.Field(
+        default=None,
+        foreign_key="publicsigningkey.fingerprint",
+        ondelete="SET NULL",
+        index=True,
+        **example("0123456789abcdef0123456789abcdef01234567"),
+    )
+    # Path to the .asc detached signature file
+    signature_path: str | None = sqlmodel.Field(default=None, **example("apache-example-0.0.1.tar.gz.asc"))
+    # Path to the strongest available checksum file (SHA-512 preferred over SHA-256 over MD5)
+    checksum_path: str | None = sqlmodel.Field(default=None, **example("apache-example-0.0.1.tar.gz.sha512"))
+    # Path to the paired CycloneDX SBOM, if one rides alongside the artifact (.cdx.json preferred over .cdx.xml)
+    sbom_path: str | None = sqlmodel.Field(default=None, **example("apache-example-0.0.1.tar.gz.cdx.json"))
+    classification: str | None = sqlmodel.Field(default=None, **example("source"))
+    # Per-artifact SVN revision - not all artifacts in a release are added in the same commit
+    svn_revision: int | None = sqlmodel.Field(default=None, index=True, **example(12345))
+    # The release's path under the committee downloads dir, needed to build the public
+    # download URLs. NULL means the files sit directly under the committee dir.
+    download_path_suffix: str | None = sqlmodel.Field(default=None, **example("example/0.0.1"))
+
+    # M-1: Artifact -> Release
+    # 1-M: Release -> [Artifact]
+    release: Release | None = sqlmodel.Relationship(back_populates="artifacts")
+
+    @property
+    def safe_version_key(self) -> safe.VersionKey:
+        """Get the typesafe validated version for the Artifact"""
+        return safe.VersionKey(self.version)
+
+
 # ReleasePolicy: Project
 class ReleasePolicy(sqlmodel.SQLModel, table=True):
     id: int = sqlmodel.Field(default=None, primary_key=True)
-    mailto_addresses: list[str] = sqlmodel.Field(
-        default_factory=list, sa_column=sqlalchemy.Column(sqlalchemy.JSON, nullable=False)
+    # Default email recipients per action, keyed by action ("vote", "announce").
+    # Each entry is {"to": str, "cc": list[str], "bcc": list[str]}. Stored values
+    # are advisory: any address that isn't permitted at send time is dropped.
+    recipient_defaults: dict[str, Any] = sqlmodel.Field(
+        default_factory=dict, sa_column=sqlalchemy.Column(sqlalchemy.JSON, nullable=False)
     )
-    manual_vote: bool = sqlmodel.Field(default=False)
+    vote_mode: VoteMode = sqlmodel.Field(default=VoteMode.EMAIL)
     min_hours: int | None = sqlmodel.Field(default=None)
     release_checklist: str = sqlmodel.Field(default="")
     vote_comment_template: str = sqlmodel.Field(default="")
     start_vote_subject: str = sqlmodel.Field(default="")
     start_vote_template: str = sqlmodel.Field(default="")
+    finish_vote_template: str = sqlmodel.Field(default="")
     announce_release_subject: str = sqlmodel.Field(default="")
     announce_release_template: str = sqlmodel.Field(default="")
     binary_artifact_paths: list[str] = sqlmodel.Field(
@@ -1412,6 +1948,7 @@ class ReleasePolicy(sqlmodel.SQLModel, table=True):
     github_finish_workflow_path: list[str] = sqlmodel.Field(
         default_factory=list, sa_column=sqlalchemy.Column(sqlalchemy.JSON, nullable=False)
     )
+    auto_archive_prior_release: bool = sqlmodel.Field(default=False)
     preserve_download_files: bool = sqlmodel.Field(default=False)
 
     # 1-1: ReleasePolicy -> Project
@@ -1421,13 +1958,14 @@ class ReleasePolicy(sqlmodel.SQLModel, table=True):
     def duplicate(self) -> "ReleasePolicy":
         # Cannot call this .copy because that's an existing BaseModel method
         return ReleasePolicy(
-            mailto_addresses=list(self.mailto_addresses),
-            manual_vote=self.manual_vote,
+            recipient_defaults=copy.deepcopy(self.recipient_defaults),
+            vote_mode=self.vote_mode,
             min_hours=self.min_hours,
             release_checklist=self.release_checklist,
             vote_comment_template=self.vote_comment_template,
             start_vote_subject=self.start_vote_subject,
             start_vote_template=self.start_vote_template,
+            finish_vote_template=self.finish_vote_template,
             announce_release_subject=self.announce_release_subject,
             announce_release_template=self.announce_release_template,
             binary_artifact_paths=list(self.binary_artifact_paths),
@@ -1438,8 +1976,10 @@ class ReleasePolicy(sqlmodel.SQLModel, table=True):
             github_repository_name=self.github_repository_name,
             github_repository_branch=self.github_repository_branch,
             github_compose_workflow_path=list(self.github_compose_workflow_path),
+            file_tag_mappings=dict(self.file_tag_mappings),
             github_vote_workflow_path=list(self.github_vote_workflow_path),
             github_finish_workflow_path=list(self.github_finish_workflow_path),
+            auto_archive_prior_release=self.auto_archive_prior_release,
             preserve_download_files=self.preserve_download_files,
         )
 
@@ -1511,7 +2051,8 @@ class Revision(sqlmodel.SQLModel, table=True):
 
 # User
 class User(sqlmodel.SQLModel, table=True):
-    asfuid: str = sqlmodel.Field(primary_key=True, default=None, **example("user"))
+    asfuid: str = sqlmodel.Field(primary_key=True, **example("user"))
+    name: str | None = sqlmodel.Field(default=None, **example("Alice Example"))
     preferences: UserPreferencesEntry = sqlmodel.Field(
         default_factory=UserPreferencesEntry, sa_column=sqlalchemy.Column(UserPreferencesJSON, nullable=False)
     )
@@ -1572,6 +2113,24 @@ def populate_revision_sequence_and_key(
     parent_row = connection.execute(parent_stmt).fetchone()
     if parent_row is not None:
         revision.parent_key = parent_row[0]
+
+
+@event.listens_for(Project, "after_insert")
+def populate_default_project_cycle(_mapper: orm.Mapper, connection: sqlalchemy.Connection, project: Project) -> None:
+    # Every project gets a "default" cycle automatically so Release.cycle_key
+    # has a valid FK target without writers having to do the bookkeeping. For
+    # "simple" projects this is the only cycle they'll ever have; semver and
+    # calver projects get additional cycles when versions match cycle_match.
+    connection.execute(
+        sqlite.insert(ProjectCycle)
+        .values(
+            cycle_key=f"{project.key}-default",
+            cycle="default",
+            project_key=project.key,
+            lts=False,
+        )
+        .on_conflict_do_nothing(index_elements=["cycle_key"])
+    )
 
 
 @event.listens_for(Release, "before_insert")

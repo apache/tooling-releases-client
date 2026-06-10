@@ -29,9 +29,10 @@ $ atr upload test-client 0.3+slow deliberately_slow_ATR_task_filename.txt <!conf
 ! atr vote start test-client 0.3+slow 00002 -m "<!user!>@apache.org"
 <.stderr.>
 atr: error: Error message from the API:
-400 https://localhost.apache.org:8080/api/vote/start
+409 https://localhost.apache.org:8080/api/vote/start
 {
-  "error": "All checks must be completed before starting a vote"
+  "error": "All checks must be completed before starting a vote",
+  "request_id": "<.skip.>"
 }
 
 <# tidy up #>

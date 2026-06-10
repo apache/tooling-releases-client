@@ -16,8 +16,23 @@
 # under the License.
 
 import pathlib
+import types
+from typing import Any
 
+import aiohttp
+import aioresponses.core
 import pytest
+
+
+class ClientResponseShim(aiohttp.ClientResponse):
+    # As of aiohttp 3.14, stream_writer is now a required argument
+    # Since aioresponses does not yet pass it as of 0.7.8, we need this shim
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
+        kwargs.setdefault("stream_writer", types.SimpleNamespace(output_size=0))
+        super().__init__(*args, **kwargs)
+
+
+setattr(aioresponses.core, "ClientResponse", ClientResponseShim)
 
 
 @pytest.fixture

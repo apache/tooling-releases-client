@@ -432,7 +432,7 @@ def app_distribution_record(
         project=models.safe.ProjectKey(project),
         version=models.safe.VersionKey(version),
         platform=platform_member,
-        distribution_owner_namespace=models.safe.Alphanumeric(distribution_owner_namespace)
+        distribution_owner_namespace=models.safe.OwnerNamespace(distribution_owner_namespace)
         if distribution_owner_namespace
         else None,
         distribution_package=models.safe.Alphanumeric(distribution_package),
@@ -752,8 +752,13 @@ def app_upload(project: str, version: str, path: str, filepath: str, /) -> None:
         content=base64.b64encode(content).decode("utf-8"),
     )
 
+    revision_before = api.release_get(project, version).release.latest_revision_number
     upload = api.release_upload(upload_args)
-    print(upload.revision.model_dump_json(indent=None))
+    if upload is not None:
+        print(upload.revision.model_dump_json(indent=None))
+        return
+    revision = upload_quarantine_wait(project, version, revision_before)
+    print(revision.model_dump_json(indent=None))
 
 
 @APP.command(name="verify", help="Verify an artifact.")
@@ -845,6 +850,7 @@ def app_vote_start(
     duration: Annotated[int, cyclopts.Parameter(alias="-d", name="--duration")] = 72,
     subject: Annotated[str | None, cyclopts.Parameter(alias="-s", name="--subject")] = None,
     body: Annotated[str | None, cyclopts.Parameter(alias="-b", name="--body")] = None,
+    concerns_noted: Annotated[str | None, cyclopts.Parameter(alias="-c", name="--concerns-noted")] = None,
 ) -> None:
     body_text = None
     if body:
@@ -859,6 +865,7 @@ def app_vote_start(
         vote_duration=duration,
         subject=subject or f"[VOTE] Release {project} {version}",
         body=body_text or f"Release {project} {version} is ready for voting.",
+        concerns_noted=concerns_noted.split(",") if concerns_noted else [],
     )
     vote_start = api.vote_start(vote_start_args)
     print(vote_start.task.model_dump_json(indent=None))
@@ -1076,6 +1083,23 @@ def timestamp_format(ts: int | str | None) -> str | None:
         return dt.strftime("%d %b %Y at %H:%M:%S UTC")
     except Exception:
         return str(ts)
+
+
+def upload_quarantine_wait(
+    project: str, version: str, revision_before: str | None, timeout: float = 60
+) -> models.sql.Revision:
+    print("Upload quarantined pending archive validation.")
+    interval_seconds = 0.5
+    while timeout > 0:
+        revision_number = api.release_get(project, version).release.latest_revision_number
+        if isinstance(revision_number, str) and (revision_number != revision_before):
+            revisions = api.release_revisions(project, version).revisions
+            for revision in revisions:
+                if revision.number == revision_number:
+                    return revision
+        time.sleep(interval_seconds)
+        timeout -= interval_seconds
+    show.error_and_exit("Timeout waiting for archive validation to complete.")
 
 
 def verify_summary(

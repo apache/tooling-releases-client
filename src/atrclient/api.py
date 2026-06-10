@@ -218,10 +218,17 @@ def release_revisions(api: ApiGet, project: str, version: str) -> models.api.Rel
     return models.api.validate_release_revisions(response)
 
 
-@post("/release/upload")
-def release_upload(api: ApiPost, args: models.api.ReleaseUploadArgs) -> models.api.ReleaseUploadResults:
-    response = api.post(args)
-    return models.api.validate_release_upload(response)
+def release_upload(args: models.api.ReleaseUploadArgs) -> models.api.ReleaseUploadResults | None:
+    # Not decorated with @post because a quarantined upload gives a 202 response
+    # Since the 202 has no corresponding Results model, the return here is None
+    api_instance = ApiPost("/release/upload")
+    try:
+        response = api_instance.post(args)
+        if isinstance(response, dict) and (response.get("quarantined") is True):
+            return None
+        return models.api.validate_release_upload(response)
+    except (pydantic.ValidationError, models.api.ResultsTypeError) as e:
+        show.error_and_exit(f"Unexpected API POST response: {e}")
 
 
 @post("/signature/provenance")

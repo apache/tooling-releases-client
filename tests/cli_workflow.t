@@ -26,30 +26,40 @@ test-client-0.3+cli
 $ atr release start test-client 0.3+cli
 <.skip.>created<.skip.>
 
-$ atr config path
-<?config_rel_path?>
+<# associate the test signing key with the test committee, tolerating errors #>
+* atr key add ATR_Test_0x1913BD07F118B758_public.asc test
+<.etc.>
 
-$ atr upload test-client 0.3+cli atr-client.conf <!config_rel_path!>
+$ atr upload test-client 0.3+cli apache-test-0.2.tar.gz apache-test-0.2.tar.gz
+Upload quarantined pending archive validation.
+<.skip.>created<.skip.>
+
+$ atr upload test-client 0.3+cli apache-test-0.2.tar.gz.sha512 apache-test-0.2.tar.gz.sha512
+<.skip.>created<.skip.>
+
+$ atr upload test-client 0.3+cli apache-test-0.2.tar.gz.asc apache-test-0.2.tar.gz.asc
 <.skip.>created<.skip.>
 
 $ atr check wait test-client 0.3+cli -i 25
 Checks completed.
 
 $ atr check status test-client 0.3+cli
-Total checks: 1
-  failure: 1
+Total checks: 13
+  note: 10
+  concern: 3
 
-$ atr check status test-client 0.3+cli 00002
-Total checks: 1
-  failure: 1
+$ atr check status test-client 0.3+cli 00004
+Total checks: 13
+  note: 10
+  concern: 3
 
-$ atr vote start test-client 0.3+cli 00002 -m "<!user!>@apache.org"
+$ atr vote start test-client 0.3+cli 00004 -m "<!user!>@apache.org" --concerns-noted atr.tasks.checks.rat.check
 <.skip.>"email_to":"<!user!>@apache.org"<.skip.>
 
 $ atr vote resolve test-client 0.3+cli failed
 Vote marked as failed.
 
-$ atr vote start test-client 0.3+cli 00002 -m "<!user!>@apache.org"
+$ atr vote start test-client 0.3+cli 00004 -m "<!user!>@apache.org" --concerns-noted atr.tasks.checks.rat.check
 <.skip.>"email_to":"<!user!>@apache.org"<.skip.>
 
 $ atr vote resolve test-client 0.3+cli passed
@@ -58,7 +68,7 @@ Vote marked as passed.
 $ atr distribution record test-client 0.3+cli NPM None react 18.2.0 False False
 Distribution recorded.
 
-$ atr announce test-client 0.3+cli 00003 -m "<!user!>@apache.org" -b "Release test-client 0.3+cli has been announced."
+$ atr announce test-client 0.3+cli 00005 -m "<!user!>@apache.org" -b "Release test-client 0.3+cli has been announced."
 Announcement sent.
 
 <# tidy up #>
