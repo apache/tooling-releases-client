@@ -74,3 +74,14 @@ Announcement sent.
 <# tidy up #>
 * atr dev delete test-client 0.3+cli
 <.etc.>
+
+<# regression test for atr draft delete #>
+<# delete any existing draft, ignoring errors #>
+* atr dev delete test-client 0.3+draft
+<.etc.>
+
+$ atr release start test-client 0.3+draft
+<.skip.>created<.skip.>
+
+$ atr draft delete test-client 0.3+draft
+True
