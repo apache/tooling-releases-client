@@ -114,6 +114,12 @@ def checks_ongoing(
     return models.api.validate_checks_ongoing(response)
 
 
+@get("/distribution/list")
+def distribution_list(api: ApiGet, project: str, version: str) -> models.api.DistributionListResults:
+    response = api.get(project, version)
+    return models.api.validate_distribution_list(response)
+
+
 @post("/distribution/record")
 def distribution_record(api: ApiPost, args: models.api.DistributionRecordArgs) -> models.api.DistributionRecordResults:
     response = api.post(args)

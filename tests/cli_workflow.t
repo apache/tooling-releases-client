@@ -68,6 +68,9 @@ Vote marked as passed.
 $ atr distribution record test-client 0.3+cli NPM None react 18.2.0 False False
 Distribution recorded.
 
+$ atr distribution list test-client 0.3+cli
+<.skip.>react@18.2.0<.skip.>
+
 $ atr announce test-client 0.3+cli 00005 -m "<!user!>@apache.org" -b "Release test-client 0.3+cli has been announced."
 Announcement sent.
 

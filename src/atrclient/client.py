@@ -479,6 +479,15 @@ def app_distribution_record(
     print("Distribution recorded.")
 
 
+@APP_DISTRIBUTION.command(name="list", help="List recorded distributions for a release.")
+def app_distribution_list(project: str, version: str, /) -> None:
+    result = api.distribution_list(project, version)
+    for d in result.distributions:
+        staging = " (staging)" if d.staging else ""
+        pending = " (pending)" if d.pending else ""
+        print(f"{d.platform} {d.owner_namespace or '-'}/{d.package}@{d.version}{staging}{pending}")
+
+
 @APP.command(name="docs", help="Show comprehensive CLI documentation in Markdown.")
 def app_docs() -> None:
     old_help_format = APP.help_format

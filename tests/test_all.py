@@ -270,6 +270,60 @@ def test_app_release_list_success(capsys: pytest.CaptureFixture[str], fixture_co
         assert "2.3.0" in captured.out
 
 
+def test_app_distribution_list_success(capsys: pytest.CaptureFixture[str], fixture_config_env: pathlib.Path) -> None:
+    client.app_set("atr.host", "example.invalid")
+
+    distributions_url = "https://example.invalid/api/distribution/list/test-project/2.3.1"
+
+    payload = {
+        "endpoint": "/distribution/list",
+        "distributions": [
+            {
+                "platform": "ARTIFACT_HUB",
+                "owner_namespace": "acme",
+                "package": "widget",
+                "version": "0.0.1",
+                "staging": False,
+                "pending": True,
+                "upload_date": "2026-06-15T12:00:00+00:00",
+                "api_url": "https://api.example/x",
+                "web_url": "https://web.example/x",
+            },
+            {
+                "platform": "NPM",
+                "owner_namespace": "",
+                "package": "thing",
+                "version": "1.2.3",
+                "staging": True,
+                "pending": False,
+            },
+        ],
+    }
+
+    with aioresponses.aioresponses() as mock:
+        mock.get(distributions_url, status=200, payload=payload)
+
+        client.app_distribution_list("test-project", "2.3.1")
+
+        captured = capsys.readouterr()
+        assert "ARTIFACT_HUB acme/widget@0.0.1 (pending)" in captured.out
+        assert "NPM -/thing@1.2.3 (staging)" in captured.out
+
+
+def test_app_distribution_list_empty(capsys: pytest.CaptureFixture[str], fixture_config_env: pathlib.Path) -> None:
+    client.app_set("atr.host", "example.invalid")
+    capsys.readouterr()
+
+    distributions_url = "https://example.invalid/api/distribution/list/test-project/2.3.1"
+
+    with aioresponses.aioresponses() as mock:
+        mock.get(distributions_url, status=200, payload={"endpoint": "/distribution/list", "distributions": []})
+
+        client.app_distribution_list("test-project", "2.3.1")
+
+        assert capsys.readouterr().out == ""
+
+
 def test_app_set_show(capsys: pytest.CaptureFixture[str], fixture_config_env: pathlib.Path) -> None:
     client.app_set("atr.host", "example.invalid")
     client.app_show("atr.host")
