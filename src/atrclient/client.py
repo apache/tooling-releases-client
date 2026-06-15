@@ -884,6 +884,7 @@ def app_vote_start(
     subject: Annotated[str | None, cyclopts.Parameter(alias="-s", name="--subject")] = None,
     body: Annotated[str | None, cyclopts.Parameter(alias="-b", name="--body")] = None,
     concerns_noted: Annotated[str | None, cyclopts.Parameter(alias="-c", name="--concerns-noted")] = None,
+    auto_publish: Annotated[bool, cyclopts.Parameter(name="--auto-publish")] = False,
 ) -> None:
     body_text = None
     if body:
@@ -899,6 +900,7 @@ def app_vote_start(
         subject=subject or f"[VOTE] Release {project} {version}",
         body=body_text or f"Release {project} {version} is ready for voting.",
         concerns_noted=concerns_noted.split(",") if concerns_noted else [],
+        automatic_publish_when_resolved=auto_publish,
     )
     vote_start = api.vote_start(vote_start_args)
     print(vote_start.task.model_dump_json(indent=None))
