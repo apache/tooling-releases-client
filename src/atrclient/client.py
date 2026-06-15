@@ -68,6 +68,15 @@ VERSION: str = metadata.version("apache-trusted-releases")
 
 type JSON = dict[str, Any] | list[Any] | str | int | float | bool | None
 
+CHECK_DETAIL_STATUSES: frozenset[models.sql.CheckResultStatus] = frozenset(
+    {
+        models.sql.CheckResultStatus.BLOCKER,
+        models.sql.CheckResultStatus.CONCERN,
+        models.sql.CheckResultStatus.EXCEPTION,
+        models.sql.CheckResultStatus.SUGGESTION,
+    }
+)
+
 
 class ForceUnexpiredOpenPGPKey(pgpy.PGPKey):
     def __init__(self, *args: Any, **kwargs: Any) -> None:
@@ -139,6 +148,30 @@ def app_api_post(path: str, /, **kwargs: str) -> None:
     show.json_or_message(json_data)
 
 
+@APP_CHECK.command(name="blockers", help="Get check blockers for a release revision.")
+def app_check_blockers(
+    project: str,
+    version: str,
+    revision: str,
+    /,
+    members: Annotated[bool, cyclopts.Parameter(alias="-m", name="--members")] = False,
+) -> None:
+    checks_list = api.checks_list(project, version, revision)
+    checks_display_status(models.sql.CheckResultStatus.BLOCKER, checks_list.checks, members=members)
+
+
+@APP_CHECK.command(name="concerns", help="Get check concerns for a release revision.")
+def app_check_concerns(
+    project: str,
+    version: str,
+    revision: str,
+    /,
+    members: Annotated[bool, cyclopts.Parameter(alias="-m", name="--members")] = False,
+) -> None:
+    checks_list = api.checks_list(project, version, revision)
+    checks_display_status(models.sql.CheckResultStatus.CONCERN, checks_list.checks, members=members)
+
+
 @APP_CHECK.command(name="exceptions", help="Get check exceptions for a release revision.")
 def app_check_exceptions(
     project: str,
@@ -148,11 +181,11 @@ def app_check_exceptions(
     members: Annotated[bool, cyclopts.Parameter(alias="-m", name="--members")] = False,
 ) -> None:
     checks_list = api.checks_list(project, version, revision)
-    checks_display_status("exception", checks_list.checks, members=members)
+    checks_display_status(models.sql.CheckResultStatus.EXCEPTION, checks_list.checks, members=members)
 
 
-@APP_CHECK.command(name="failures", help="Get check failures for a release revision.")
-def app_check_failures(
+@APP_CHECK.command(name="notes", help="Get check notes for a release revision.")
+def app_check_notes(
     project: str,
     version: str,
     revision: str,
@@ -160,7 +193,7 @@ def app_check_failures(
     members: Annotated[bool, cyclopts.Parameter(alias="-m", name="--members")] = False,
 ) -> None:
     checks_list = api.checks_list(project, version, revision)
-    checks_display_status("failure", checks_list.checks, members=members)
+    checks_display_status(models.sql.CheckResultStatus.NOTE, checks_list.checks, members=members)
 
 
 @APP_CHECK.command(name="status", help="Get check status for a release revision.")
@@ -190,6 +223,18 @@ def app_check_status(
     checks_display(checks_list.checks, verbose)
 
 
+@APP_CHECK.command(name="suggestions", help="Get check suggestions for a release revision.")
+def app_check_suggestions(
+    project: str,
+    version: str,
+    revision: str,
+    /,
+    members: Annotated[bool, cyclopts.Parameter(alias="-m", name="--members")] = False,
+) -> None:
+    checks_list = api.checks_list(project, version, revision)
+    checks_display_status(models.sql.CheckResultStatus.SUGGESTION, checks_list.checks, members=members)
+
+
 @APP_CHECK.command(name="wait", help="Wait for checks to be completed.")
 def app_check_wait(
     project: str,
@@ -215,18 +260,6 @@ def app_check_wait(
         if timeout <= 0:
             show.error_and_exit("Timeout waiting for checks to complete.")
     print("Checks completed.")
-
-
-@APP_CHECK.command(name="warnings", help="Get check warnings for a release revision.")
-def app_check_warnings(
-    project: str,
-    version: str,
-    revision: str,
-    /,
-    members: Annotated[bool, cyclopts.Parameter(alias="-m", name="--members")] = False,
-) -> None:
-    checks_list = api.checks_list(project, version, revision)
-    checks_display_status("warning", checks_list.checks, members=members)
 
 
 @APP_CONFIG.command(name="file", help="Display the configuration file contents.")
@@ -898,14 +931,14 @@ def checks_display_details(by_status: dict[str, list[models.sql.CheckResult]], v
     if not verbose:
         return
     for status_key in by_status.keys():
-        if status_key.upper() not in ["FAILURE", "EXCEPTION", "WARNING"]:
+        if status_key not in CHECK_DETAIL_STATUSES:
             continue
         print(f"\n{status_key}:")
         checks_display_verbose_details(by_status[status_key])
 
 
 def checks_display_status(
-    status: Literal["failure", "exception", "warning"],
+    status: models.sql.CheckResultStatus,
     results: Sequence[models.sql.CheckResult],
     members: bool,
 ) -> None:
@@ -939,7 +972,7 @@ def checks_display_status(
 def checks_display_summary(by_status: dict[str, list[models.sql.CheckResult]], verbose: bool, total: int) -> None:
     print(f"Total checks: {total}")
     for status, checks in by_status.items():
-        if verbose and status.upper() in ["FAILURE", "EXCEPTION", "WARNING"]:
+        if verbose and status in CHECK_DETAIL_STATUSES:
             top = sum(r.member_rel_path is None for r in checks)
             inner = len(checks) - top
             print(f"  {status}: {len(checks)} (top-level {top}, inner {inner})")

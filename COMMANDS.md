@@ -50,11 +50,47 @@ Usage: check COMMAND
 Check result operations.
 
 ╭─ Commands ───────────────────────────────────────────────────────────────────────────────────────────────────────────╮
-│ exceptions  Get check exceptions for a release revision.                                                             │
-│ failures    Get check failures for a release revision.                                                               │
-│ status      Get check status for a release revision.                                                                 │
-│ wait        Wait for checks to be completed.                                                                         │
-│ warnings    Get check warnings for a release revision.                                                               │
+│ blockers     Get check blockers for a release revision.                                                              │
+│ concerns     Get check concerns for a release revision.                                                              │
+│ exceptions   Get check exceptions for a release revision.                                                            │
+│ notes        Get check notes for a release revision.                                                                 │
+│ status       Get check status for a release revision.                                                                │
+│ suggestions  Get check suggestions for a release revision.                                                           │
+│ wait         Wait for checks to be completed.                                                                        │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+```
+
+### atr check blockers
+
+```
+Usage: blockers [ARGS] [OPTIONS]
+
+Get check blockers for a release revision.
+
+╭─ Arguments ──────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│ *  PROJECT   [required]                                                                                              │
+│ *  VERSION   [required]                                                                                              │
+│ *  REVISION  [required]                                                                                              │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+╭─ Parameters ─────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│ MEMBERS --members --no-members  -m  [default: False]                                                                 │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+```
+
+### atr check concerns
+
+```
+Usage: concerns [ARGS] [OPTIONS]
+
+Get check concerns for a release revision.
+
+╭─ Arguments ──────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│ *  PROJECT   [required]                                                                                              │
+│ *  VERSION   [required]                                                                                              │
+│ *  REVISION  [required]                                                                                              │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+╭─ Parameters ─────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│ MEMBERS --members --no-members  -m  [default: False]                                                                 │
 ╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
 ```
 
@@ -75,12 +111,12 @@ Get check exceptions for a release revision.
 ╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
 ```
 
-### atr check failures
+### atr check notes
 
 ```
-Usage: failures [ARGS] [OPTIONS]
+Usage: notes [ARGS] [OPTIONS]
 
-Get check failures for a release revision.
+Get check notes for a release revision.
 
 ╭─ Arguments ──────────────────────────────────────────────────────────────────────────────────────────────────────────╮
 │ *  PROJECT   [required]                                                                                              │
@@ -109,6 +145,23 @@ Get check status for a release revision.
 ╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
 ```
 
+### atr check suggestions
+
+```
+Usage: suggestions [ARGS] [OPTIONS]
+
+Get check suggestions for a release revision.
+
+╭─ Arguments ──────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│ *  PROJECT   [required]                                                                                              │
+│ *  VERSION   [required]                                                                                              │
+│ *  REVISION  [required]                                                                                              │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+╭─ Parameters ─────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│ MEMBERS --members --no-members  -m  [default: False]                                                                 │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+```
+
 ### atr check wait
 
 ```
@@ -124,23 +177,6 @@ Wait for checks to be completed.
 │ REVISION --revision                                                                                                  │
 │ TIMEOUT --timeout    -t  [default: 60]                                                                               │
 │ INTERVAL --interval  -i  [default: 500]                                                                              │
-╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
-```
-
-### atr check warnings
-
-```
-Usage: warnings [ARGS] [OPTIONS]
-
-Get check warnings for a release revision.
-
-╭─ Arguments ──────────────────────────────────────────────────────────────────────────────────────────────────────────╮
-│ *  PROJECT   [required]                                                                                              │
-│ *  VERSION   [required]                                                                                              │
-│ *  REVISION  [required]                                                                                              │
-╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
-╭─ Parameters ─────────────────────────────────────────────────────────────────────────────────────────────────────────╮
-│ MEMBERS --members --no-members  -m  [default: False]                                                                 │
 ╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
 ```
 

@@ -116,33 +116,33 @@ def test_app_checks_status_verbose(capsys: pytest.CaptureFixture[str], fixture_c
                 "release_name": "test-project-2.3.1",
                 "revision_number": "00003",
                 "created": "2025-01-01T00:00:00Z",
-                "status": "failure",
+                "status": "blocker",
                 "checker": "test_checker1",
                 "primary_rel_path": "file1.txt",
                 "member_rel_path": None,
-                "message": "Test failure 1",
+                "message": "Test blocker 1",
                 "data": None,
             },
             {
                 "release_name": "test-project-2.3.1",
                 "revision_number": "00003",
                 "created": "2025-01-01T00:00:00Z",
-                "status": "failure",
+                "status": "blocker",
                 "checker": "test_checker2",
                 "primary_rel_path": "file2.txt",
                 "member_rel_path": "inner.txt",
-                "message": "Test failure 2",
+                "message": "Test blocker 2",
                 "data": None,
             },
             {
                 "release_name": "test-project-2.3.1",
                 "revision_number": "00003",
                 "created": "2025-01-01T00:00:00Z",
-                "status": "success",
+                "status": "note",
                 "checker": "test_checker3",
                 "primary_rel_path": "file3.txt",
                 "member_rel_path": None,
-                "message": "Test success",
+                "message": "Test note",
                 "data": None,
             },
         ],
@@ -156,8 +156,60 @@ def test_app_checks_status_verbose(capsys: pytest.CaptureFixture[str], fixture_c
 
         captured = capsys.readouterr()
         assert "(top-level" in captured.out
-        assert "failure: 2 (top-level 1, inner 1)" in captured.out
-        assert "test_checker1 → file1.txt : Test failure 1" in captured.out
+        assert "blocker: 2 (top-level 1, inner 1)" in captured.out
+        assert "  note: 1\n" in captured.out
+        assert "test_checker1 → file1.txt : Test blocker 1" in captured.out
+
+
+def test_app_check_bucket_commands_list_results(
+    capsys: pytest.CaptureFixture[str], fixture_config_env: pathlib.Path
+) -> None:
+    client.app_set("atr.host", "example.invalid")
+    client.app_set("tokens.jwt", "dummy_jwt_token")
+
+    checks_url = "https://example.invalid/api/checks/list/test-project/2.3.1/00003"
+
+    def check(status: str, checker: str, path: str, message: str) -> dict[str, Any]:
+        return {
+            "release_name": "test-project-2.3.1",
+            "revision_number": "00003",
+            "created": "2025-01-01T00:00:00Z",
+            "status": status,
+            "checker": checker,
+            "primary_rel_path": path,
+            "member_rel_path": None,
+            "message": message,
+            "data": None,
+        }
+
+    checks_payload = {
+        "endpoint": "/checks/list",
+        "checks_revision": "00003",
+        "current_phase": "release_candidate_draft",
+        "checks": [
+            check("blocker", "rat", "blocker.txt", "A blocking problem"),
+            check("concern", "rat", "concern.txt", "A concern"),
+            check("suggestion", "rat", "suggestion.txt", "A suggestion"),
+            check("note", "rat", "note.txt", "Just a note"),
+        ],
+    }
+
+    cases = [
+        (client.app_check_blockers, "blocker.txt", "A blocking problem"),
+        (client.app_check_concerns, "concern.txt", "A concern"),
+        (client.app_check_suggestions, "suggestion.txt", "A suggestion"),
+        (client.app_check_notes, "note.txt", "Just a note"),
+    ]
+    for command, expected_path, expected_message in cases:
+        with aioresponses.aioresponses() as mock:
+            mock.get(checks_url, status=200, payload=checks_payload)
+            command("test-project", "2.3.1", "00003")
+        out = capsys.readouterr().out
+        assert expected_path in out
+        assert expected_message in out
+        other_messages = [m for _, _, m in cases if m != expected_message]
+        for other in other_messages:
+            assert other not in out
 
 
 def test_app_release_list_not_found(capsys: pytest.CaptureFixture[str], fixture_config_env: pathlib.Path) -> None:
