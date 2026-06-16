@@ -2,15 +2,40 @@
 # atr
 
 ```
-Usage: atr docs
+Usage: atr COMMAND
 
-Show comprehensive CLI documentation in Markdown.
+╭─ Commands ───────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│ announce      Announce a release.                                                                                    │
+│ api           API operations.                                                                                        │
+│ check         Check result operations.                                                                               │
+│ config        Configuration operations.                                                                              │
+│ dev           Developer operations.                                                                                  │
+│ distribution  Distribution operations.                                                                               │
+│ docs          Show comprehensive CLI documentation in Markdown.                                                      │
+│ draft         Draft operations.                                                                                      │
+│ drop          Remove a configuration key using dot notation.                                                         │
+│ ignore        Ignore operations.                                                                                     │
+│ jwt           JWT operations.                                                                                        │
+│ key           Key operations.                                                                                        │
+│ list          List all files within a release.                                                                       │
+│ release       Release operations.                                                                                    │
+│ revisions     List all revisions for a release.                                                                      │
+│ rsync         Rsync a release.                                                                                       │
+│ set           Set a configuration value using dot notation.                                                          │
+│ show          Show a configuration value using dot notation.                                                         │
+│ ssh           SSH operations.                                                                                        │
+│ upload        Upload a file to a release.                                                                            │
+│ verify        Verify an artifact.                                                                                    │
+│ vote          Vote operations.                                                                                       │
+│ --help (-h)   Display this message and exit.                                                                         │
+│ --version     Display application version.                                                                           │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
 ```
 
 ## atr announce
 
 ```
-Usage: announce [ARGS] [OPTIONS]
+Usage: atr announce PROJECT VERSION REVISION MAILING-LIST [ARGS]
 
 Announce a release.
 
@@ -20,19 +45,43 @@ Announce a release.
 │ *  REVISION  [required]                                                                                              │
 ╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
 ╭─ Parameters ─────────────────────────────────────────────────────────────────────────────────────────────────────────╮
-│ *  MAILING-LIST --mailing-list  -m  [required]                                                                       │
-│    SUBJECT --subject            -s                                                                                   │
-│    BODY --body                  -b                                                                                   │
-│    PATH-SUFFIX --path-suffix    -p                                                                                   │
+│ *  MAILING-LIST --mailing-list -m  [required]                                                                        │
+│    BODY --body -b                                                                                                    │
+│    PATH-SUFFIX --path-suffix -p                                                                                      │
 ╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
 ```
 
 ## atr api
 
 ```
-Usage: api [ARGS] [OPTIONS]
+Usage: atr api COMMAND
 
-Call the API directly.
+API operations.
+
+╭─ Commands ───────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│ get   GET a resource from the API.                                                                                   │
+│ post  POST a resource to the API.                                                                                    │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+```
+
+### atr api get
+
+```
+Usage: atr api get PATH
+
+GET a resource from the API.
+
+╭─ Parameters ─────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│ *  PATH --path  [required]                                                                                           │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+```
+
+### atr api post
+
+```
+Usage: atr api post [OPTIONS] PATH
+
+POST a resource to the API.
 
 ╭─ Arguments ──────────────────────────────────────────────────────────────────────────────────────────────────────────╮
 │ *  PATH  [required]                                                                                                  │
@@ -45,7 +94,7 @@ Call the API directly.
 ## atr check
 
 ```
-Usage: check COMMAND
+Usage: atr check COMMAND
 
 Check result operations.
 
@@ -63,7 +112,7 @@ Check result operations.
 ### atr check blockers
 
 ```
-Usage: blockers [ARGS] [OPTIONS]
+Usage: atr check blockers PROJECT VERSION REVISION [ARGS]
 
 Get check blockers for a release revision.
 
@@ -73,14 +122,14 @@ Get check blockers for a release revision.
 │ *  REVISION  [required]                                                                                              │
 ╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
 ╭─ Parameters ─────────────────────────────────────────────────────────────────────────────────────────────────────────╮
-│ MEMBERS --members --no-members  -m  [default: False]                                                                 │
+│ MEMBERS --members -m --no-members  [default: False]                                                                  │
 ╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
 ```
 
 ### atr check concerns
 
 ```
-Usage: concerns [ARGS] [OPTIONS]
+Usage: atr check concerns PROJECT VERSION REVISION [ARGS]
 
 Get check concerns for a release revision.
 
@@ -90,14 +139,14 @@ Get check concerns for a release revision.
 │ *  REVISION  [required]                                                                                              │
 ╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
 ╭─ Parameters ─────────────────────────────────────────────────────────────────────────────────────────────────────────╮
-│ MEMBERS --members --no-members  -m  [default: False]                                                                 │
+│ MEMBERS --members -m --no-members  [default: False]                                                                  │
 ╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
 ```
 
 ### atr check exceptions
 
 ```
-Usage: exceptions [ARGS] [OPTIONS]
+Usage: atr check exceptions PROJECT VERSION REVISION [ARGS]
 
 Get check exceptions for a release revision.
 
@@ -107,14 +156,14 @@ Get check exceptions for a release revision.
 │ *  REVISION  [required]                                                                                              │
 ╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
 ╭─ Parameters ─────────────────────────────────────────────────────────────────────────────────────────────────────────╮
-│ MEMBERS --members --no-members  -m  [default: False]                                                                 │
+│ MEMBERS --members -m --no-members  [default: False]                                                                  │
 ╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
 ```
 
 ### atr check notes
 
 ```
-Usage: notes [ARGS] [OPTIONS]
+Usage: atr check notes PROJECT VERSION REVISION [ARGS]
 
 Get check notes for a release revision.
 
@@ -124,14 +173,14 @@ Get check notes for a release revision.
 │ *  REVISION  [required]                                                                                              │
 ╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
 ╭─ Parameters ─────────────────────────────────────────────────────────────────────────────────────────────────────────╮
-│ MEMBERS --members --no-members  -m  [default: False]                                                                 │
+│ MEMBERS --members -m --no-members  [default: False]                                                                  │
 ╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
 ```
 
 ### atr check status
 
 ```
-Usage: status [ARGS] [OPTIONS]
+Usage: atr check status PROJECT VERSION [ARGS]
 
 Get check status for a release revision.
 
@@ -141,14 +190,14 @@ Get check status for a release revision.
 ╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
 ╭─ Parameters ─────────────────────────────────────────────────────────────────────────────────────────────────────────╮
 │ REVISION --revision                                                                                                  │
-│ VERBOSE --verbose --no-verbose  -v  [default: False]                                                                 │
+│ VERBOSE --verbose -v --no-verbose  [default: False]                                                                  │
 ╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
 ```
 
 ### atr check suggestions
 
 ```
-Usage: suggestions [ARGS] [OPTIONS]
+Usage: atr check suggestions PROJECT VERSION REVISION [ARGS]
 
 Get check suggestions for a release revision.
 
@@ -158,14 +207,14 @@ Get check suggestions for a release revision.
 │ *  REVISION  [required]                                                                                              │
 ╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
 ╭─ Parameters ─────────────────────────────────────────────────────────────────────────────────────────────────────────╮
-│ MEMBERS --members --no-members  -m  [default: False]                                                                 │
+│ MEMBERS --members -m --no-members  [default: False]                                                                  │
 ╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
 ```
 
 ### atr check wait
 
 ```
-Usage: wait [ARGS] [OPTIONS]
+Usage: atr check wait PROJECT VERSION [ARGS]
 
 Wait for checks to be completed.
 
@@ -175,15 +224,15 @@ Wait for checks to be completed.
 ╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
 ╭─ Parameters ─────────────────────────────────────────────────────────────────────────────────────────────────────────╮
 │ REVISION --revision                                                                                                  │
-│ TIMEOUT --timeout    -t  [default: 60]                                                                               │
-│ INTERVAL --interval  -i  [default: 500]                                                                              │
+│ TIMEOUT --timeout -t    [default: 60]                                                                                │
+│ INTERVAL --interval -i  [default: 500]                                                                               │
 ╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
 ```
 
 ## atr config
 
 ```
-Usage: config COMMAND
+Usage: atr config COMMAND
 
 Configuration operations.
 
@@ -196,7 +245,7 @@ Configuration operations.
 ### atr config file
 
 ```
-Usage: file
+Usage: atr config file
 
 Display the configuration file contents.
 ```
@@ -204,7 +253,7 @@ Display the configuration file contents.
 ### atr config path
 
 ```
-Usage: path
+Usage: atr config path
 
 Show the configuration file path.
 ```
@@ -212,7 +261,7 @@ Show the configuration file path.
 ## atr dev
 
 ```
-Usage: dev COMMAND
+Usage: atr dev COMMAND
 
 Developer operations.
 
@@ -231,7 +280,7 @@ Developer operations.
 ### atr dev delete
 
 ```
-Usage: delete [ARGS]
+Usage: atr dev delete PROJECT VERSION
 
 Delete a release.
 
@@ -244,7 +293,7 @@ Delete a release.
 ### atr dev env
 
 ```
-Usage: env
+Usage: atr dev env
 
 Show the environment variables.
 ```
@@ -252,7 +301,7 @@ Show the environment variables.
 ### atr dev key
 
 ```
-Usage: key
+Usage: atr dev key
 
 Return a test OpenPGP key.
 ```
@@ -260,7 +309,7 @@ Return a test OpenPGP key.
 ### atr dev pat
 
 ```
-Usage: pat
+Usage: atr dev pat
 
 Read a PAT from development configuration.
 ```
@@ -268,7 +317,7 @@ Read a PAT from development configuration.
 ### atr dev pwd
 
 ```
-Usage: pwd
+Usage: atr dev pwd
 
 Show the current working directory.
 ```
@@ -276,7 +325,7 @@ Show the current working directory.
 ### atr dev stamp
 
 ```
-Usage: stamp
+Usage: atr dev stamp
 
 Update version and exclude-newer in pyproject.toml.
 ```
@@ -284,7 +333,7 @@ Update version and exclude-newer in pyproject.toml.
 ### atr dev token
 
 ```
-Usage: token
+Usage: atr dev token
 
 Generate a random alphabetical token.
 ```
@@ -292,15 +341,64 @@ Generate a random alphabetical token.
 ### atr dev user
 
 ```
-Usage: user
+Usage: atr dev user
 
 Show the value of $USER.
+```
+
+## atr distribution
+
+```
+Usage: atr distribution COMMAND
+
+Distribution operations.
+
+╭─ Commands ───────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│ list    List recorded distributions for a release.                                                                   │
+│ record  Record a distribution.                                                                                       │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+```
+
+### atr distribution list
+
+```
+Usage: atr distribution list PROJECT VERSION
+
+List recorded distributions for a release.
+
+╭─ Arguments ──────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│ *  PROJECT  [required]                                                                                               │
+│ *  VERSION  [required]                                                                                               │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+```
+
+### atr distribution record
+
+```
+Usage: atr distribution record PROJECT VERSION PLATFORM DISTRIBUTION-OWNER-NAMESPACE DISTRIBUTION-PACKAGE 
+DISTRIBUTION-VERSION STAGING DETAILS
+
+Record a distribution.
+
+╭─ Parameters ─────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│ *  PROJECT --project                 [required]                                                                      │
+│ *  VERSION --version                 [required]                                                                      │
+│ *  PLATFORM --platform               [required]                                                                      │
+│ *  DISTRIBUTION-OWNER-NAMESPACE      [required]                                                                      │
+│      --distribution-owner-namespace                                                                                  │
+│ *  DISTRIBUTION-PACKAGE              [required]                                                                      │
+│      --distribution-package                                                                                          │
+│ *  DISTRIBUTION-VERSION              [required]                                                                      │
+│      --distribution-version                                                                                          │
+│ *  STAGING --staging --no-staging    [required]                                                                      │
+│ *  DETAILS --details --no-details    [required]                                                                      │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
 ```
 
 ## atr docs
 
 ```
-Usage: docs
+Usage: atr docs
 
 Show comprehensive CLI documentation in Markdown.
 ```
@@ -308,7 +406,7 @@ Show comprehensive CLI documentation in Markdown.
 ## atr draft
 
 ```
-Usage: draft COMMAND
+Usage: atr draft COMMAND
 
 Draft operations.
 
@@ -317,10 +415,23 @@ Draft operations.
 ╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
 ```
 
+### atr draft delete
+
+```
+Usage: atr draft delete PROJECT VERSION
+
+Delete a draft release.
+
+╭─ Arguments ──────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│ *  PROJECT  [required]                                                                                               │
+│ *  VERSION  [required]                                                                                               │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+```
+
 ## atr drop
 
 ```
-Usage: drop [ARGS]
+Usage: atr drop PATH
 
 Remove a configuration key using dot notation.
 
@@ -332,7 +443,7 @@ Remove a configuration key using dot notation.
 ## atr ignore
 
 ```
-Usage: ignore COMMAND
+Usage: atr ignore COMMAND
 
 Ignore operations.
 
@@ -346,12 +457,12 @@ Ignore operations.
 ### atr ignore add
 
 ```
-Usage: add [ARGS] [OPTIONS]
+Usage: atr ignore add PROJECT [ARGS]
 
 Add a check ignore.
 
 ╭─ Arguments ──────────────────────────────────────────────────────────────────────────────────────────────────────────╮
-│ *  COMMITTEE  [required]                                                                                             │
+│ *  PROJECT  [required]                                                                                               │
 ╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
 ╭─ Parameters ─────────────────────────────────────────────────────────────────────────────────────────────────────────╮
 │ RELEASE --release                                                                                                    │
@@ -359,15 +470,28 @@ Add a check ignore.
 │ CHECKER --checker                                                                                                    │
 │ PRIMARY-REL-PATH --primary-rel-path                                                                                  │
 │ MEMBER-REL-PATH --member-rel-path                                                                                    │
-│ STATUS --status                      [choices: exception, failure, warning]                                          │
+│ STATUS --status                      [choices: concern, exception, suggestion]                                       │
 │ MESSAGE --message                                                                                                    │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+```
+
+### atr ignore delete
+
+```
+Usage: atr ignore delete PROJECT ID
+
+Delete a check ignore.
+
+╭─ Arguments ──────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│ *  PROJECT  [required]                                                                                               │
+│ *  ID       [required]                                                                                               │
 ╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
 ```
 
 ### atr ignore list
 
 ```
-Usage: list [ARGS]
+Usage: atr ignore list COMMITTEE
 
 List check ignores.
 
@@ -379,7 +503,7 @@ List check ignores.
 ## atr jwt
 
 ```
-Usage: jwt COMMAND
+Usage: atr jwt COMMAND
 
 JWT operations.
 
@@ -394,7 +518,7 @@ JWT operations.
 ### atr jwt dump
 
 ```
-Usage: dump
+Usage: atr jwt dump
 
 Show decoded JWT payload from stored config.
 ```
@@ -402,7 +526,7 @@ Show decoded JWT payload from stored config.
 ### atr jwt info
 
 ```
-Usage: info
+Usage: atr jwt info
 
 Show JWT payload in human-readable form.
 ```
@@ -410,7 +534,7 @@ Show JWT payload in human-readable form.
 ### atr jwt refresh
 
 ```
-Usage: refresh [ARGS] [OPTIONS]
+Usage: atr jwt refresh [ARGS]
 
 Fetch a JWT using the stored PAT and store it in config.
 
@@ -422,15 +546,107 @@ Fetch a JWT using the stored PAT and store it in config.
 ### atr jwt show
 
 ```
-Usage: show
+Usage: atr jwt show
 
 Show stored JWT token.
+```
+
+## atr key
+
+```
+Usage: atr key COMMAND
+
+Key operations.
+
+╭─ Commands ───────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│ add     Add an OpenPGP key.                                                                                          │
+│ delete  Delete an OpenPGP key.                                                                                       │
+│ get     Get an OpenPGP key.                                                                                          │
+│ upload  Upload a KEYS file.                                                                                          │
+│ user    List OpenPGP keys for a user.                                                                                │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+```
+
+### atr key add
+
+```
+Usage: atr key add PATH [ARGS]
+
+Add an OpenPGP key.
+
+╭─ Arguments ──────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│ *  PATH        [required]                                                                                            │
+│    COMMITTEES  [default: ""]                                                                                         │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+```
+
+### atr key delete
+
+```
+Usage: atr key delete FINGERPRINT
+
+Delete an OpenPGP key.
+
+╭─ Arguments ──────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│ *  FINGERPRINT  [required]                                                                                           │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+```
+
+### atr key get
+
+```
+Usage: atr key get FINGERPRINT
+
+Get an OpenPGP key.
+
+╭─ Arguments ──────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│ *  FINGERPRINT  [required]                                                                                           │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+```
+
+### atr key upload
+
+```
+Usage: atr key upload PATH SELECTED_COMMITTEE_NAME
+
+Upload a KEYS file.
+
+╭─ Arguments ──────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│ *  PATH                     [required]                                                                               │
+│ *  SELECTED_COMMITTEE_NAME  [required]                                                                               │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+```
+
+### atr key user
+
+```
+Usage: atr key user [ARGS]
+
+List OpenPGP keys for a user.
+
+╭─ Parameters ─────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│ ASF-UID --asf-uid                                                                                                    │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+```
+
+## atr list
+
+```
+Usage: atr list PROJECT VERSION [ARGS]
+
+List all files within a release.
+
+╭─ Arguments ──────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│ *  PROJECT   [required]                                                                                              │
+│ *  VERSION   [required]                                                                                              │
+│    REVISION                                                                                                          │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
 ```
 
 ## atr release
 
 ```
-Usage: release COMMAND
+Usage: atr release COMMAND
 
 Release operations.
 
@@ -441,10 +657,35 @@ Release operations.
 ╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
 ```
 
+### atr release info
+
+```
+Usage: atr release info PROJECT VERSION
+
+Show information about a release.
+
+╭─ Arguments ──────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│ *  PROJECT  [required]                                                                                               │
+│ *  VERSION  [required]                                                                                               │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+```
+
+### atr release list
+
+```
+Usage: atr release list PROJECT
+
+List releases for a project.
+
+╭─ Arguments ──────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│ *  PROJECT  [required]                                                                                               │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+```
+
 ### atr release start
 
 ```
-Usage: start [ARGS]
+Usage: atr release start PROJECT VERSION
 
 Start a release.
 
@@ -457,7 +698,7 @@ Start a release.
 ## atr revisions
 
 ```
-Usage: revisions [ARGS]
+Usage: atr revisions PROJECT VERSION
 
 List all revisions for a release.
 
@@ -470,7 +711,7 @@ List all revisions for a release.
 ## atr rsync
 
 ```
-Usage: rsync [ARGS]
+Usage: atr rsync PROJECT VERSION [ARGS]
 
 Rsync a release.
 
@@ -485,7 +726,7 @@ Rsync a release.
 ## atr set
 
 ```
-Usage: set [ARGS]
+Usage: atr set PATH VALUE
 
 Set a configuration value using dot notation.
 
@@ -495,10 +736,22 @@ Set a configuration value using dot notation.
 ╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
 ```
 
+## atr show
+
+```
+Usage: atr show PATH
+
+Show a configuration value using dot notation.
+
+╭─ Arguments ──────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│ *  PATH  [required]                                                                                                  │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+```
+
 ## atr ssh
 
 ```
-Usage: ssh COMMAND
+Usage: atr ssh COMMAND
 
 SSH operations.
 
@@ -509,10 +762,46 @@ SSH operations.
 ╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
 ```
 
+### atr ssh add
+
+```
+Usage: atr ssh add TEXT
+
+Add an SSH key.
+
+╭─ Arguments ──────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│ *  TEXT  [required]                                                                                                  │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+```
+
+### atr ssh delete
+
+```
+Usage: atr ssh delete FINGERPRINT
+
+Delete an SSH key.
+
+╭─ Arguments ──────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│ *  FINGERPRINT  [required]                                                                                           │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+```
+
+### atr ssh list
+
+```
+Usage: atr ssh list [ARGS]
+
+List SSH keys.
+
+╭─ Parameters ─────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│ ASF-UID --asf-uid                                                                                                    │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+```
+
 ## atr upload
 
 ```
-Usage: upload [ARGS]
+Usage: atr upload PROJECT VERSION PATH FILEPATH
 
 Upload a file to a release.
 
@@ -527,7 +816,7 @@ Upload a file to a release.
 ## atr verify
 
 ```
-Usage: verify [ARGS] [OPTIONS]
+Usage: atr verify URL [ARGS]
 
 Verify an artifact.
 
@@ -542,7 +831,7 @@ Verify an artifact.
 ## atr vote
 
 ```
-Usage: vote COMMAND
+Usage: atr vote COMMAND
 
 Vote operations.
 
@@ -556,7 +845,7 @@ Vote operations.
 ### atr vote resolve
 
 ```
-Usage: resolve [ARGS] [OPTIONS]
+Usage: atr vote resolve PROJECT VERSION RESOLUTION
 
 Resolve a vote.
 
@@ -567,10 +856,33 @@ Resolve a vote.
 ╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
 ```
 
+### atr vote start
+
+```
+Usage: atr vote start PROJECT VERSION REVISION MAILING-LIST [ARGS]
+
+Start a vote.
+
+╭─ Arguments ──────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│ *  PROJECT   [required]                                                                                              │
+│ *  VERSION   [required]                                                                                              │
+│ *  REVISION  [required]                                                                                              │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+╭─ Parameters ─────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│ *  MAILING-LIST --mailing-list -m      [required]                                                                    │
+│    DURATION --duration -d              [default: 72]                                                                 │
+│    SUBJECT --subject -s                                                                                              │
+│    BODY --body -b                                                                                                    │
+│    CONCERNS-NOTED --concerns-noted -c                                                                                │
+│    AUTO-PUBLISH --auto-publish         [default: False]                                                              │
+│      --no-auto-publish                                                                                               │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+```
+
 ### atr vote tabulate
 
 ```
-Usage: tabulate [ARGS]
+Usage: atr vote tabulate PROJECT VERSION
 
 Tabulate a vote.
 

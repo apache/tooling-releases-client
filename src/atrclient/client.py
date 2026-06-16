@@ -1005,23 +1005,24 @@ def documentation_to_markdown(
     app: cyclopts.App,
     subcommands: list[str] | None = None,
     seen: set[str] | None = None,
+    root: cyclopts.App | None = None,
 ) -> str:
     import io
 
     import rich.console as console
 
+    root = root if root is not None else app
     seen = seen or set()
-    string_io = io.StringIO()
-    rich_console = console.Console(record=True, width=120, file=string_io)
-    original_console = app.console
-    app.console = rich_console
-    with contextlib.redirect_stdout(string_io):
-        app.help_print()
-    app.console = original_console
-
-    exported_text = rich_console.export_text()
     if not subcommands:
         subcommands = [" ".join(app.name) if isinstance(app.name, list | tuple) else (app.name or "atr")]
+
+    command_path = subcommands[1:]
+    string_io = io.StringIO()
+    rich_console = console.Console(record=True, width=120, file=string_io)
+    with contextlib.redirect_stdout(string_io):
+        root.help_print(command_path, console=rich_console)
+
+    exported_text = rich_console.export_text()
     level = len(subcommands)
     markdown = f"""
 {"#" * level} {" ".join(subcommands)}
@@ -1030,14 +1031,15 @@ def documentation_to_markdown(
 {exported_text.rstrip()}
 ```
 """
-    commands = sorted(app)
-    for cmd in commands:
-        if cmd in seen or cmd.startswith("-"):
+    for cmd in sorted(app):
+        # Key seen by full path
+        path_key = " ".join([*command_path, cmd])
+        if path_key in seen or cmd.startswith("-"):
             continue
         sub = app[cmd]
         if isinstance(sub, cyclopts.App):
-            seen.add(cmd)
-            markdown += documentation_to_markdown(sub, [*subcommands, cmd], seen)
+            seen.add(path_key)
+            markdown += documentation_to_markdown(sub, [*subcommands, cmd], seen, root)
     return markdown
 
 
