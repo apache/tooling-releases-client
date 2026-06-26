@@ -31,5 +31,5 @@ $ atr key get E35604DD9E2892E5465B3D8A203F105A7B33A64F
 * atr key delete E35604DD9E2892E5465B3D8A203F105A7B33A64F
 <.etc.>
 
-$ atr key upload tooling-public-test.asc tooling
+$ atr key upload tooling-public-test.asc test
 <.etc.>
