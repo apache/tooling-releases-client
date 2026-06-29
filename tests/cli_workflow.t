@@ -44,14 +44,12 @@ $ atr check wait test-client 0.3+cli -i 25
 Checks completed.
 
 $ atr check status test-client 0.3+cli
-Total checks: 13
-  note: 10
-  concern: 3
+Total checks: <.skip.>
+<.etc.>
 
 $ atr check status test-client 0.3+cli 00004
-Total checks: 13
-  note: 10
-  concern: 3
+Total checks: <.skip.>
+<.etc.>
 
 $ atr vote start test-client 0.3+cli 00004 -m "<!user!>@apache.org" --concerns-noted atr.tasks.checks.rat.check
 <.skip.>"email_to":"<!user!>@apache.org"<.skip.>

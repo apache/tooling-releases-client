@@ -410,6 +410,8 @@ def transcript_capture(
             line = REGEX_COMMENT.sub("", line)
             if line.startswith("$ ") or line.startswith("! ") or line.startswith("* "):
                 actual_output = transcript_execute(actual_output, line, script_runner, env)
+            elif line == "<.etc.>":
+                actual_output[:] = []
             elif actual_output:
                 captures, actual_output = transcript_match(captures, actual_output, line)
             elif line:
@@ -447,9 +449,6 @@ def transcript_execute(
 
 
 def transcript_match(captures: dict[str, str], actual_output: list[str], line: str) -> tuple[dict[str, str], list[str]]:
-    if line == "<.etc.>":
-        actual_output[:] = []
-        return captures, actual_output
     actual_output_line = actual_output.pop(0)
 
     # Replace captures with (?P<name>.*?)
