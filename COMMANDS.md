@@ -876,7 +876,10 @@ Start a vote.
 │    --duration -d                     [default: 72]                                                                   │
 │    --subject -s                                                                                                      │
 │    --body -b                                                                                                         │
-│    --concerns-noted -c                                                                                               │
+│    --concerns-noted -c               Comma separated keys of the concern groups that you reviewed, e.g.              │
+│                                      atr.tasks.checks.license.headers. Every current concern group must be           │
+│                                      acknowledged by its key before a vote can start. The atr check concerns command │
+│                                      lists these keys.                                                               │
 │    --auto-publish --no-auto-publish  [default: False]                                                                │
 ╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
 ```

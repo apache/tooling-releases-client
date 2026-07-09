@@ -171,6 +171,7 @@ def app_check_concerns(
 ) -> None:
     checks_list = api.checks_list(project, version, revision)
     checks_display_status(models.sql.CheckResultStatus.CONCERN, checks_list.checks, members=members)
+    checks_display_concern_groups(checks_list.checks)
 
 
 @APP_CHECK.command(name="exceptions", help="Get check exceptions for a release revision.")
@@ -908,7 +909,17 @@ def app_vote_start(
     duration: Annotated[int, cyclopts.Parameter(alias="-d", name="--duration")] = 72,
     subject: Annotated[str | None, cyclopts.Parameter(alias="-s", name="--subject")] = None,
     body: Annotated[str | None, cyclopts.Parameter(alias="-b", name="--body")] = None,
-    concerns_noted: Annotated[str | None, cyclopts.Parameter(alias="-c", name="--concerns-noted")] = None,
+    concerns_noted: Annotated[
+        str | None,
+        cyclopts.Parameter(
+            alias="-c",
+            name="--concerns-noted",
+            help="Comma separated keys of the concern groups that you reviewed,"
+            " e.g. atr.tasks.checks.license.headers."
+            " Every current concern group must be acknowledged by its key before a vote can start."
+            " The atr check concerns command lists these keys.",
+        ),
+    ] = None,
     auto_publish: Annotated[bool, cyclopts.Parameter(name="--auto-publish")] = False,
 ) -> None:
     body_text = None
@@ -952,6 +963,20 @@ def checks_display(results: Sequence[models.sql.CheckResult], verbose: bool = Fa
 
     checks_display_summary(by_status, verbose, len(results))
     checks_display_details(by_status, verbose)
+
+
+def checks_display_concern_groups(results: Sequence[models.sql.CheckResult]) -> None:
+    counts: dict[str, int] = {}
+    for result in results:
+        if result.status != models.sql.CheckResultStatus.CONCERN:
+            continue
+        checker = result.checker or ""
+        counts[checker] = counts.get(checker, 0) + 1
+    if not counts:
+        return
+    print("Concern groups (keys for vote start --concerns-noted):")
+    for checker in sorted(counts):
+        print(f" - {checker} ({counts[checker]})")
 
 
 def checks_display_details(by_status: dict[str, list[models.sql.CheckResult]], verbose: bool) -> None:

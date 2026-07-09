@@ -212,6 +212,47 @@ def test_app_check_bucket_commands_list_results(
             assert other not in out
 
 
+def test_app_check_concerns_group_summary(capsys: pytest.CaptureFixture[str], fixture_config_env: pathlib.Path) -> None:
+    client.app_set("atr.host", "example.invalid")
+    client.app_set("tokens.jwt", "dummy_jwt_token")
+
+    checks_url = "https://example.invalid/api/checks/list/test-project/2.3.1/00003"
+
+    checks = []
+    for checker, member in [
+        ("atr.tasks.checks.license.headers", None),
+        ("atr.tasks.checks.license.headers", "inner.sh"),
+        ("atr.tasks.checks.paths", None),
+    ]:
+        checks.append(
+            {
+                "release_name": "test-project-2.3.1",
+                "revision_number": "00003",
+                "created": "2025-01-01T00:00:00Z",
+                "status": "concern",
+                "checker": checker,
+                "primary_rel_path": "a.tar.gz",
+                "member_rel_path": member,
+                "message": "A concern",
+                "data": None,
+            }
+        )
+    checks_payload = {
+        "endpoint": "/checks/list",
+        "checks_revision": "00003",
+        "current_phase": "release_candidate_draft",
+        "checks": checks,
+    }
+
+    with aioresponses.aioresponses() as mock:
+        mock.get(checks_url, status=200, payload=checks_payload)
+        client.app_check_concerns("test-project", "2.3.1", "00003")
+    out = capsys.readouterr().out
+    assert "Concern groups (keys for vote start --concerns-noted):" in out
+    assert " - atr.tasks.checks.license.headers (2)" in out
+    assert " - atr.tasks.checks.paths (1)" in out
+
+
 def test_app_release_list_not_found(capsys: pytest.CaptureFixture[str], fixture_config_env: pathlib.Path) -> None:
     client.app_set("atr.host", "example.invalid")
 
