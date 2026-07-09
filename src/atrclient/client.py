@@ -96,8 +96,9 @@ class ForceUnexpiredOpenPGPKey(pgpy.PGPKey):
 def app_announce(
     project: str,
     version: str,
-    revision: str,
     /,
+    revision: str | None = None,
+    *,
     mailing_list: Annotated[str, cyclopts.Parameter(alias="-m", name="--mailing-list")],
     body: Annotated[str | None, cyclopts.Parameter(alias="-b", name="--body")] = None,
     path_suffix: Annotated[str | None, cyclopts.Parameter(alias="-p", name="--path-suffix")] = None,
@@ -105,7 +106,7 @@ def app_announce(
     announce_args = models.api.ReleaseAnnounceArgs(
         project=models.safe.ProjectKey(project),
         version=models.safe.VersionKey(version),
-        revision=models.safe.RevisionNumber(revision),
+        revision=models.safe.RevisionNumber(revision) if revision else None,
         email_to=mailing_list,
         body=body or f"Release {project} {version} has been announced.",
         path_suffix=models.safe.RelPath(path_suffix) if path_suffix else None,

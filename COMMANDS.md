@@ -35,19 +35,19 @@ Usage: atr COMMAND
 ## atr announce
 
 ```
-Usage: atr announce PROJECT VERSION REVISION MAILING-LIST [ARGS]
+Usage: atr announce --mailing-list STR [OPTIONS] PROJECT VERSION [ARGS]
 
 Announce a release.
 
 ╭─ Arguments ──────────────────────────────────────────────────────────────────────────────────────────────────────────╮
-│ *  PROJECT   [required]                                                                                              │
-│ *  VERSION   [required]                                                                                              │
-│ *  REVISION  [required]                                                                                              │
+│ *  PROJECT  [required]                                                                                               │
+│ *  VERSION  [required]                                                                                               │
 ╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
 ╭─ Parameters ─────────────────────────────────────────────────────────────────────────────────────────────────────────╮
-│ *  MAILING-LIST --mailing-list -m  [required]                                                                        │
-│    BODY --body -b                                                                                                    │
-│    PATH-SUFFIX --path-suffix -p                                                                                      │
+│    REVISION --revision                                                                                               │
+│ *  --mailing-list -m    [required]                                                                                   │
+│    --body -b                                                                                                         │
+│    --path-suffix -p                                                                                                  │
 ╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
 ```
 
