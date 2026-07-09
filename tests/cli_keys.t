@@ -11,7 +11,7 @@ $ atr dev pat
 <?pat?>
 
 $ atr set tokens.pat <!pat!>
-Set tokens.pat to "<!pat!>".
+Set tokens.pat.
 
 $ atr key user
 <.etc.>

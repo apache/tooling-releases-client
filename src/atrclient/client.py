@@ -25,6 +25,7 @@ import asyncio
 import base64
 import contextlib
 import datetime
+import getpass
 import hashlib
 import importlib.metadata as metadata
 import io
@@ -731,15 +732,29 @@ def app_rsync(project: str, version: str, source: str = ".", target: str = "/", 
 
 
 @APP.command(name="set", help="Set a configuration value using dot notation.")
-def app_set(path: str, value: str, /) -> None:
+def app_set(
+    path: str,
+    value: str | None = None,
+    /,
+    stdin: Annotated[bool, cyclopts.Parameter(name="--stdin")] = False,
+) -> None:
     parts = path.split(".")
     if not parts:
         show.error_and_exit("Not a valid configuration key.")
+    if stdin and (value is not None):
+        show.error_and_exit("Cannot use both VALUE and --stdin.")
+
+    masked = stdin or (value is None) or path.startswith("tokens.")
+    if value is None:
+        value = value_read(stdin)
 
     with config.lock(write_to_disk=True) as cfg:
         config.set_value(cfg, path.split("."), value)
 
-    print(f"Set {path} to {json.dumps(value, indent=None)}.")
+    if masked:
+        print(f"Set {path}.")
+    else:
+        print(f"Set {path} to {json.dumps(value, indent=None)}.")
 
 
 @APP.command(name="show", help="Show a configuration value using dot notation.")
@@ -1146,6 +1161,21 @@ def upload_quarantine_wait(
         time.sleep(interval_seconds)
         timeout -= interval_seconds
     show.error_and_exit("Timeout waiting for archive validation to complete.")
+
+
+def value_read(stdin: bool) -> str:
+    if stdin:
+        value = sys.stdin.read().removesuffix("\n")
+    elif sys.stdin.isatty():
+        try:
+            value = getpass.getpass("Value: ")
+        except EOFError:
+            show.error_and_exit("No value provided.")
+    else:
+        show.error_and_exit("No value provided. Use --stdin to read the value from standard input.")
+    if not value:
+        show.error_and_exit("The value is empty.")
+    return value
 
 
 def verify_summary(

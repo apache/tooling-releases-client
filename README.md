@@ -24,9 +24,11 @@ The ATR API is not stable, so please do not rely on its schema. The client CLI i
 
    ```
    atr set asf.uid <your asf id>
-   atr set tokens.pat "<pat from ATR site>"
+   atr set tokens.pat
    atr jwt refresh
    ```
+
+   The `atr set tokens.pat` command prompts for your PAT from the ATR site, without echoing it. In scripts, pipe the PAT to `atr set tokens.pat --stdin` instead. Do not pass the PAT as a command line argument, because it would then be recorded in your shell history and exposed to other local processes.
 
 If you do not have a compatible version of Python (we currently require 3.12 or higher), then you can try using the following commands:
 

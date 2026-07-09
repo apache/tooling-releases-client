@@ -13,11 +13,11 @@ uv run atr --version
 alias atr="uv run atr"
 ```
 
-Now you have an `atr` command. Set a couple of required configuration values.
+Now you have an `atr` command. Set a couple of required configuration values. The second command prompts for your PAT without echoing it.
 
 ```
 atr set asf.uid "$ASF_UID"
-atr set tokens.pat "$PAT"
+atr set tokens.pat
 ```
 
 You can now create a release.
@@ -78,10 +78,10 @@ Add your ASF UID and PAT to configuration.
 
 ```
 atr set asf.uid "$ASF_UID"
-atr set tokens.pat "$PAT"
+atr set tokens.pat
 ```
 
-Your `"$ASF_UID"` is just the short ASF username, e.g. `wave`, `tn`, or `sbp` for the ASF Tooling team. The `"$PAT"` is the value you recorded earlier from the website. If you didn't record it, you can always generate a new one as you can have multiple PATs.
+Your `"$ASF_UID"` is just the short ASF username, e.g. `wave`, `tn`, or `sbp` for the ASF Tooling team. The second command prompts for your PAT without echoing it; paste the value you recorded earlier from the website. If you didn't record it, you can always generate a new one as you can have multiple PATs. In scripts, pipe the PAT to `atr set tokens.pat --stdin` instead of using the prompt. Do not pass the PAT as a command line argument, because it would then be recorded in your shell history and exposed to other local processes.
 
 The configuration path depends on your OS, but you can find it using `atr config path`. On macOS, for example, it will be at:
 

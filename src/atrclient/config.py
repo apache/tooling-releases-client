@@ -233,6 +233,8 @@ def write(data: dict[str, Any]) -> None:
         return
     tmp = config_path.with_suffix(".tmp")
     tmp.parent.mkdir(parents=True, exist_ok=True)
+    tmp.unlink(missing_ok=True)
+    tmp.touch(mode=0o600)
     tmp.write_text(
         strictyaml.as_document(data, YAML_SCHEMA).as_yaml(),
         encoding="utf-8",

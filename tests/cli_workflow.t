@@ -11,7 +11,7 @@ $ atr dev pat
 <?pat?>
 
 $ atr set tokens.pat <!pat!>
-Set tokens.pat to "<!pat!>".
+Set tokens.pat.
 
 <# delete any existing draft, ignoring errors #>
 * atr dev delete test-client 0.3+cli
