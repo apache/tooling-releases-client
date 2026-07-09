@@ -901,8 +901,9 @@ def app_vote_resolve(
 def app_vote_start(
     project: str,
     version: str,
-    revision: str,
     /,
+    revision: str | None = None,
+    *,
     mailing_list: Annotated[str, cyclopts.Parameter(alias="-m", name="--mailing-list")],
     duration: Annotated[int, cyclopts.Parameter(alias="-d", name="--duration")] = 72,
     subject: Annotated[str | None, cyclopts.Parameter(alias="-s", name="--subject")] = None,
@@ -918,7 +919,7 @@ def app_vote_start(
     vote_start_args = models.api.VoteStartArgs(
         project=models.safe.ProjectKey(project),
         version=models.safe.VersionKey(version),
-        revision=models.safe.RevisionNumber(revision),
+        revision=models.safe.RevisionNumber(revision) if revision else None,
         email_to=mailing_list,
         vote_duration=duration,
         subject=subject or f"[VOTE] Release {project} {version}",

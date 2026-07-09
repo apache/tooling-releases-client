@@ -862,23 +862,22 @@ Resolve a vote.
 ### atr vote start
 
 ```
-Usage: atr vote start PROJECT VERSION REVISION MAILING-LIST [ARGS]
+Usage: atr vote start --mailing-list STR [OPTIONS] PROJECT VERSION [ARGS]
 
 Start a vote.
 
 ╭─ Arguments ──────────────────────────────────────────────────────────────────────────────────────────────────────────╮
-│ *  PROJECT   [required]                                                                                              │
-│ *  VERSION   [required]                                                                                              │
-│ *  REVISION  [required]                                                                                              │
+│ *  PROJECT  [required]                                                                                               │
+│ *  VERSION  [required]                                                                                               │
 ╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
 ╭─ Parameters ─────────────────────────────────────────────────────────────────────────────────────────────────────────╮
-│ *  MAILING-LIST --mailing-list -m      [required]                                                                    │
-│    DURATION --duration -d              [default: 72]                                                                 │
-│    SUBJECT --subject -s                                                                                              │
-│    BODY --body -b                                                                                                    │
-│    CONCERNS-NOTED --concerns-noted -c                                                                                │
-│    AUTO-PUBLISH --auto-publish         [default: False]                                                              │
-│      --no-auto-publish                                                                                               │
+│    REVISION --revision                                                                                               │
+│ *  --mailing-list -m                 [required]                                                                      │
+│    --duration -d                     [default: 72]                                                                   │
+│    --subject -s                                                                                                      │
+│    --body -b                                                                                                         │
+│    --concerns-noted -c                                                                                               │
+│    --auto-publish --no-auto-publish  [default: False]                                                                │
 ╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
 ```
 
