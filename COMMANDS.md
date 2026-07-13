@@ -46,7 +46,8 @@ Announce a release.
 ╭─ Parameters ─────────────────────────────────────────────────────────────────────────────────────────────────────────╮
 │    REVISION --revision                                                                                               │
 │ *  --mailing-list -m    [required]                                                                                   │
-│    --body -b                                                                                                         │
+│    --body -b            Literal announcement email body. If omitted, the server renders it from the project's        │
+│                         announce email template.                                                                     │
 │    --path-suffix -p                                                                                                  │
 ╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
 ```

@@ -19,6 +19,7 @@
 
 from __future__ import annotations
 
+import json
 import os
 import pathlib
 import re
@@ -82,6 +83,45 @@ def test_app_checks_status_non_draft_phase(
         captured = capsys.readouterr()
         assert "Checks are not applicable for this release phase." in captured.out
         assert "Checks are only performed during the draft phase." in captured.out
+
+
+def test_app_announce_serializes_template_default_and_literal_body(
+    capsys: pytest.CaptureFixture[str], fixture_config_env: pathlib.Path
+) -> None:
+    config.write(
+        {
+            "atr": {"host": "example.invalid"},
+            "output": {"json": True},
+            "tokens": {"jwt": "dummy_jwt_token"},
+        }
+    )
+    announce_url = "https://example.invalid/api/release/announce"
+    captured_requests: list[dict[str, Any]] = []
+    response_payload = {"endpoint": "/release/announce", "success": True}
+
+    def capture_request(_url: Any, **kwargs: Any) -> aioresponses.CallbackResult:
+        captured_requests.append(kwargs["json"])
+        return aioresponses.CallbackResult(status=201, payload=response_payload)
+
+    with aioresponses.aioresponses() as mock:
+        mock.post(announce_url, callback=capture_request)
+        mock.post(announce_url, callback=capture_request)
+        client.app_announce("test-project", "2.3.1", mailing_list="announce@example.apache.org")
+        default_record = json.loads(capsys.readouterr().out)
+        client.app_announce(
+            "test-project",
+            "2.3.1",
+            mailing_list="announce@example.apache.org",
+            body="Custom announcement body",
+        )
+        custom_record = json.loads(capsys.readouterr().out)
+
+    assert captured_requests[0]["body"] is None
+    assert default_record["body"] is None
+    assert default_record["body_rendered_by_server"] is True
+    assert captured_requests[1]["body"] == "Custom announcement body"
+    assert custom_record["body"] == "Custom announcement body"
+    assert "body_rendered_by_server" not in custom_record
 
 
 def test_app_checks_status_verbose(capsys: pytest.CaptureFixture[str], fixture_config_env: pathlib.Path) -> None:

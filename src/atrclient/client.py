@@ -100,7 +100,17 @@ def app_announce(
     revision: str | None = None,
     *,
     mailing_list: Annotated[str, cyclopts.Parameter(alias="-m", name="--mailing-list")],
-    body: Annotated[str | None, cyclopts.Parameter(alias="-b", name="--body")] = None,
+    body: Annotated[
+        str | None,
+        cyclopts.Parameter(
+            alias="-b",
+            name="--body",
+            help=(
+                "Literal announcement email body. If omitted, the server renders it from "
+                "the project's announce email template."
+            ),
+        ),
+    ] = None,
     path_suffix: Annotated[str | None, cyclopts.Parameter(alias="-p", name="--path-suffix")] = None,
 ) -> None:
     announce_args = models.api.ReleaseAnnounceArgs(
@@ -108,15 +118,21 @@ def app_announce(
         version=models.safe.VersionKey(version),
         revision=models.safe.RevisionNumber(revision) if revision else None,
         email_to=mailing_list,
-        body=body or f"Release {project} {version} has been announced.",
+        body=body,
         path_suffix=models.safe.RelPath(path_suffix) if path_suffix else None,
     )
     announce = api.release_announce(announce_args)
     if not announce.success:
         show.error_and_exit("Failed to announce release.")
-    # The result only contains a success bool
-    # Therefore the ReleaseAnnounceArgs actually contain most of the information
-    show.json_or_message(announce_args, "Announcement sent.")
+    # The result only contains a success bool, so the request arguments contain most of the information.
+    announce_record = announce_args.model_dump(mode="json")
+    success_message = "Announcement sent."
+    if body is None:
+        announce_record["body_rendered_by_server"] = True
+        success_message = (
+            "Announcement sent with a body rendered by the server from the project's announce email template."
+        )
+    show.json_or_message(announce_record, success_message)
 
 
 @APP_API.command(name="get", help="GET a resource from the API.")
