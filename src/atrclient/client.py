@@ -150,52 +150,52 @@ def app_api_post(path: str, /, **kwargs: str) -> None:
     show.json_or_message(json_data)
 
 
-@APP_CHECK.command(name="blockers", help="Get check blockers for a release revision.")
+@APP_CHECK.command(name="blockers", help="Get check blockers for the latest or specified release revision.")
 def app_check_blockers(
     project: str,
     version: str,
-    revision: str,
     /,
+    revision: str | None = None,
     members: Annotated[bool, cyclopts.Parameter(alias="-m", name="--members")] = False,
 ) -> None:
-    checks_list = api.checks_list(project, version, revision)
+    checks_list = api.checks_list(project, version, revision=revision)
     checks_display_status(models.sql.CheckResultStatus.BLOCKER, checks_list.checks, members=members)
 
 
-@APP_CHECK.command(name="concerns", help="Get check concerns for a release revision.")
+@APP_CHECK.command(name="concerns", help="Get check concerns for the latest or specified release revision.")
 def app_check_concerns(
     project: str,
     version: str,
-    revision: str,
     /,
+    revision: str | None = None,
     members: Annotated[bool, cyclopts.Parameter(alias="-m", name="--members")] = False,
 ) -> None:
-    checks_list = api.checks_list(project, version, revision)
+    checks_list = api.checks_list(project, version, revision=revision)
     checks_display_status(models.sql.CheckResultStatus.CONCERN, checks_list.checks, members=members)
     checks_display_concern_groups(checks_list.checks)
 
 
-@APP_CHECK.command(name="exceptions", help="Get check exceptions for a release revision.")
+@APP_CHECK.command(name="exceptions", help="Get check exceptions for the latest or specified release revision.")
 def app_check_exceptions(
     project: str,
     version: str,
-    revision: str,
     /,
+    revision: str | None = None,
     members: Annotated[bool, cyclopts.Parameter(alias="-m", name="--members")] = False,
 ) -> None:
-    checks_list = api.checks_list(project, version, revision)
+    checks_list = api.checks_list(project, version, revision=revision)
     checks_display_status(models.sql.CheckResultStatus.EXCEPTION, checks_list.checks, members=members)
 
 
-@APP_CHECK.command(name="notes", help="Get check notes for a release revision.")
+@APP_CHECK.command(name="notes", help="Get check notes for the latest or specified release revision.")
 def app_check_notes(
     project: str,
     version: str,
-    revision: str,
     /,
+    revision: str | None = None,
     members: Annotated[bool, cyclopts.Parameter(alias="-m", name="--members")] = False,
 ) -> None:
-    checks_list = api.checks_list(project, version, revision)
+    checks_list = api.checks_list(project, version, revision=revision)
     checks_display_status(models.sql.CheckResultStatus.NOTE, checks_list.checks, members=members)
 
 
@@ -226,15 +226,15 @@ def app_check_status(
     checks_display(checks_list.checks, verbose)
 
 
-@APP_CHECK.command(name="suggestions", help="Get check suggestions for a release revision.")
+@APP_CHECK.command(name="suggestions", help="Get check suggestions for the latest or specified release revision.")
 def app_check_suggestions(
     project: str,
     version: str,
-    revision: str,
     /,
+    revision: str | None = None,
     members: Annotated[bool, cyclopts.Parameter(alias="-m", name="--members")] = False,
 ) -> None:
-    checks_list = api.checks_list(project, version, revision)
+    checks_list = api.checks_list(project, version, revision=revision)
     checks_display_status(models.sql.CheckResultStatus.SUGGESTION, checks_list.checks, members=members)
 
 

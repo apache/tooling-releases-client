@@ -99,12 +99,12 @@ Usage: atr check COMMAND
 Check result operations.
 
 ╭─ Commands ───────────────────────────────────────────────────────────────────────────────────────────────────────────╮
-│ blockers     Get check blockers for a release revision.                                                              │
-│ concerns     Get check concerns for a release revision.                                                              │
-│ exceptions   Get check exceptions for a release revision.                                                            │
-│ notes        Get check notes for a release revision.                                                                 │
+│ blockers     Get check blockers for the latest or specified release revision.                                        │
+│ concerns     Get check concerns for the latest or specified release revision.                                        │
+│ exceptions   Get check exceptions for the latest or specified release revision.                                      │
+│ notes        Get check notes for the latest or specified release revision.                                           │
 │ status       Get check status for a release revision.                                                                │
-│ suggestions  Get check suggestions for a release revision.                                                           │
+│ suggestions  Get check suggestions for the latest or specified release revision.                                     │
 │ wait         Wait for checks to be completed.                                                                        │
 ╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
 ```
@@ -112,16 +112,16 @@ Check result operations.
 ### atr check blockers
 
 ```
-Usage: atr check blockers PROJECT VERSION REVISION [ARGS]
+Usage: atr check blockers PROJECT VERSION [ARGS]
 
-Get check blockers for a release revision.
+Get check blockers for the latest or specified release revision.
 
 ╭─ Arguments ──────────────────────────────────────────────────────────────────────────────────────────────────────────╮
-│ *  PROJECT   [required]                                                                                              │
-│ *  VERSION   [required]                                                                                              │
-│ *  REVISION  [required]                                                                                              │
+│ *  PROJECT  [required]                                                                                               │
+│ *  VERSION  [required]                                                                                               │
 ╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
 ╭─ Parameters ─────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│ REVISION --revision                                                                                                  │
 │ MEMBERS --members -m --no-members  [default: False]                                                                  │
 ╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
 ```
@@ -129,16 +129,16 @@ Get check blockers for a release revision.
 ### atr check concerns
 
 ```
-Usage: atr check concerns PROJECT VERSION REVISION [ARGS]
+Usage: atr check concerns PROJECT VERSION [ARGS]
 
-Get check concerns for a release revision.
+Get check concerns for the latest or specified release revision.
 
 ╭─ Arguments ──────────────────────────────────────────────────────────────────────────────────────────────────────────╮
-│ *  PROJECT   [required]                                                                                              │
-│ *  VERSION   [required]                                                                                              │
-│ *  REVISION  [required]                                                                                              │
+│ *  PROJECT  [required]                                                                                               │
+│ *  VERSION  [required]                                                                                               │
 ╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
 ╭─ Parameters ─────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│ REVISION --revision                                                                                                  │
 │ MEMBERS --members -m --no-members  [default: False]                                                                  │
 ╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
 ```
@@ -146,16 +146,16 @@ Get check concerns for a release revision.
 ### atr check exceptions
 
 ```
-Usage: atr check exceptions PROJECT VERSION REVISION [ARGS]
+Usage: atr check exceptions PROJECT VERSION [ARGS]
 
-Get check exceptions for a release revision.
+Get check exceptions for the latest or specified release revision.
 
 ╭─ Arguments ──────────────────────────────────────────────────────────────────────────────────────────────────────────╮
-│ *  PROJECT   [required]                                                                                              │
-│ *  VERSION   [required]                                                                                              │
-│ *  REVISION  [required]                                                                                              │
+│ *  PROJECT  [required]                                                                                               │
+│ *  VERSION  [required]                                                                                               │
 ╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
 ╭─ Parameters ─────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│ REVISION --revision                                                                                                  │
 │ MEMBERS --members -m --no-members  [default: False]                                                                  │
 ╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
 ```
@@ -163,16 +163,16 @@ Get check exceptions for a release revision.
 ### atr check notes
 
 ```
-Usage: atr check notes PROJECT VERSION REVISION [ARGS]
+Usage: atr check notes PROJECT VERSION [ARGS]
 
-Get check notes for a release revision.
+Get check notes for the latest or specified release revision.
 
 ╭─ Arguments ──────────────────────────────────────────────────────────────────────────────────────────────────────────╮
-│ *  PROJECT   [required]                                                                                              │
-│ *  VERSION   [required]                                                                                              │
-│ *  REVISION  [required]                                                                                              │
+│ *  PROJECT  [required]                                                                                               │
+│ *  VERSION  [required]                                                                                               │
 ╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
 ╭─ Parameters ─────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│ REVISION --revision                                                                                                  │
 │ MEMBERS --members -m --no-members  [default: False]                                                                  │
 ╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
 ```
@@ -197,16 +197,16 @@ Get check status for a release revision.
 ### atr check suggestions
 
 ```
-Usage: atr check suggestions PROJECT VERSION REVISION [ARGS]
+Usage: atr check suggestions PROJECT VERSION [ARGS]
 
-Get check suggestions for a release revision.
+Get check suggestions for the latest or specified release revision.
 
 ╭─ Arguments ──────────────────────────────────────────────────────────────────────────────────────────────────────────╮
-│ *  PROJECT   [required]                                                                                              │
-│ *  VERSION   [required]                                                                                              │
-│ *  REVISION  [required]                                                                                              │
+│ *  PROJECT  [required]                                                                                               │
+│ *  VERSION  [required]                                                                                               │
 ╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
 ╭─ Parameters ─────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│ REVISION --revision                                                                                                  │
 │ MEMBERS --members -m --no-members  [default: False]                                                                  │
 ╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
 ```

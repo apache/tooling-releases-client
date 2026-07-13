@@ -167,8 +167,6 @@ def test_app_check_bucket_commands_list_results(
     client.app_set("atr.host", "example.invalid")
     client.app_set("tokens.jwt", "dummy_jwt_token")
 
-    checks_url = "https://example.invalid/api/checks/list/test-project/2.3.1/00003"
-
     def check(status: str, checker: str, path: str, message: str) -> dict[str, Any]:
         return {
             "release_name": "test-project-2.3.1",
@@ -201,15 +199,20 @@ def test_app_check_bucket_commands_list_results(
         (client.app_check_notes, "note.txt", "Just a note"),
     ]
     for command, expected_path, expected_message in cases:
-        with aioresponses.aioresponses() as mock:
-            mock.get(checks_url, status=200, payload=checks_payload)
-            command("test-project", "2.3.1", "00003")
-        out = capsys.readouterr().out
-        assert expected_path in out
-        assert expected_message in out
-        other_messages = [m for _, _, m in cases if m != expected_message]
-        for other in other_messages:
-            assert other not in out
+        for revision, suffix in [(None, ""), ("00003", "/00003")]:
+            checks_url = f"https://example.invalid/api/checks/list/test-project/2.3.1{suffix}"
+            with aioresponses.aioresponses() as mock:
+                mock.get(checks_url, status=200, payload=checks_payload)
+                if revision is None:
+                    command("test-project", "2.3.1")
+                else:
+                    command("test-project", "2.3.1", revision)
+            out = capsys.readouterr().out
+            assert expected_path in out
+            assert expected_message in out
+            other_messages = [m for _, _, m in cases if m != expected_message]
+            for other in other_messages:
+                assert other not in out
 
 
 def test_app_check_concerns_group_summary(capsys: pytest.CaptureFixture[str], fixture_config_env: pathlib.Path) -> None:

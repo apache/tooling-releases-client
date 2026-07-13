@@ -101,8 +101,8 @@ def post(path: str) -> Callable[[Callable[[ApiPost, A], R]], Callable[[A], R]]:
 
 
 @get("/checks/list")
-def checks_list(api: ApiGet, project: str, version: str, revision: str) -> models.api.ChecksListResults:
-    response = api.get(project, version, revision)
+def checks_list(api: ApiGet, project: str, version: str, revision: str | None = None) -> models.api.ChecksListResults:
+    response = api.get(project, version, revision=revision)
     return models.api.validate_checks_list(response)
 
 
