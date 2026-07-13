@@ -51,7 +51,7 @@ $ atr check status test-client 0.3+cli 00004
 Total checks: <.skip.>
 <.etc.>
 
-<# supply a literal body while omitting the subject to exercise its server-side template #>
+<# supply a literal body while omitting the subject and duration to exercise their server-side defaults #>
 $ atr vote start test-client 0.3+cli 00004 -m "<!user!>@apache.org" -b "Vote body supplied as literal text." --concerns-noted atr.tasks.checks.rat.check
 <.skip.>"email_to":"<!user!>@apache.org"<.skip.>
 

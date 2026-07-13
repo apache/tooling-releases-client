@@ -511,6 +511,7 @@ def test_app_vote_start_serializes_template_defaults_and_file_body(
 
     assert captured_requests[0]["subject"] is None
     assert captured_requests[0]["body"] is None
+    assert captured_requests[0]["vote_duration"] is None
     assert captured_requests[1]["subject"] == "[VOTE] Custom subject"
     assert captured_requests[1]["body"] == "Custom vote body\n"
 

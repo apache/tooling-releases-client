@@ -965,7 +965,14 @@ def app_vote_start(
     revision: str | None = None,
     *,
     mailing_list: Annotated[str, cyclopts.Parameter(alias="-m", name="--mailing-list")],
-    duration: Annotated[int, cyclopts.Parameter(alias="-d", name="--duration")] = 72,
+    duration: Annotated[
+        int | None,
+        cyclopts.Parameter(
+            alias="-d",
+            name="--duration",
+            help="Hours the vote stays open; if omitted, the server uses the project policy's minimum duration.",
+        ),
+    ] = None,
     subject: Annotated[
         str | None,
         cyclopts.Parameter(

@@ -876,7 +876,8 @@ Start a vote.
 ╭─ Parameters ─────────────────────────────────────────────────────────────────────────────────────────────────────────╮
 │    REVISION --revision                                                                                               │
 │ *  --mailing-list -m                 [required]                                                                      │
-│    --duration -d                     [default: 72]                                                                   │
+│    --duration -d                     Hours the vote stays open; if omitted, the server uses the project policy's     │
+│                                      minimum duration.                                                               │
 │    --subject -s                      Vote email subject. If omitted, the server renders it from the project's vote   │
 │                                      email subject template.                                                         │
 │    --body -b                         Literal vote email body text. If omitted along with --body-file, the server     │
