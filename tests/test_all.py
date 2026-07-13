@@ -85,8 +85,8 @@ def test_app_checks_status_non_draft_phase(
         assert "Checks are only performed during the draft phase." in captured.out
 
 
-def test_app_announce_serializes_template_default_and_literal_body(
-    capsys: pytest.CaptureFixture[str], fixture_config_env: pathlib.Path
+def test_app_announce_serializes_template_default_and_bodies(
+    capsys: pytest.CaptureFixture[str], fixture_config_env: pathlib.Path, tmp_path: pathlib.Path
 ) -> None:
     config.write(
         {
@@ -103,7 +103,11 @@ def test_app_announce_serializes_template_default_and_literal_body(
         captured_requests.append(kwargs["json"])
         return aioresponses.CallbackResult(status=201, payload=response_payload)
 
+    body_path = tmp_path / "announce-body.txt"
+    body_path.write_text("Announcement body from file\n", encoding="utf-8")
+
     with aioresponses.aioresponses() as mock:
+        mock.post(announce_url, callback=capture_request)
         mock.post(announce_url, callback=capture_request)
         mock.post(announce_url, callback=capture_request)
         client.app_announce("test-project", "2.3.1", mailing_list="announce@example.apache.org")
@@ -115,6 +119,13 @@ def test_app_announce_serializes_template_default_and_literal_body(
             body="Custom announcement body",
         )
         custom_record = json.loads(capsys.readouterr().out)
+        client.app_announce(
+            "test-project",
+            "2.3.1",
+            mailing_list="announce@example.apache.org",
+            body_file=str(body_path),
+        )
+        file_record = json.loads(capsys.readouterr().out)
 
     assert captured_requests[0]["body"] is None
     assert default_record["body"] is None
@@ -122,6 +133,22 @@ def test_app_announce_serializes_template_default_and_literal_body(
     assert captured_requests[1]["body"] == "Custom announcement body"
     assert custom_record["body"] == "Custom announcement body"
     assert "body_rendered_by_server" not in custom_record
+    assert captured_requests[2]["body"] == "Announcement body from file\n"
+    assert file_record["body"] == "Announcement body from file\n"
+    assert "body_rendered_by_server" not in file_record
+
+
+def test_app_announce_rejects_body_and_body_file(capsys: pytest.CaptureFixture[str]) -> None:
+    with pytest.raises(SystemExit):
+        client.app_announce(
+            "test-project",
+            "2.3.1",
+            mailing_list="announce@example.apache.org",
+            body="Literal body",
+            body_file="body.txt",
+        )
+
+    assert capsys.readouterr().err == "atr: error: Cannot use both --body and --body-file.\n"
 
 
 def test_app_checks_status_verbose(capsys: pytest.CaptureFixture[str], fixture_config_env: pathlib.Path) -> None:
@@ -479,13 +506,40 @@ def test_app_vote_start_serializes_template_defaults_and_file_body(
             "2.3.1",
             mailing_list="dev@example.apache.org",
             subject="[VOTE] Custom subject",
-            body=str(body_path),
+            body_file=str(body_path),
         )
 
     assert captured_requests[0]["subject"] is None
     assert captured_requests[0]["body"] is None
     assert captured_requests[1]["subject"] == "[VOTE] Custom subject"
     assert captured_requests[1]["body"] == "Custom vote body\n"
+
+
+def test_app_vote_start_rejects_body_and_body_file(capsys: pytest.CaptureFixture[str]) -> None:
+    with pytest.raises(SystemExit):
+        client.app_vote_start(
+            "test-project",
+            "2.3.1",
+            mailing_list="dev@example.apache.org",
+            body="Literal body",
+            body_file="body.txt",
+        )
+
+    assert capsys.readouterr().err == "atr: error: Cannot use both --body and --body-file.\n"
+
+
+def test_app_vote_start_rejects_file_path_as_literal_body(
+    capsys: pytest.CaptureFixture[str], tmp_path: pathlib.Path
+) -> None:
+    body_path = tmp_path / "vote-body.txt"
+    body_path.write_text("Custom vote body\n", encoding="utf-8")
+
+    with pytest.raises(SystemExit):
+        client.app_vote_start("test-project", "2.3.1", mailing_list="dev@example.apache.org", body=str(body_path))
+
+    assert capsys.readouterr().err == (
+        "atr: error: The --body value names an existing file; use --body-file instead.\n"
+    )
 
 
 def test_app_release_list_success(capsys: pytest.CaptureFixture[str], fixture_config_env: pathlib.Path) -> None:

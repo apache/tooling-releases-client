@@ -46,8 +46,10 @@ Announce a release.
 ╭─ Parameters ─────────────────────────────────────────────────────────────────────────────────────────────────────────╮
 │    REVISION --revision                                                                                               │
 │ *  --mailing-list -m    [required]                                                                                   │
-│    --body -b            Literal announcement email body. If omitted, the server renders it from the project's        │
-│                         announce email template.                                                                     │
+│    --body -b            Literal announcement email body text. If omitted along with --body-file, the server renders  │
+│                         it from the project's announce email template.                                               │
+│    --body-file          Path to a UTF-8 file containing the announcement email body. If omitted along with --body,   │
+│                         the server renders it from the project's announce email template.                            │
 │    --path-suffix -p                                                                                                  │
 ╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
 ```
@@ -877,8 +879,10 @@ Start a vote.
 │    --duration -d                     [default: 72]                                                                   │
 │    --subject -s                      Vote email subject. If omitted, the server renders it from the project's vote   │
 │                                      email subject template.                                                         │
-│    --body -b                         Path to a file containing the vote email body. If omitted, the server renders   │
-│                                      it from the project's vote email body template.                                 │
+│    --body -b                         Literal vote email body text. If omitted along with --body-file, the server     │
+│                                      renders it from the project's vote email body template.                         │
+│    --body-file                       Path to a UTF-8 file containing the vote email body. If omitted along with      │
+│                                      --body, the server renders it from the project's vote email body template.      │
 │    --concerns-noted -c               Comma separated keys of the concern groups that you reviewed, e.g.              │
 │                                      atr.tasks.checks.license.headers. Every current concern group must be           │
 │                                      acknowledged by its key before a vote can start. The atr check concerns command │

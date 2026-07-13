@@ -106,19 +106,36 @@ def app_announce(
             alias="-b",
             name="--body",
             help=(
-                "Literal announcement email body. If omitted, the server renders it from "
-                "the project's announce email template."
+                "Literal announcement email body text. If omitted along with --body-file, the server renders it "
+                "from the project's announce email template."
+            ),
+        ),
+    ] = None,
+    body_file: Annotated[
+        str | None,
+        cyclopts.Parameter(
+            name="--body-file",
+            help=(
+                "Path to a UTF-8 file containing the announcement email body. If omitted along with --body, "
+                "the server renders it from the project's announce email template."
             ),
         ),
     ] = None,
     path_suffix: Annotated[str | None, cyclopts.Parameter(alias="-p", name="--path-suffix")] = None,
 ) -> None:
+    if (body is not None) and (body_file is not None):
+        show.error_and_exit("Cannot use both --body and --body-file.")
+    body_text = body
+    if body_file is not None:
+        with open(body_file, encoding="utf-8") as fh:
+            body_text = fh.read()
+
     announce_args = models.api.ReleaseAnnounceArgs(
         project=models.safe.ProjectKey(project),
         version=models.safe.VersionKey(version),
         revision=models.safe.RevisionNumber(revision) if revision else None,
         email_to=mailing_list,
-        body=body,
+        body=body_text,
         path_suffix=models.safe.RelPath(path_suffix) if path_suffix else None,
     )
     announce = api.release_announce(announce_args)
@@ -127,7 +144,7 @@ def app_announce(
     # The result only contains a success bool, so the request arguments contain most of the information.
     announce_record = announce_args.model_dump(mode="json")
     success_message = "Announcement sent."
-    if body is None:
+    if body_text is None:
         announce_record["body_rendered_by_server"] = True
         success_message = (
             "Announcement sent with a body rendered by the server from the project's announce email template."
@@ -965,8 +982,18 @@ def app_vote_start(
             alias="-b",
             name="--body",
             help=(
-                "Path to a file containing the vote email body. If omitted, the server renders it from "
+                "Literal vote email body text. If omitted along with --body-file, the server renders it from "
                 "the project's vote email body template."
+            ),
+        ),
+    ] = None,
+    body_file: Annotated[
+        str | None,
+        cyclopts.Parameter(
+            name="--body-file",
+            help=(
+                "Path to a UTF-8 file containing the vote email body. If omitted along with --body, the server "
+                "renders it from the project's vote email body template."
             ),
         ),
     ] = None,
@@ -983,9 +1010,13 @@ def app_vote_start(
     ] = None,
     auto_publish: Annotated[bool, cyclopts.Parameter(name="--auto-publish")] = False,
 ) -> None:
-    body_text = None
-    if body:
-        with open(body, encoding="utf-8") as fh:
+    if (body is not None) and (body_file is not None):
+        show.error_and_exit("Cannot use both --body and --body-file.")
+    if (body is not None) and os.path.isfile(body):
+        show.error_and_exit("The --body value names an existing file; use --body-file instead.")
+    body_text = body
+    if body_file is not None:
+        with open(body_file, encoding="utf-8") as fh:
             body_text = fh.read()
 
     vote_start_args = models.api.VoteStartArgs(
