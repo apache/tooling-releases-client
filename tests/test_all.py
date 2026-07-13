@@ -187,6 +187,7 @@ def test_app_check_bucket_commands_list_results(
         "checks": [
             check("blocker", "rat", "blocker.txt", "A blocking problem"),
             check("concern", "rat", "concern.txt", "A concern"),
+            check("exception", "rat", "exception.txt", "An exception"),
             check("suggestion", "rat", "suggestion.txt", "A suggestion"),
             check("note", "rat", "note.txt", "Just a note"),
         ],
@@ -195,6 +196,7 @@ def test_app_check_bucket_commands_list_results(
     cases = [
         (client.app_check_blockers, "blocker.txt", "A blocking problem"),
         (client.app_check_concerns, "concern.txt", "A concern"),
+        (client.app_check_exceptions, "exception.txt", "An exception"),
         (client.app_check_suggestions, "suggestion.txt", "A suggestion"),
         (client.app_check_notes, "note.txt", "Just a note"),
     ]
@@ -254,6 +256,141 @@ def test_app_check_concerns_group_summary(capsys: pytest.CaptureFixture[str], fi
     assert "Concern groups (keys for vote start --concerns-noted):" in out
     assert " - atr.tasks.checks.license.headers (2)" in out
     assert " - atr.tasks.checks.paths (1)" in out
+
+
+def test_app_check_bucket_commands_acknowledge_no_matching_results(
+    capsys: pytest.CaptureFixture[str], fixture_config_env: pathlib.Path
+) -> None:
+    client.app_set("atr.host", "example.invalid")
+    client.app_set("tokens.jwt", "dummy_jwt_token")
+    capsys.readouterr()
+
+    checks_url = "https://example.invalid/api/checks/list/test-project/2.3.1/00003"
+    cases = [
+        (client.app_check_blockers, "blocker", "note"),
+        (client.app_check_concerns, "concern", "note"),
+        (client.app_check_exceptions, "exception", "note"),
+        (client.app_check_notes, "note", "suggestion"),
+        (client.app_check_suggestions, "suggestion", "note"),
+    ]
+
+    for command, requested_status, other_status in cases:
+        checks_payload = {
+            "endpoint": "/checks/list",
+            "checks_revision": "00003",
+            "current_phase": "release_candidate_draft",
+            "checks": [
+                {
+                    "release_name": "test-project-2.3.1",
+                    "revision_number": "00003",
+                    "created": "2025-01-01T00:00:00Z",
+                    "status": other_status,
+                    "checker": "rat",
+                    "primary_rel_path": "other.txt",
+                    "member_rel_path": None,
+                    "message": "A different result",
+                    "data": None,
+                }
+            ],
+        }
+        with aioresponses.aioresponses() as mock:
+            mock.get(checks_url, status=200, payload=checks_payload)
+            command("test-project", "2.3.1", "00003")
+
+        out = capsys.readouterr().out
+        assert out == f"No {requested_status} check results found for revision 00003.\n"
+
+
+def test_app_check_concerns_reports_no_check_results(
+    capsys: pytest.CaptureFixture[str], fixture_config_env: pathlib.Path
+) -> None:
+    client.app_set("atr.host", "example.invalid")
+    client.app_set("tokens.jwt", "dummy_jwt_token")
+    capsys.readouterr()
+
+    checks_url = "https://example.invalid/api/checks/list/test-project/2.3.1/00003"
+    checks_payload = {
+        "endpoint": "/checks/list",
+        "checks_revision": "00003",
+        "current_phase": "release_candidate_draft",
+        "checks": [],
+    }
+    with aioresponses.aioresponses() as mock:
+        mock.get(checks_url, status=200, payload=checks_payload)
+        client.app_check_concerns("test-project", "2.3.1", "00003")
+
+    assert capsys.readouterr().out == "No check results found for revision 00003.\n"
+
+
+def test_app_check_concerns_reports_hidden_member_results(
+    capsys: pytest.CaptureFixture[str], fixture_config_env: pathlib.Path
+) -> None:
+    client.app_set("atr.host", "example.invalid")
+    client.app_set("tokens.jwt", "dummy_jwt_token")
+
+    checks_url = "https://example.invalid/api/checks/list/test-project/2.3.1/00003"
+    checks_payload = {
+        "endpoint": "/checks/list",
+        "checks_revision": "00003",
+        "current_phase": "release_candidate_draft",
+        "checks": [
+            {
+                "release_name": "test-project-2.3.1",
+                "revision_number": "00003",
+                "created": "2025-01-01T00:00:00Z",
+                "status": "concern",
+                "checker": "atr.tasks.checks.rat.check",
+                "primary_rel_path": "source.tar.gz",
+                "member_rel_path": "src/example.py",
+                "message": "A member concern",
+                "data": None,
+            }
+        ],
+    }
+    with aioresponses.aioresponses() as mock:
+        mock.get(checks_url, status=200, payload=checks_payload)
+        client.app_check_concerns("test-project", "2.3.1", "00003")
+
+    out = capsys.readouterr().out
+    assert "No visible concern check results found for revision 00003." in out
+    assert "1 archive-member check result hidden; use --members to show them." in out
+    assert "Concern groups (keys for vote start --concerns-noted):" in out
+
+
+def test_app_check_concerns_displays_release_level_results(
+    capsys: pytest.CaptureFixture[str], fixture_config_env: pathlib.Path
+) -> None:
+    client.app_set("atr.host", "example.invalid")
+    client.app_set("tokens.jwt", "dummy_jwt_token")
+
+    checks_url = "https://example.invalid/api/checks/list/test-project/2.3.1/00003"
+
+    def concern(path: str | None, message: str) -> dict[str, Any]:
+        return {
+            "release_name": "test-project-2.3.1",
+            "revision_number": "00003",
+            "created": "2025-01-01T00:00:00Z",
+            "status": "concern",
+            "checker": "atr.tasks.checks.rat.check",
+            "primary_rel_path": path,
+            "member_rel_path": None,
+            "message": message,
+            "data": None,
+        }
+
+    checks_payload = {
+        "endpoint": "/checks/list",
+        "checks_revision": "00003",
+        "current_phase": "release_candidate_draft",
+        "checks": [concern(None, "A release concern"), concern("source.tar.gz", "A file concern")],
+    }
+    with aioresponses.aioresponses() as mock:
+        mock.get(checks_url, status=200, payload=checks_payload)
+        client.app_check_concerns("test-project", "2.3.1", "00003")
+
+    out = capsys.readouterr().out
+    assert "(release)\n - A release concern (rat.check)" in out
+    assert "source.tar.gz\n - A file concern (rat.check)" in out
 
 
 def test_app_release_list_not_found(capsys: pytest.CaptureFixture[str], fixture_config_env: pathlib.Path) -> None:

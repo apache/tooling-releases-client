@@ -159,7 +159,12 @@ def app_check_blockers(
     members: Annotated[bool, cyclopts.Parameter(alias="-m", name="--members")] = False,
 ) -> None:
     checks_list = api.checks_list(project, version, revision=revision)
-    checks_display_status(models.sql.CheckResultStatus.BLOCKER, checks_list.checks, members=members)
+    checks_display_status(
+        models.sql.CheckResultStatus.BLOCKER,
+        checks_list.checks,
+        checks_list.checks_revision,
+        members=members,
+    )
 
 
 @APP_CHECK.command(name="concerns", help="Get check concerns for the latest or specified release revision.")
@@ -171,7 +176,12 @@ def app_check_concerns(
     members: Annotated[bool, cyclopts.Parameter(alias="-m", name="--members")] = False,
 ) -> None:
     checks_list = api.checks_list(project, version, revision=revision)
-    checks_display_status(models.sql.CheckResultStatus.CONCERN, checks_list.checks, members=members)
+    checks_display_status(
+        models.sql.CheckResultStatus.CONCERN,
+        checks_list.checks,
+        checks_list.checks_revision,
+        members=members,
+    )
     checks_display_concern_groups(checks_list.checks)
 
 
@@ -184,7 +194,12 @@ def app_check_exceptions(
     members: Annotated[bool, cyclopts.Parameter(alias="-m", name="--members")] = False,
 ) -> None:
     checks_list = api.checks_list(project, version, revision=revision)
-    checks_display_status(models.sql.CheckResultStatus.EXCEPTION, checks_list.checks, members=members)
+    checks_display_status(
+        models.sql.CheckResultStatus.EXCEPTION,
+        checks_list.checks,
+        checks_list.checks_revision,
+        members=members,
+    )
 
 
 @APP_CHECK.command(name="notes", help="Get check notes for the latest or specified release revision.")
@@ -196,7 +211,12 @@ def app_check_notes(
     members: Annotated[bool, cyclopts.Parameter(alias="-m", name="--members")] = False,
 ) -> None:
     checks_list = api.checks_list(project, version, revision=revision)
-    checks_display_status(models.sql.CheckResultStatus.NOTE, checks_list.checks, members=members)
+    checks_display_status(
+        models.sql.CheckResultStatus.NOTE,
+        checks_list.checks,
+        checks_list.checks_revision,
+        members=members,
+    )
 
 
 @APP_CHECK.command(name="status", help="Get check status for a release revision.")
@@ -235,7 +255,12 @@ def app_check_suggestions(
     members: Annotated[bool, cyclopts.Parameter(alias="-m", name="--members")] = False,
 ) -> None:
     checks_list = api.checks_list(project, version, revision=revision)
-    checks_display_status(models.sql.CheckResultStatus.SUGGESTION, checks_list.checks, members=members)
+    checks_display_status(
+        models.sql.CheckResultStatus.SUGGESTION,
+        checks_list.checks,
+        checks_list.checks_revision,
+        members=members,
+    )
 
 
 @APP_CHECK.command(name="wait", help="Wait for checks to be completed.")
@@ -993,18 +1018,28 @@ def checks_display_details(by_status: dict[str, list[models.sql.CheckResult]], v
 def checks_display_status(
     status: models.sql.CheckResultStatus,
     results: Sequence[models.sql.CheckResult],
+    revision: models.safe.RevisionNumber,
     members: bool,
 ) -> None:
-    messages = {}
-    for result in results:
-        if result.status != status:
-            continue
+    if not results:
+        print(f"No check results found for revision {revision}.")
+        return
+
+    matching_results = [result for result in results if result.status == status]
+    if not matching_results:
+        print(f"No {status.value} check results found for revision {revision}.")
+        return
+
+    messages: dict[str, list[str]] = {}
+    hidden_member_count = 0
+    for result in matching_results:
         member_rel_path = result.member_rel_path
         if member_rel_path and (not members):
+            hidden_member_count += 1
             continue
         checker = result.checker or ""
         message = result.message
-        primary_rel_path = result.primary_rel_path
+        primary_rel_path = result.primary_rel_path or "(release)"
         if not member_rel_path:
             path = primary_rel_path
         else:
@@ -1014,6 +1049,12 @@ def checks_display_status(
             messages[path] = []
         msg = f" - {message} ({checker.removeprefix('atr.tasks.checks.')})"
         messages[path].append(msg)
+
+    if not messages:
+        noun = "result" if hidden_member_count == 1 else "results"
+        print(f"No visible {status.value} check results found for revision {revision}.")
+        print(f"{hidden_member_count} archive-member check {noun} hidden; use --members to show them.")
+        return
 
     for path in sorted(messages):
         print(path)
