@@ -874,8 +874,10 @@ Start a vote.
 │    REVISION --revision                                                                                               │
 │ *  --mailing-list -m                 [required]                                                                      │
 │    --duration -d                     [default: 72]                                                                   │
-│    --subject -s                                                                                                      │
-│    --body -b                                                                                                         │
+│    --subject -s                      Vote email subject. If omitted, the server renders it from the project's vote   │
+│                                      email subject template.                                                         │
+│    --body -b                         Path to a file containing the vote email body. If omitted, the server renders   │
+│                                      it from the project's vote email body template.                                 │
 │    --concerns-noted -c               Comma separated keys of the concern groups that you reviewed, e.g.              │
 │                                      atr.tasks.checks.license.headers. Every current concern group must be           │
 │                                      acknowledged by its key before a vote can start. The atr check concerns command │

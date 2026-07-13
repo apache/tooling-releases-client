@@ -51,6 +51,7 @@ $ atr check status test-client 0.3+cli 00004
 Total checks: <.skip.>
 <.etc.>
 
+<# omit subject and body to exercise server-side vote templates #>
 $ atr vote start test-client 0.3+cli 00004 -m "<!user!>@apache.org" --concerns-noted atr.tasks.checks.rat.check
 <.skip.>"email_to":"<!user!>@apache.org"<.skip.>
 

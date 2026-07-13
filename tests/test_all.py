@@ -405,6 +405,49 @@ def test_app_release_list_not_found(capsys: pytest.CaptureFixture[str], fixture_
             client.app_release_list("nonexistent-project")
 
 
+def test_app_vote_start_serializes_template_defaults_and_file_body(
+    capsys: pytest.CaptureFixture[str], fixture_config_env: pathlib.Path, tmp_path: pathlib.Path
+) -> None:
+    client.app_set("atr.host", "example.invalid")
+    client.app_set("tokens.jwt", "dummy_jwt_token")
+    capsys.readouterr()
+
+    vote_url = "https://example.invalid/api/vote/start"
+    captured_requests: list[dict[str, Any]] = []
+    response_payload = {
+        "endpoint": "/vote/start",
+        "task": {
+            "task_type": "vote_initiate",
+            "task_args": {},
+            "asf_uid": "test-user",
+        },
+    }
+
+    def capture_request(_url: Any, **kwargs: Any) -> aioresponses.CallbackResult:
+        captured_requests.append(kwargs["json"])
+        return aioresponses.CallbackResult(status=201, payload=response_payload)
+
+    body_path = tmp_path / "vote-body.txt"
+    body_path.write_text("Custom vote body\n", encoding="utf-8")
+
+    with aioresponses.aioresponses() as mock:
+        mock.post(vote_url, callback=capture_request)
+        mock.post(vote_url, callback=capture_request)
+        client.app_vote_start("test-project", "2.3.1", mailing_list="dev@example.apache.org")
+        client.app_vote_start(
+            "test-project",
+            "2.3.1",
+            mailing_list="dev@example.apache.org",
+            subject="[VOTE] Custom subject",
+            body=str(body_path),
+        )
+
+    assert captured_requests[0]["subject"] is None
+    assert captured_requests[0]["body"] is None
+    assert captured_requests[1]["subject"] == "[VOTE] Custom subject"
+    assert captured_requests[1]["body"] == "Custom vote body\n"
+
+
 def test_app_release_list_success(capsys: pytest.CaptureFixture[str], fixture_config_env: pathlib.Path) -> None:
     client.app_set("atr.host", "example.invalid")
 

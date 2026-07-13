@@ -933,8 +933,27 @@ def app_vote_start(
     *,
     mailing_list: Annotated[str, cyclopts.Parameter(alias="-m", name="--mailing-list")],
     duration: Annotated[int, cyclopts.Parameter(alias="-d", name="--duration")] = 72,
-    subject: Annotated[str | None, cyclopts.Parameter(alias="-s", name="--subject")] = None,
-    body: Annotated[str | None, cyclopts.Parameter(alias="-b", name="--body")] = None,
+    subject: Annotated[
+        str | None,
+        cyclopts.Parameter(
+            alias="-s",
+            name="--subject",
+            help=(
+                "Vote email subject. If omitted, the server renders it from the project's vote email subject template."
+            ),
+        ),
+    ] = None,
+    body: Annotated[
+        str | None,
+        cyclopts.Parameter(
+            alias="-b",
+            name="--body",
+            help=(
+                "Path to a file containing the vote email body. If omitted, the server renders it from "
+                "the project's vote email body template."
+            ),
+        ),
+    ] = None,
     concerns_noted: Annotated[
         str | None,
         cyclopts.Parameter(
@@ -959,8 +978,8 @@ def app_vote_start(
         revision=models.safe.RevisionNumber(revision) if revision else None,
         email_to=mailing_list,
         vote_duration=duration,
-        subject=subject or f"[VOTE] Release {project} {version}",
-        body=body_text or f"Release {project} {version} is ready for voting.",
+        subject=subject,
+        body=body_text,
         concerns_noted=concerns_noted.split(",") if concerns_noted else [],
         automatic_publish_when_resolved=auto_publish,
     )
