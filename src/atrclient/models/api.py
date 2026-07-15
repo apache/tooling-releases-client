@@ -42,6 +42,9 @@ class CatalogArtifact(schema.Strict):
     sbom_path: str | None
     key_fingerprint: str | None
     svn_revision: int | None
+    # True when the artifact came through ATR; dated by its date of action
+    managed: bool
+    dated: datetime.datetime | None
     downloadable: bool
     # Public download URLs: the artifact via the mirror network, its signature,
     # checksum and SBOM from downloads.apache.org. None when the version is not downloadable.
@@ -50,12 +53,18 @@ class CatalogArtifact(schema.Strict):
     checksum_url: str | None
     sbom_url: str | None
 
+    @pydantic.field_validator("dated", mode="before")
+    @classmethod
+    def dated_from_iso(cls, v):
+        return datetime.datetime.fromisoformat(v) if isinstance(v, str) else v
+
 
 class CatalogVersion(schema.Strict):
     version: safe.VersionKey
     status: Literal["released", "archived"]
     released: datetime.datetime | None
     svn_revision: int | None
+    managed: bool
     # The cycle's display label (e.g. "2.x"), or None for versions outside any cycle.
     cycle: str | None
     # The per-version CLE feed, or None when no released-phase record backs this version.
@@ -432,6 +441,7 @@ class PolicyArgsBase(schema.Strict):
     license_check_mode: sql.LicenseCheckMode | None = None
     vote_recipients: RecipientDefaults | None = None
     announce_recipients: RecipientDefaults | None = None
+    download_path_suffix: str | None = None
     manual_vote: bool | None = None
     min_hours: int | None = None
     preserve_download_files: bool | None = None
@@ -473,6 +483,9 @@ class PolicyArgsBase(schema.Strict):
         if self.min_hours is not None:
             validation.validate_policy_min_hours(self.min_hours)
 
+        if self.download_path_suffix is not None:
+            validation.validate_download_path_suffix(self.download_path_suffix)
+
         github_repository_name = self.github_repository_name
         if github_repository_name is not None:
             validation.validate_github_repository_name(github_repository_name.strip())
@@ -509,6 +522,9 @@ class ProjectConfigProjectArgs(schema.Strict):
     download_page: pydantic.HttpUrl | None = None
     bug_database: pydantic.HttpUrl | None = None
     mailing_lists: pydantic.HttpUrl | None = None
+    security_contact: str | None = None
+    threat_model_link: pydantic.HttpUrl | None = None
+    threat_model_src_link: pydantic.HttpUrl | None = None
     repositories: list[str] | None = None
     standards: list[str] | None = None
     categories: list[str] | None = None
@@ -570,6 +586,14 @@ class ProjectConfigArgs(schema.Strict):
             validation.validate_vote_recipients(committee_key, self.policy.vote_recipients.addresses())
         if self.policy.announce_recipients is not None:
             validation.validate_announce_recipients(self.policy.announce_recipients.addresses())
+        return self
+
+    @pydantic.model_validator(mode="after")
+    def _validate_security_contact(self) -> Self:
+        if self.project is None:
+            return self
+        contact = self.project.security_contact
+        validation.validate_security_contact(str(self.committee_key), contact.strip() if contact else contact)
         return self
 
 
@@ -769,8 +793,6 @@ class SignatureProvenanceArgs(schema.Strict):
 
 class SignatureProvenanceKey(schema.Strict):
     committee: str = schema.example("example")
-    keys_file_url: str = schema.example("https://example.apache.org/example/KEYS")
-    keys_file_sha3_256: str = schema.example("0123456789abcdef0123456789abcdef01234567")
 
 
 class SignatureProvenanceResults(schema.Strict):
@@ -942,6 +964,7 @@ type Results = Annotated[
     | CommitteesListResults
     | DistributionListResults
     | DistributionRecordResults
+    | DistributeSshRegisterResults
     | IgnoreAddResults
     | IgnoreDeleteResults
     | IgnoreListResults

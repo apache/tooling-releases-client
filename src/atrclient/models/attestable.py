@@ -50,9 +50,11 @@ class HashEntryV2(schema.Strict):
     size: int
     uploaders: list[Annotated[tuple[str, str], pydantic.BeforeValidator(tuple)]]
     basenames: list[str] = schema.factory(list)
+    swhid_dir_inner: str | None = None
 
 
 class GeneratorV2(enum.Enum):
+    SHA512_FROM_CONTENT = "SHA512_from_content"
     SHA512_FROM_SIGNATURE = "SHA512_from_signature"
 
 

@@ -25,7 +25,7 @@ from typing import Annotated, Any, Final
 import pydantic
 
 _ALPHANUM: Final = frozenset(string.ascii_letters + string.digits + "-")
-_PROJECT_CHARS: Final = _ALPHANUM | frozenset("+")
+_PROJECT_CHARS: Final = _ALPHANUM
 _ASF_UID_CHARS: Final = frozenset(string.ascii_lowercase + string.digits + "-_")
 _NUMERIC: Final = frozenset(string.digits)
 _PATH_CHARS: Final = frozenset(string.ascii_letters + string.digits + "-._+~/()")
@@ -249,6 +249,9 @@ class RelPath(SafeType):
             raise ValueError("Absolute paths are not allowed")
         if "//" in value:
             raise ValueError("Path cannot contain empty segments")
+        # pathlib removes "." segments from Path.parts, so reject them before parsing.
+        if "." in value.split("/"):
+            raise ValueError("Path cannot contain directory traversal")
         for segment in pathlib.Path(value).parts:
             if segment in (".", ".."):
                 raise ValueError("Path cannot contain directory traversal")

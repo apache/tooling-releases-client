@@ -69,6 +69,20 @@ class DistributionPlatformValue:
 # Enumerations
 
 
+class ApprovalAction(enum.StrEnum):
+    ARCHIVE = "archive"
+    ARCHIVE_RELEASE = "archive_release"
+    DELETE = "delete"
+
+
+class ApprovalStatus(enum.StrEnum):
+    PENDING = "pending"
+    APPROVED = "approved"
+    REJECTED = "rejected"
+    COMPLETED = "completed"
+    FAILED = "failed"
+
+
 class CheckResultStatus(enum.StrEnum):
     BLOCKER = "blocker"
     CONCERN = "concern"
@@ -83,7 +97,7 @@ class CheckResultStatusIgnore(enum.StrEnum):
     SUGGESTION = "suggestion"
 
     @classmethod
-    def from_form_field(cls, status: str) -> Optional["CheckResultStatusIgnore"]:
+    def from_form_field(cls, status: str) -> "CheckResultStatusIgnore | None":
         match status:
             case "None":
                 return None
@@ -216,9 +230,12 @@ class TaskStatus(enum.StrEnum):
 
 
 class TaskType(enum.StrEnum):
+    ARCHIVE_COMPARISON = "archive_comparison"
+    CAP_APPROVAL_RESOLVE = "cap_approval_resolve"
     COMPARE_SOURCE_TREES = "compare_source_trees"
     DISTRIBUTION_STATUS = "distribution_status"
     DISTRIBUTION_WORKFLOW = "distribution_workflow"
+    HAS_SBOM = "has_sbom"
     HASHING_CHECK = "hashing_check"
     KEYS_IMPORT_FILE = "keys_import_file"
     LICENSE_FILES = "license_files"
@@ -250,12 +267,18 @@ class TaskType(enum.StrEnum):
     @property
     def label(self) -> str:  # noqa: C901
         match self:
+            case TaskType.ARCHIVE_COMPARISON:
+                return "Archive comparison"
+            case TaskType.CAP_APPROVAL_RESOLVE:
+                return "CAP approval resolution"
             case TaskType.COMPARE_SOURCE_TREES:
                 return "Compare source trees"
             case TaskType.DISTRIBUTION_STATUS:
                 return "Distribution status"
             case TaskType.DISTRIBUTION_WORKFLOW:
                 return "Distribution workflow"
+            case TaskType.HAS_SBOM:
+                return "SBOM check"
             case TaskType.HASHING_CHECK:
                 return "Hashing check"
             case TaskType.KEYS_IMPORT_FILE:
@@ -549,6 +572,56 @@ def example(value: Any) -> dict[Literal["schema_extra"], dict[str, Any]]:
 # SQL models with no dependencies
 
 
+# ApprovalRequest:
+class ApprovalRequest(sqlmodel.SQLModel, table=True):
+    id: int | None = sqlmodel.Field(default=None, primary_key=True)
+    project_key: str = sqlmodel.Field()
+    committee_key: str = sqlmodel.Field()
+    action: ApprovalAction = sqlmodel.Field()
+    # Only for release-scoped actions; project-scoped requests leave it null
+    release_version: str | None = sqlmodel.Field(default=None)
+    cap_question_id: int = sqlmodel.Field(unique=True)
+    status: ApprovalStatus = sqlmodel.Field(default=ApprovalStatus.PENDING, index=True)
+    outcome: str | None = None
+    requested_by: str = sqlmodel.Field()
+    requested_at: datetime.datetime = sqlmodel.Field(
+        default_factory=lambda: datetime.datetime.now(datetime.UTC),
+        sa_column=sqlalchemy.Column(UTCDateTime, nullable=False),
+    )
+    closes_at: datetime.datetime = sqlmodel.Field(sa_column=sqlalchemy.Column(UTCDateTime, nullable=False))
+    resolved_at: datetime.datetime | None = sqlmodel.Field(default=None, sa_column=sqlalchemy.Column(UTCDateTime))
+    permalink: str | None = None
+    error: str | None = None
+
+    __table_args__ = (
+        # Project scoped actions stay one at a time; each release may carry its own vote
+        sqlalchemy.Index(
+            "ix_approvalrequest_active_project",
+            "project_key",
+            unique=True,
+            sqlite_where=sqlalchemy.text("status IN ('PENDING', 'APPROVED') AND release_version IS NULL"),
+        ),
+        sqlalchemy.Index(
+            "ix_approvalrequest_active_release",
+            "project_key",
+            "release_version",
+            unique=True,
+            sqlite_where=sqlalchemy.text("status IN ('PENDING', 'APPROVED') AND release_version IS NOT NULL"),
+        ),
+    )
+
+
+# Banner:
+class Banner(sqlmodel.SQLModel, table=True):
+    id: int | None = sqlmodel.Field(default=None, primary_key=True)
+    markdown: str = sqlmodel.Field()
+    asf_uid: str = sqlmodel.Field()
+    set_at: datetime.datetime = sqlmodel.Field(
+        default_factory=lambda: datetime.datetime.now(datetime.UTC),
+        sa_column=sqlalchemy.Column(UTCDateTime, nullable=False),
+    )
+
+
 # KeyLink:
 class KeyLink(sqlmodel.SQLModel, table=True):
     committee_key: str = sqlmodel.Field(foreign_key="committee.key", primary_key=True)
@@ -565,6 +638,9 @@ class Notification(sqlmodel.SQLModel, table=True):
     )
     level: NotificationLevel = sqlmodel.Field(default=NotificationLevel.ERROR)
     message: str = sqlmodel.Field()
+    # An ATR path the notification acts on, built by the sender and never by a user
+    link: str | None = sqlmodel.Field(default=None)
+    link_text: str | None = sqlmodel.Field(default=None)
 
     __table_args__ = (sqlalchemy.Index("ix_notification_asf_uid_created", "asf_uid", "created"),)
 
@@ -735,10 +811,10 @@ class UserSession(sqlmodel.SQLModel, table=True):
     is_member: bool = sqlmodel.Field(default=False)
     is_chair: bool = sqlmodel.Field(default=False)
     is_root: bool = sqlmodel.Field(default=False)
-    committees: list[str] = sqlmodel.Field(
+    member_committees: list[str] = sqlmodel.Field(
         default_factory=list, sa_column=sqlalchemy.Column(sqlalchemy.JSON, nullable=False)
     )
-    projects: list[str] = sqlmodel.Field(
+    participant_committees: list[str] = sqlmodel.Field(
         default_factory=list, sa_column=sqlalchemy.Column(sqlalchemy.JSON, nullable=False)
     )
     mfa: bool = sqlmodel.Field(default=False)
@@ -763,6 +839,20 @@ class SessionFormError(sqlmodel.SQLModel, table=True):
         default_factory=dict, sa_column=sqlalchemy.Column(sqlalchemy.JSON, nullable=False)
     )
     cts: float = sqlmodel.Field(default=0.0, nullable=False)
+
+
+# SignatureHint:
+class SignatureHint(sqlmodel.SQLModel, table=True):
+    hint: str = sqlmodel.Field(primary_key=True, **example("0123456789abcdef"))
+
+
+# WorkflowJti:
+class WorkflowJti(sqlmodel.SQLModel, table=True):
+    # The jti of a GitHub OIDC token that has already minted a workflow SSH key
+    jti: str = sqlmodel.Field(primary_key=True, **example("0123456789abcdef"))
+    # Unix time, taken from the token's own exp so that rows can be pruned once it can't be replayed
+    expires: int = sqlmodel.Field(index=True)
+    consumed: int = sqlmodel.Field()
 
 
 # WorkflowSSHKey:
@@ -825,7 +915,12 @@ class Committee(sqlmodel.SQLModel, table=True):
     # M-M: Committee -> [PublicSigningKey]
     # M-M: PublicSigningKey -> [Committee]
     public_signing_keys: list["PublicSigningKey"] = sqlmodel.Relationship(
-        back_populates="committees", link_model=KeyLink
+        back_populates="committees",
+        link_model=KeyLink,
+        sa_relationship_kwargs={
+            "secondaryjoin": "and_(PublicSigningKey.fingerprint == KeyLink.key_fingerprint,"
+            " PublicSigningKey.deleted.is_(None))",
+        },
     )
 
     updated: datetime.datetime | None = sqlmodel.Field(default=None, sa_column=sqlalchemy.Column(UTCDateTime))
@@ -882,11 +977,20 @@ class Project(sqlmodel.SQLModel, table=True):
         default_factory=list, sa_column=sqlalchemy.Column(sqlalchemy.JSON, nullable=False)
     )
 
+    security_contact: str | None = sqlmodel.Field(default=None, **example("security@example.apache.org"))
+    threat_model_link: str | None = sqlmodel.Field(
+        default=None, **example("https://example.apache.org/security/threat-model")
+    )
+    threat_model_src_link: str | None = sqlmodel.Field(
+        default=None, **example("https://example.apache.org/security/threat-model.md")
+    )
+
     # Version-scheme metadata (#912). For "simple" projects the pattern fields are null
     # and the project keeps a single "default" cycle.
     version_method: VersionMethod = sqlmodel.Field(default=VersionMethod.SIMPLE, **example(VersionMethod.SIMPLE))
     version_pattern: str | None = sqlmodel.Field(default=None, **example(r"^\d+\.\d+\.\d+$"))
     cycle_match: str | None = sqlmodel.Field(default=None, **example(r"^(\d+)\.\d+\.\d+$"))
+    calver_format: str | None = sqlmodel.Field(default=None, **example("(YY.MM).N"))
     branch_template: str | None = sqlmodel.Field(default=None, **example("release-{cycle}"))
 
     # M-1: Project -> Committee
@@ -898,7 +1002,11 @@ class Project(sqlmodel.SQLModel, table=True):
     # 1-M: Project -> [Release]
     # M-1: Release -> Project
     # see_also(Release.project)
-    releases: list["Release"] = sqlmodel.Relationship(back_populates="project")
+    releases_including_embargoed: list["Release"] = sqlmodel.Relationship(back_populates="project")
+
+    @property
+    def releases(self) -> list["Release"]:
+        return [release for release in self.releases_including_embargoed if (not release.is_embargoed)]
 
     # 1-M: Project -C-> [ProjectCycle]
     # M-1: ProjectCycle -> Project
@@ -1086,6 +1194,12 @@ Sincerely,
             # TODO: Not sure what the default should be
             return self.policy_default_min_hours
         return policy.min_hours
+
+    @property
+    def policy_download_path_suffix(self) -> str:
+        if ((policy := self.release_policy) is None) or (policy.download_path_suffix == ""):
+            return ""
+        return policy.download_path_suffix
 
     @property
     def policy_release_checklist(self) -> str:
@@ -1284,14 +1398,18 @@ class Release(sqlmodel.SQLModel, table=True):
         sa_column=sqlalchemy.Column(UTCDateTime),
         **example(datetime.datetime(2025, 6, 1, 1, 2, 3, tzinfo=datetime.UTC)),
     )
-    # Mirrors the latest archive LifecycleEvent for this release. Null for
-    # releases that haven't been archived. Sourced by whatever archival flow
-    # #507 eventually settles on.
+    # Mirrors the latest archive LifecycleEvent for this release - the date it was
+    # archived. Null when there's no such event, which includes a release that's
+    # archived but undated (a catalogued historical release whose date we don't have);
+    # is_archived carries the status. Sourced by whatever archival flow #507 settles on.
     archived: datetime.datetime | None = sqlmodel.Field(
         default=None,
         sa_column=sqlalchemy.Column(UTCDateTime),
         **example(datetime.datetime(2026, 1, 15, 1, 2, 3, tzinfo=datetime.UTC)),
     )
+    # The archived status. The archived date above can be null while this is true,
+    # for a catalogued historical release we know is archived but can't date
+    is_archived: bool = sqlmodel.Field(default=False)
     activity_at: datetime.datetime = sqlmodel.Field(
         default_factory=lambda: datetime.datetime.now(datetime.UTC),
         sa_column=sqlalchemy.Column(UTCDateTime, nullable=False),
@@ -1301,14 +1419,15 @@ class Release(sqlmodel.SQLModel, table=True):
     # Set at start time when the user opts in to archiving the prior release
     # in this cycle when this release is announced.
     archive_prior_release: bool = sqlmodel.Field(default=False)
+    expedited: bool = sqlmodel.Field(default=False)
 
     check_cache_key: str | None = sqlmodel.Field(default=None, **example("ef0ccb0a-3514-4b65-abcd-879850349f74"))
 
     # M-1: Release -> Project
     # 1-M: Project -> [Release]
     project_key: str = sqlmodel.Field(foreign_key="project.key", **example("example"))
-    project: Project = sqlmodel.Relationship(back_populates="releases")
-    see_also(Project.releases)
+    project: Project = sqlmodel.Relationship(back_populates="releases_including_embargoed")
+    see_also(Project.releases_including_embargoed)
 
     # M-1: Release -> ProjectCycle
     # 1-M: ProjectCycle -> [Release]
@@ -1401,6 +1520,10 @@ class Release(sqlmodel.SQLModel, table=True):
         return project.committee
 
     @property
+    def is_embargoed(self) -> bool:
+        return self.expedited and (self.phase != ReleasePhase.RELEASE)
+
+    @property
     def days_since_active(self) -> int:
         """Get the number of whole days since the release was last active."""
         activity = [self.created]
@@ -1417,6 +1540,10 @@ class Release(sqlmodel.SQLModel, table=True):
 
     @property
     def effective_vote_mode(self) -> VoteMode:
+        if self.expedited:
+            if (self.vote_mode is not None) and (self.vote_mode != VoteMode.TRUSTED):
+                raise RuntimeError(f"Expedited release {self.key} has a non-trusted vote mode: {self.vote_mode.value}")
+            return VoteMode.TRUSTED
         if (self.phase != ReleasePhase.RELEASE_CANDIDATE_DRAFT) and (self.vote_mode is not None):
             return self.vote_mode
         return self.project.policy_vote_mode
@@ -1528,8 +1655,9 @@ class LifecycleEvent(sqlmodel.SQLModel, table=True):
         **example(datetime.datetime(2026, 1, 15, 1, 2, 3, tzinfo=datetime.UTC)),
     )
 
-    # When the row was recorded. Maps to ECMA-428 `published` and orders the
-    # spec id sequence, so retroactive entries get later ids than older ones.
+    # When the row was recorded (ECMA-428 `published`); may post-date `effective`
+    # for a retroactive entry. The eventId sequence is the auto-increment id, so a
+    # row recorded later sorts later whatever date it took effect.
     published: datetime.datetime = sqlmodel.Field(
         default_factory=lambda: datetime.datetime.now(datetime.UTC),
         sa_column=sqlalchemy.Column(UTCDateTime, nullable=False),
@@ -1767,6 +1895,8 @@ class PublicSigningKey(sqlmodel.SQLModel, table=True):
     ascii_armored_key: str = sqlmodel.Field(
         **example("-----BEGIN PGP PUBLIC KEY BLOCK-----\n\n...\n-----END PGP PUBLIC KEY BLOCK-----\n")
     )
+    deleted: datetime.datetime | None = sqlmodel.Field(default=None, sa_column=sqlalchemy.Column(UTCDateTime))
+    historic_use: bool = sqlmodel.Field(default=False)
 
     # M-M: PublicSigningKey -> [Committee]
     # M-M: Committee -> [PublicSigningKey]
@@ -1876,7 +2006,7 @@ class Artifact(sqlmodel.SQLModel, table=True):
     key_fingerprint: str | None = sqlmodel.Field(
         default=None,
         foreign_key="publicsigningkey.fingerprint",
-        ondelete="SET NULL",
+        ondelete="RESTRICT",
         index=True,
         **example("0123456789abcdef0123456789abcdef01234567"),
     )
@@ -1889,9 +2019,19 @@ class Artifact(sqlmodel.SQLModel, table=True):
     classification: str | None = sqlmodel.Field(default=None, **example("source"))
     # Per-artifact SVN revision - not all artifacts in a release are added in the same commit
     svn_revision: int | None = sqlmodel.Field(default=None, index=True, **example(12345))
-    # The release's path under the committee downloads dir, needed to build the public
-    # download URLs. NULL means the files sit directly under the committee dir.
-    download_path_suffix: str | None = sqlmodel.Field(default=None, **example("example/0.0.1"))
+    # True when the artifact came through ATR rather than being catalogued from dist
+    managed: bool = sqlmodel.Field(default=False)
+    # When the artifact was published: the release date for ATR, the commit date for a
+    # dist detection, the find date for a historical catalogue entry
+    dated: datetime.datetime | None = sqlmodel.Field(
+        default=None,
+        sa_column=sqlalchemy.Column(UTCDateTime),
+        **example(datetime.datetime(2025, 6, 1, 1, 2, 3, tzinfo=datetime.UTC)),
+    )
+    # The artifact's directory under the dist root: the committee dir (incubator prefix for a
+    # podling) plus the release sub-path. artifact_path is the file name within it, and the
+    # signature, checksum and SBOM share the directory
+    download_path_suffix: str | None = sqlmodel.Field(default=None, **example("incubator/example/0.0.1"))
 
     # M-1: Artifact -> Release
     # 1-M: Release -> [Artifact]
@@ -1950,6 +2090,7 @@ class ReleasePolicy(sqlmodel.SQLModel, table=True):
     )
     auto_archive_prior_release: bool = sqlmodel.Field(default=False)
     preserve_download_files: bool = sqlmodel.Field(default=False)
+    download_path_suffix: str = sqlmodel.Field(default="")
 
     # 1-1: ReleasePolicy -> Project
     # 1-1: Project -C-> ReleasePolicy
@@ -1981,6 +2122,7 @@ class ReleasePolicy(sqlmodel.SQLModel, table=True):
             github_finish_workflow_path=list(self.github_finish_workflow_path),
             auto_archive_prior_release=self.auto_archive_prior_release,
             preserve_download_files=self.preserve_download_files,
+            download_path_suffix=self.download_path_suffix,
         )
 
 

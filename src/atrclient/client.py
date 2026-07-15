@@ -932,10 +932,8 @@ def app_verify(url: str, /, verbose: bool = False) -> None:
     print_if_verbose(verify_provenance.fingerprint.upper() + "\n")
     print_if_verbose("This key is associated with these committees with a project containing the artifact:\n")
     for committee_with_artifact in verify_provenance.committees_with_artifact:
-        print_if_verbose(f"-- {committee_with_artifact.committee} --")
-        print_if_verbose(f"KEYS URL: {committee_with_artifact.keys_file_url}")
-        print_if_verbose(f"SHA3-256: {committee_with_artifact.keys_file_sha3_256}")
-        print_if_verbose("")
+        print_if_verbose(f"-- {committee_with_artifact.committee}")
+    print_if_verbose("")
 
     print_if_verbose("We can now try to verify the signature using the OpenPGP key from the ATR.\n")
     print_if_verbose("Note that we ignore key expiry, so we consider expired key signatures to be valid.\n")
