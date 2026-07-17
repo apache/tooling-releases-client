@@ -12,6 +12,7 @@ Usage: atr COMMAND
 │ dev           Developer operations.                                                                                  │
 │ distribution  Distribution operations.                                                                               │
 │ docs          Show comprehensive CLI documentation in Markdown.                                                      │
+│ download      Download a file from a release.                                                                        │
 │ draft         Draft operations.                                                                                      │
 │ drop          Remove a configuration key using dot notation.                                                         │
 │ ignore        Ignore operations.                                                                                     │
@@ -21,6 +22,7 @@ Usage: atr COMMAND
 │ release       Release operations.                                                                                    │
 │ revisions     List all revisions for a release.                                                                      │
 │ rsync         Rsync a release.                                                                                       │
+│ sbom          SBOM operations.                                                                                       │
 │ set           Set a configuration value using dot notation.                                                          │
 │ show          Show a configuration value using dot notation.                                                         │
 │ ssh           SSH operations.                                                                                        │
@@ -406,6 +408,21 @@ Usage: atr docs
 Show comprehensive CLI documentation in Markdown.
 ```
 
+## atr download
+
+```
+Usage: atr download PROJECT VERSION PATH [ARGS]
+
+Download a file from a release.
+
+╭─ Arguments ──────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│ *  PROJECT  [required]                                                                                               │
+│ *  VERSION  [required]                                                                                               │
+│ *  PATH     [required]                                                                                               │
+│    TARGET   [default: .]                                                                                             │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+```
+
 ## atr draft
 
 ```
@@ -723,6 +740,36 @@ Rsync a release.
 │ *  VERSION  [required]                                                                                               │
 │    SOURCE   [default: .]                                                                                             │
 │    TARGET   [default: /]                                                                                             │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+```
+
+## atr sbom
+
+```
+Usage: atr sbom COMMAND
+
+SBOM operations.
+
+╭─ Commands ───────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│ generate  Generate and augment a CycloneDX SBOM for a release artifact.                                              │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+```
+
+### atr sbom generate
+
+```
+Usage: atr sbom generate PROJECT VERSION PATH [ARGS]
+
+Generate and augment a CycloneDX SBOM for a release artifact.
+
+╭─ Arguments ──────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│ *  PROJECT  [required]                                                                                               │
+│ *  VERSION  [required]                                                                                               │
+│ *  PATH     [required]                                                                                               │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+╭─ Parameters ─────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│ WAIT --wait --no-wait  [default: False]                                                                              │
+│ TIMEOUT --timeout      [default: 600]                                                                                │
 ╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
 ```
 

@@ -18,12 +18,38 @@
 from __future__ import annotations
 
 import json
+from typing import TYPE_CHECKING
 
 import aiohttp
 
 import atrclient.basic as basic
 import atrclient.models.schema as schema
 import atrclient.show as show
+
+if TYPE_CHECKING:
+    import pathlib
+
+
+async def download(url: str, target: pathlib.Path, verify_ssl: bool = True) -> None:
+    connector = None if verify_ssl else aiohttp.TCPConnector(ssl=False)
+    try:
+        file = target.open("xb")
+    except FileExistsError:
+        show.error_and_exit(f"File already exists: {target}")
+    try:
+        async with aiohttp.ClientSession(connector=connector) as session:
+            async with session.get(url, allow_redirects=False) as response:
+                if response.status != 200:
+                    show.error_and_exit(f"Not a downloadable file: {response.status} {url}")
+                if response.headers.get("Content-Type") != "application/octet-stream":
+                    show.error_and_exit(f"Not a downloadable file: {url}")
+                async for chunk in response.content.iter_chunked(65536):
+                    file.write(chunk)
+    except BaseException:
+        target.unlink(missing_ok=True)
+        raise
+    finally:
+        file.close()
 
 
 async def get(url: str, jwt_token: str | None, verify_ssl: bool = True) -> basic.JSON:

@@ -26,6 +26,7 @@ import re
 import shlex
 import shutil
 import tempfile
+import types
 from typing import TYPE_CHECKING, Any, Final
 
 import aioresponses
@@ -33,6 +34,7 @@ import pytest
 
 import atrclient.client as client
 import atrclient.config as config
+import atrclient.models as models
 
 if TYPE_CHECKING:
     import pytest_console_scripts
@@ -460,6 +462,62 @@ def test_app_check_concerns_displays_release_level_results(
     assert "source.tar.gz\n - A file concern (rat.check)" in out
 
 
+def test_app_download_writes_file(
+    capsys: pytest.CaptureFixture[str], fixture_config_env: pathlib.Path, tmp_path: pathlib.Path
+) -> None:
+    config.write({"atr": {"host": "example.invalid"}})
+    download_url = "https://example.invalid/download/path/test-project/2.3.0/artifact.tar.gz"
+
+    with aioresponses.aioresponses() as mock:
+        mock.get(download_url, status=200, body=b"artifact bytes", content_type="application/octet-stream")
+        client.app_download("test-project", "2.3.0", "artifact.tar.gz", str(tmp_path))
+
+    saved = tmp_path / "artifact.tar.gz"
+    assert saved.read_bytes() == b"artifact bytes"
+    assert str(saved) in capsys.readouterr().out
+
+
+def test_app_download_refuses_existing_target(
+    capsys: pytest.CaptureFixture[str], fixture_config_env: pathlib.Path, tmp_path: pathlib.Path
+) -> None:
+    config.write({"atr": {"host": "example.invalid"}})
+    existing = tmp_path / "artifact.tar.gz"
+    existing.write_bytes(b"already here")
+
+    with pytest.raises(SystemExit):
+        client.app_download("test-project", "2.3.0", "artifact.tar.gz", str(tmp_path))
+
+    assert existing.read_bytes() == b"already here"
+
+
+def test_app_download_rejects_redirect(
+    capsys: pytest.CaptureFixture[str], fixture_config_env: pathlib.Path, tmp_path: pathlib.Path
+) -> None:
+    config.write({"atr": {"host": "example.invalid"}})
+    download_url = "https://example.invalid/download/path/test-project/2.3.0/missing.tar.gz"
+
+    with aioresponses.aioresponses() as mock:
+        mock.get(download_url, status=302, headers={"Location": "https://example.invalid/"})
+        with pytest.raises(SystemExit):
+            client.app_download("test-project", "2.3.0", "missing.tar.gz", str(tmp_path))
+
+    assert not (tmp_path / "missing.tar.gz").exists()
+
+
+def test_app_download_rejects_non_file_response(
+    capsys: pytest.CaptureFixture[str], fixture_config_env: pathlib.Path, tmp_path: pathlib.Path
+) -> None:
+    config.write({"atr": {"host": "example.invalid"}})
+    download_url = "https://example.invalid/download/path/test-project/2.3.0/somedir"
+
+    with aioresponses.aioresponses() as mock:
+        mock.get(download_url, status=200, body=b"<html>listing</html>", content_type="text/html")
+        with pytest.raises(SystemExit):
+            client.app_download("test-project", "2.3.0", "somedir", str(tmp_path))
+
+    assert not (tmp_path / "somedir").exists()
+
+
 def test_app_release_list_not_found(capsys: pytest.CaptureFixture[str], fixture_config_env: pathlib.Path) -> None:
     client.app_set("atr.host", "example.invalid")
 
@@ -470,6 +528,67 @@ def test_app_release_list_not_found(capsys: pytest.CaptureFixture[str], fixture_
 
         with pytest.raises(SystemExit):
             client.app_release_list("nonexistent-project")
+
+
+def test_app_sbom_generate_wait_polls_until_completed(
+    capsys: pytest.CaptureFixture[str], fixture_config_env: pathlib.Path
+) -> None:
+    config.write(
+        {
+            "atr": {"host": "example.invalid"},
+            "tokens": {"jwt": "dummy_jwt_token"},
+        }
+    )
+    generate_url = "https://example.invalid/api/sbom/generate"
+    task_url = "https://example.invalid/api/task/get/42"
+    queued_task = {
+        "id": 42,
+        "task_type": "sbom_generate",
+        "task_args": {},
+        "asf_uid": "test_asf_uid",
+        "status": "queued",
+    }
+    completed_task = dict(queued_task)
+    completed_task["status"] = "completed"
+    completed_task["result"] = {
+        "kind": "sbom_generate",
+        "path": "artifact.tar.gz.cdx.json",
+        "bom_version": 2,
+        "revision_number": "00002",
+    }
+
+    with aioresponses.aioresponses() as mock:
+        mock.post(generate_url, status=202, payload={"endpoint": "/sbom/generate", "task": queued_task})
+        mock.get(task_url, status=200, payload={"endpoint": "/task/get", "task": completed_task})
+        client.app_sbom_generate("test-project", "2.3.0", "artifact.tar.gz", wait=True)
+
+    record = json.loads(capsys.readouterr().out)
+    assert record["status"] == "completed"
+    assert record["result"]["revision_number"] == "00002"
+
+
+def test_task_wait_returns_terminal_task_from_final_poll(monkeypatch: pytest.MonkeyPatch) -> None:
+    queued = models.sql.Task(
+        id=42,
+        task_type=models.sql.TaskType.SBOM_GENERATE,
+        task_args={},
+        asf_uid="test",
+        status=models.sql.TaskStatus.QUEUED,
+    )
+    completed = models.sql.Task(
+        id=42,
+        task_type=models.sql.TaskType.SBOM_GENERATE,
+        task_args={},
+        asf_uid="test",
+        status=models.sql.TaskStatus.COMPLETED,
+    )
+
+    monkeypatch.setattr(client.api, "task_get", lambda _task_id: types.SimpleNamespace(task=completed))
+    monkeypatch.setattr(client.time, "sleep", lambda _seconds: None)
+
+    result = client.task_wait(queued, 0.5)
+
+    assert result.status == models.sql.TaskStatus.COMPLETED
 
 
 def test_app_vote_start_serializes_template_defaults_and_file_body(

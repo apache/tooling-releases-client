@@ -46,12 +46,16 @@ class ApiCore:
 
 
 class ApiGet(ApiCore):
+    def __init__(self, path: str, bearer: bool = False):
+        super().__init__(path)
+        self.bearer = bearer
+
     def get(self, *args: str, **kwargs: str | None) -> basic.JSON:
         url = self.url + "/" + "/".join(args)
         for value in kwargs.values():
             if value is not None:
                 url += f"/{value}"
-        jwt_value = None
+        jwt_value = config.jwt_usable() if self.bearer else None
         return asyncio.run(web.get(url, jwt_value, self.verify_ssl))
 
 
@@ -65,11 +69,11 @@ A = TypeVar("A", bound=models.schema.Strict)
 R = TypeVar("R", bound=models.api.Results)
 
 
-def get(path: str) -> Callable[[Callable[..., R]], Callable[..., R]]:
+def get(path: str, bearer: bool = False) -> Callable[[Callable[..., R]], Callable[..., R]]:
     def decorator(func: Callable[..., R]) -> Callable[..., R]:
         @functools.wraps(func)
         def wrapper(*args: str, **kwargs: str | None) -> R:
-            api_instance = ApiGet(path)
+            api_instance = ApiGet(path, bearer)
             try:
                 response = func(api_instance, *args, **kwargs)
             except pydantic.ValidationError as e:
@@ -237,6 +241,12 @@ def release_upload(args: models.api.ReleaseUploadArgs) -> models.api.ReleaseUplo
         show.error_and_exit(f"Unexpected API POST response: {e}")
 
 
+@post("/sbom/generate")
+def sbom_generate(api: ApiPost, args: models.api.SbomGenerateArgs) -> models.api.SbomGenerateResults:
+    response = api.post(args)
+    return models.api.validate_sbom_generate(response)
+
+
 @post("/signature/provenance")
 def signature_provenance(
     api: ApiPost, args: models.api.SignatureProvenanceArgs
@@ -261,6 +271,12 @@ def ssh_key_delete(api: ApiPost, args: models.api.SshKeyDeleteArgs) -> models.ap
 def ssh_keys_list(api: ApiGet, asf_uid: str) -> models.api.SshKeysListResults:
     response = api.get(asf_uid)
     return models.api.validate_ssh_keys_list(response)
+
+
+@get("/task/get", bearer=True)
+def task_get(api: ApiGet, task_id: str) -> models.api.TaskGetResults:
+    response = api.get(task_id)
+    return models.api.validate_task_get(response)
 
 
 @post("/vote/resolve")

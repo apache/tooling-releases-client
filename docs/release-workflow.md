@@ -106,6 +106,14 @@ atr check wait your-project 0.1+test
 
 To see the status of the checks here, you could run `atr check status your-project 0.1+test 00002`. You need to know the revision to get the status, but we plan to make this command use the most recent revision if omitted.
 
+To generate a CycloneDX SBOM for an uploaded artifact, augmented automatically for NTIA conformance, use `atr sbom generate`. The SBOM appears beside the artifact in a new revision.
+
+```
+atr sbom generate your-project 0.1+test example-0.1.tar.gz --wait
+```
+
+There is also a general `atr download` command to fetch any release file.
+
 ### Vote
 
 ```

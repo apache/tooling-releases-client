@@ -63,6 +63,7 @@ APP_IGNORE: cyclopts.App = cyclopts.App(name="ignore", help="Ignore operations."
 APP_JWT: cyclopts.App = cyclopts.App(name="jwt", help="JWT operations.")
 APP_KEY: cyclopts.App = cyclopts.App(name="key", help="Key operations.")
 APP_RELEASE: cyclopts.App = cyclopts.App(name="release", help="Release operations.")
+APP_SBOM: cyclopts.App = cyclopts.App(name="sbom", help="SBOM operations.")
 APP_SSH: cyclopts.App = cyclopts.App(name="ssh", help="SSH operations.")
 APP_VOTE: cyclopts.App = cyclopts.App(name="vote", help="Vote operations.")
 VERSION: str = metadata.version("apache-trusted-releases")
@@ -558,6 +559,12 @@ def app_docs() -> None:
     print(markdown.rstrip())
 
 
+@APP.command(name="download", help="Download a file from a release.")
+def app_download(project: str, version: str, path: str, target: str = ".", /) -> None:
+    saved = release_file_download(project, version, path, target)
+    print(f"Downloaded to {saved}")
+
+
 @APP.command(name="drop", help="Remove a configuration key using dot notation.")
 def app_drop(path: str, /) -> None:
     parts = path.split(".")
@@ -789,6 +796,26 @@ def app_rsync(project: str, version: str, source: str = ".", target: str = "/", 
     remote_target = f"{asf_uid}@{host}:/{project}/{version}/{target}"
     cmd = ["rsync", "-av", "-e", "ssh -p 2222", source, remote_target]
     subprocess.run(cmd, check=True)
+
+
+@APP_SBOM.command(name="generate", help="Generate and augment a CycloneDX SBOM for a release artifact.")
+def app_sbom_generate(
+    project: str,
+    version: str,
+    path: str,
+    /,
+    wait: bool = False,
+    timeout: float = 600,
+) -> None:
+    generate_args = models.api.SbomGenerateArgs(
+        project=models.safe.ProjectKey(project),
+        version=models.safe.VersionKey(version),
+        relpath=models.safe.RelPath(path),
+    )
+    task = api.sbom_generate(generate_args).task
+    if wait:
+        task = task_wait(task, timeout)
+    print(task.model_dump_json(indent=None))
 
 
 @APP.command(name="set", help="Set a configuration value using dot notation.")
@@ -1231,6 +1258,16 @@ def quiet() -> Generator[None]:
         yield
 
 
+def release_file_download(project: str, version: str, path: str, target: str) -> pathlib.Path:
+    host, verify_ssl = config.host_get()
+    url = f"https://{host}/download/path/{project}/{version}/{path}"
+    target_path = pathlib.Path(target)
+    if target_path.is_dir():
+        target_path = target_path / pathlib.Path(path).name
+    asyncio.run(web.download(url, target_path, verify_ssl=verify_ssl))
+    return target_path
+
+
 def releases_display(releases: Sequence[models.sql.Release]) -> None:
     if not releases:
         print("No releases found for this project.")
@@ -1270,8 +1307,23 @@ def subcommands_register(app: cyclopts.App) -> None:
     app.command(APP_JWT)
     app.command(APP_KEY)
     app.command(APP_RELEASE)
+    app.command(APP_SBOM)
     app.command(APP_SSH)
     app.command(APP_VOTE)
+
+
+def task_wait(task: models.sql.Task, timeout: float) -> models.sql.Task:
+    terminal = {models.sql.TaskStatus.COMPLETED, models.sql.TaskStatus.FAILED}
+    interval_seconds = 0.5
+    while task.status not in terminal:
+        if timeout <= 0:
+            show.error_and_exit("Timeout waiting for the task to complete.")
+        time.sleep(interval_seconds)
+        timeout -= interval_seconds
+        task = api.task_get(str(task.id)).task
+    if task.status == models.sql.TaskStatus.FAILED:
+        show.error_and_exit(f"Task {task.id} failed: {task.error}")
+    return task
 
 
 def timestamp_format(ts: int | str | None) -> str | None:
