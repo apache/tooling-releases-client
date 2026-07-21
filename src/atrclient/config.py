@@ -56,6 +56,11 @@ YAML_SCHEMA: strictyaml.Map = strictyaml.Map(
                 strictyaml.Optional("json"): strictyaml.Bool(),
             }
         ),
+        strictyaml.Optional("signing"): strictyaml.Map(
+            {
+                strictyaml.Optional("key"): strictyaml.Str(),
+            }
+        ),
         strictyaml.Optional("tokens"): strictyaml.Map(
             {
                 strictyaml.Optional("pat"): strictyaml.Str(),

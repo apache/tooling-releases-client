@@ -25,6 +25,7 @@ Usage: atr COMMAND
 │ sbom          SBOM operations.                                                                                       │
 │ set           Set a configuration value using dot notation.                                                          │
 │ show          Show a configuration value using dot notation.                                                         │
+│ sign          Sign a release file, optionally uploading the signature.                                               │
 │ ssh           SSH operations.                                                                                        │
 │ upload        Upload a file to a release.                                                                            │
 │ verify        Verify an artifact.                                                                                    │
@@ -798,6 +799,25 @@ Show a configuration value using dot notation.
 
 ╭─ Arguments ──────────────────────────────────────────────────────────────────────────────────────────────────────────╮
 │ *  PATH  [required]                                                                                                  │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+```
+
+## atr sign
+
+```
+Usage: atr sign PROJECT VERSION PATH [ARGS]
+
+Sign a release file, optionally uploading the signature.
+
+╭─ Arguments ──────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│ *  PROJECT  [required]                                                                                               │
+│ *  VERSION  [required]                                                                                               │
+│ *  PATH     [required]                                                                                               │
+│    TARGET   [default: .]                                                                                             │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+╭─ Parameters ─────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│ KEY --key                                                                                                            │
+│ UPLOAD --upload --no-upload  [default: False]                                                                        │
 ╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
 ```
 

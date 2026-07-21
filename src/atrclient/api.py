@@ -118,6 +118,12 @@ def checks_ongoing(
     return models.api.validate_checks_ongoing(response)
 
 
+@get("/committee/keys")
+def committee_keys(api: ApiGet, name: str) -> models.api.CommitteeKeysResults:
+    response = api.get(name)
+    return models.api.validate_committee_keys(response)
+
+
 @get("/distribution/list")
 def distribution_list(api: ApiGet, project: str, version: str) -> models.api.DistributionListResults:
     response = api.get(project, version)
@@ -176,6 +182,12 @@ def keys_upload(api: ApiPost, args: models.api.KeysUploadArgs) -> models.api.Key
 def keys_user(api: ApiGet, asf_uid: str) -> models.api.KeysUserResults:
     response = api.get(asf_uid)
     return models.api.validate_keys_user(response)
+
+
+@get("/project/get")
+def project_get(api: ApiGet, project: str) -> models.api.ProjectGetResults:
+    response = api.get(project)
+    return models.api.validate_project_get(response)
 
 
 @get("/project/releases")

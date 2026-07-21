@@ -106,13 +106,24 @@ atr check wait your-project 0.1+test
 
 To see the status of the checks here, you could run `atr check status your-project 0.1+test 00002`. You need to know the revision to get the status, but we plan to make this command use the most recent revision if omitted.
 
-To generate a CycloneDX SBOM for an uploaded artifact, augmented automatically for NTIA conformance, use `atr sbom generate`. The SBOM appears beside the artifact in a new revision.
+To generate a CycloneDX SBOM for an uploaded artifact, augmented automatically for NTIA conformance, use `atr sbom generate`. The SBOM appears beside the artifact in a new revision. You can then sign it with your OpenPGP key and upload the detached signature.
 
 ```
 atr sbom generate your-project 0.1+test example-0.1.tar.gz --wait
+atr sign your-project 0.1+test example-0.1.tar.gz.cdx.json --key ~/signing-key.asc --upload
 ```
 
-There is also a general `atr download` command to fetch any release file.
+The sign command downloads the SBOM, signs it locally using rPGP, and writes the detached signature next to the download. With `--upload` it also uploads the signature to the draft, creating a new revision, after checking that the key is registered for the project's committee; by default nothing is uploaded, so when signing many artifacts you can gather the signatures locally and upload them together in a single revision using `atr rsync`. The command selects the newest valid signing subkey automatically, skipping expired or revoked components, and prompts for a passphrase when the key is protected. These client checks are advisory: ATR verifies every uploaded signature against the registered committee certificates, so conditions which the client does not detect, such as a rotated signing subkey which is not yet in the registered certificate, are reported by the server checks after upload. Sign the SBOM only after all steps which modify it, because augmentation and vulnerability scanning rewrite the file. There is also a general `atr download` command to fetch any release file.
+
+To export a key for signing, use the following commands, and delete the exported file when you no longer need it.
+
+```
+gpg --export-secret-keys --armor --output ~/signing-key.asc "$KEYID"
+chmod 600 ~/signing-key.asc
+atr set signing.key ~/signing-key.asc
+```
+
+If you keep your primary key offline, `gpg --export-secret-subkeys` works too, provided that your key has a signing subkey. Keys held only in gpg-agent or on a hardware token cannot be exported this way, and are not yet supported for signing.
 
 ### Vote
 

@@ -47,10 +47,13 @@ import atrclient.basic as basic
 import atrclient.config as config
 import atrclient.models as models
 import atrclient.show as show
+import atrclient.sign as sign
 import atrclient.web as web
 
 if TYPE_CHECKING:
     from collections.abc import Generator, Sequence
+
+    import openpgp
 
 APP: cyclopts.App = cyclopts.App()
 APP_API: cyclopts.App = cyclopts.App(name="api", help="API operations.")
@@ -859,6 +862,56 @@ def app_show(path: str, /) -> None:
     print(value)
 
 
+@APP.command(name="sign", help="Sign a release file, optionally uploading the signature.")
+def app_sign(
+    project: str,
+    version: str,
+    path: str,
+    target: str = ".",
+    /,
+    key: str | None = None,
+    upload: bool = False,
+) -> None:
+    secret_key, component = signing_component_load(key)
+    expected_revision = None
+    if upload:
+        committee_key_check(project, secret_key.fingerprint)
+        expected_revision = api.release_get(project, version).release.latest_revision_number
+    password = signing_password_read(secret_key, component)
+
+    file_path = release_file_download(project, version, path, target)
+    try:
+        armored = sign.sign_detached(file_path.read_bytes(), component, password)
+    except ValueError as e:
+        show.error_and_exit(f"Signing failed: {e}")
+
+    asc_path = file_path.with_name(file_path.name + ".asc")
+    try:
+        with asc_path.open("x", encoding="utf-8") as asc_file:
+            asc_file.write(armored)
+    except FileExistsError:
+        show.error_and_exit(f"File already exists: {asc_path}")
+    except BaseException:
+        asc_path.unlink(missing_ok=True)
+        raise
+
+    if not upload:
+        print(f"Signed to {asc_path}")
+        return
+
+    upload_args = models.api.ReleaseUploadArgs(
+        project=models.safe.ProjectKey(project),
+        version=models.safe.VersionKey(version),
+        relpath=models.safe.RelPath(path + ".asc"),
+        content=base64.b64encode(armored.encode("utf-8")).decode("utf-8"),
+        expected_revision=(models.safe.RevisionNumber(expected_revision) if (expected_revision is not None) else None),
+    )
+    uploaded = api.release_upload(upload_args)
+    if uploaded is None:
+        show.error_and_exit("Unexpected quarantine of the uploaded signature.")
+    print(uploaded.revision.model_dump_json(indent=None))
+
+
 @APP_SSH.command(name="add", help="Add an SSH key.")
 def app_ssh_add(text: str, /) -> None:
     ssh_add_args = models.api.SshKeyAddArgs(text=text)
@@ -1182,6 +1235,18 @@ def checks_display_verbose_details(checks: Sequence[models.sql.CheckResult]) -> 
         print(f"  {checker} → {primary_rel_path}{member_part} : {message}")
 
 
+def committee_key_check(project: str, fingerprint: str) -> None:
+    committee_key = api.project_get(project).project.committee_key
+    if committee_key is None:
+        show.error_and_exit(f'Project "{project}" has no committee.')
+    registered = {signing_key.fingerprint.lower() for signing_key in api.committee_keys(committee_key).keys}
+    if fingerprint.lower() not in registered:
+        show.error_and_exit(
+            f'Key {fingerprint.upper()} is not registered for the "{committee_key}" committee.'
+            ' Associate it using "atr key add".'
+        )
+
+
 def documentation_to_markdown(
     app: cyclopts.App,
     subcommands: list[str] | None = None,
@@ -1294,6 +1359,40 @@ def releases_display(releases: Sequence[models.sql.Release]) -> None:
             created_formatted = "Unknown"
         latest = release.latest_revision_number or "-"
         print(f"  {version:<24} {latest:<7} {phase_short:<11} {created_formatted}")
+
+
+def signing_component_load(key: str | None) -> tuple[openpgp.SecretKey, openpgp.SecretKey | openpgp.SecretSubkey]:
+    key_path = key
+    if key_path is None:
+        with config.lock() as cfg:
+            key_path = config.get(cfg, ["signing", "key"])
+    if key_path is None:
+        show.error_and_exit('No signing key given. Use --key or "atr set signing.key /path/to/key.asc".')
+
+    try:
+        secret_key = sign.load_secret_key(pathlib.Path(key_path))
+    except (OSError, ValueError) as e:
+        show.error_and_exit(f"Cannot load signing key {key_path}: {e}")
+    component = sign.select_signing_component(secret_key)
+    if component is None:
+        show.error_and_exit(
+            f"Key {secret_key.fingerprint.upper()} has no usable signing component."
+            " A subkeys only export must include a signing subkey."
+        )
+    return secret_key, component
+
+
+def signing_password_read(
+    secret_key: openpgp.SecretKey, component: openpgp.SecretKey | openpgp.SecretSubkey
+) -> str | None:
+    if not sign.component_is_protected(secret_key, component):
+        return None
+    for _attempt in range(3):
+        password = getpass.getpass("Key passphrase: ")
+        if sign.probe_password(component, password):
+            return password
+        show.warning("Invalid passphrase.")
+    show.error_and_exit("Invalid passphrase.")
 
 
 def subcommands_register(app: cyclopts.App) -> None:

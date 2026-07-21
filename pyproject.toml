@@ -11,7 +11,7 @@ build-backend = "hatchling.build"
 
 [project]
 name            = "apache-trusted-releases"
-version         = "0.20260720.1856"
+version         = "0.20260721.1439"
 description     = "ATR CLI and Python API"
 readme          = "README.md"
 requires-python = ">=3.12"
@@ -34,6 +34,7 @@ dependencies = [
   "pydantic",
   "pydantic[email]",
   "pyjwt",
+  "rpgp-py>=0.19.8,<0.20.0",
   "sqlalchemy",
   "sqlmodel",
   "standard-imghdr>=3.13.0",
@@ -87,4 +88,4 @@ filterwarnings = [
 ]
 
 [tool.uv]
-exclude-newer = "2026-07-20T18:56:00Z"
+exclude-newer = "2026-07-21T14:39:00Z"
