@@ -52,13 +52,13 @@ Total checks: <.skip.>
 <.etc.>
 
 <# supply a literal body while omitting the subject and duration to exercise their server-side defaults #>
-$ atr vote start test-client 0.3+cli 00004 -m "<!user!>@apache.org" -b "Vote body supplied as literal text." --concerns-noted atr.tasks.checks.rat.check
+$ atr vote start test-client 0.3+cli 00004 -m "<!user!>@apache.org" -b "Vote body supplied as literal text." --concerns-noted atr.tasks.checks.rat.check,atr.tasks.checks.signature.check_uploader_mismatch
 <.skip.>"email_to":"<!user!>@apache.org"<.skip.>
 
 $ atr vote resolve test-client 0.3+cli failed
 Vote marked as failed.
 
-$ atr vote start test-client 0.3+cli 00004 -m "<!user!>@apache.org" --concerns-noted atr.tasks.checks.rat.check
+$ atr vote start test-client 0.3+cli 00004 -m "<!user!>@apache.org" --auto-publish --concerns-noted atr.tasks.checks.rat.check,atr.tasks.checks.signature.check_uploader_mismatch
 <.skip.>"email_to":"<!user!>@apache.org"<.skip.>
 
 $ atr vote resolve test-client 0.3+cli passed
