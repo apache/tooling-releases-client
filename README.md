@@ -37,4 +37,4 @@ curl -LsSf https://astral.sh/uv/install.sh | sh
 uv tool install "apache-trusted-releases @ git+https://github.com/apache/tooling-releases-client"
 ```
 
-And you should then have an `atr` command available.
+And you should then have an `atr` command available. You can then follow the [release process guide](RELEASE-PROCESS.md) to learn how to make a release using the client.
