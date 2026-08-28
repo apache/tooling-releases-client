@@ -81,7 +81,7 @@ def get(config: dict[str, Any], parts: list[str]) -> Any | None:
 
 def host_get() -> tuple[str, bool]:
     with lock() as config:
-        host = config.get("atr", {}).get("host", "release-test.apache.org")
+        host = config.get("atr", {}).get("host", "releases.apache.org")
     local_domains = ["localhost.apache.org", "127.0.0.1"]
     domain = host.split(":")[0]
     verify_ssl = domain not in local_domains

@@ -4,7 +4,7 @@
 
 ## Summary
 
-[Get a PAT from the Tokens page](https://release-test.apache.org/tokens) and [install uv](https://docs.astral.sh/uv/getting-started/installation/).
+[Get a PAT from the Tokens page](https://releases.apache.org/tokens) and [install uv](https://docs.astral.sh/uv/getting-started/installation/).
 
 ```
 git clone https://github.com/apache/tooling-releases-client
@@ -54,7 +54,7 @@ If you run into problems with the commands above, this section may help you. It 
 
 ### Installation
 
-To test the release workflow, [log in to the `release-test` instance of ATR using ASF OAuth](https://release-test.apache.org/) and then [go to your Tokens page](https://release-test.apache.org/tokens). Where it says "Generate new token" in the "Personal Access Tokens (PATs)" section, write a brief description of your pat (e.g. "ATR client test") and then press "Generate token". Your PAT will appear as a flash message at the top of the page; write this down safely somewhere now, because it will not be visible again. We do not store PATs in the ATR, only PAT hashes.
+To test the release workflow, [log in to the `releases` instance of ATR using ASF OAuth](https://releases.apache.org/) and then [go to your Tokens page](https://releases.apache.org/tokens). Where it says "Generate new token" in the "Personal Access Tokens (PATs)" section, write a brief description of your pat (e.g. "ATR client test") and then press "Generate token". Your PAT will appear as a flash message at the top of the page; write this down safely somewhere now, because it will not be visible again. We do not store PATs in the ATR, only PAT hashes.
 
 [Install uv](https://docs.astral.sh/uv/getting-started/installation/), and make sure you have a copy of [the ATR client repository](https://github.com/apache/tooling-releases-client) locally. You can then test the ATR client using the following command:
 
