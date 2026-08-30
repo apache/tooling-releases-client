@@ -22,7 +22,6 @@
 from __future__ import annotations
 
 import asyncio
-import base64
 import contextlib
 import datetime
 import getpass
@@ -899,17 +898,16 @@ def app_sign(
         print(f"Signed to {asc_path}")
         return
 
-    upload_args = models.api.ReleaseUploadArgs(
-        project=models.safe.ProjectKey(project),
-        version=models.safe.VersionKey(version),
-        relpath=models.safe.RelPath(path + ".asc"),
-        content=base64.b64encode(armored.encode("utf-8")).decode("utf-8"),
-        expected_revision=(models.safe.RevisionNumber(expected_revision) if (expected_revision is not None) else None),
+    stored = api.release_store(
+        models.safe.ProjectKey(project),
+        models.safe.VersionKey(version),
+        models.safe.RelPath(path + ".asc"),
+        asc_path,
+        (models.safe.RevisionNumber(expected_revision) if (expected_revision is not None) else None),
     )
-    uploaded = api.release_upload(upload_args)
-    if uploaded is None:
+    if stored.revision is None:
         show.error_and_exit("Unexpected quarantine of the uploaded signature.")
-    print(uploaded.revision.model_dump_json(indent=None))
+    print(stored.revision.model_dump_json(indent=None))
 
 
 @APP_SSH.command(name="add", help="Add an SSH key.")
@@ -939,20 +937,13 @@ def app_ssh_list(asf_uid: str | None = None) -> None:
 
 @APP.command(name="upload", help="Upload a file to a release.")
 def app_upload(project: str, version: str, path: str, filepath: str, /) -> None:
-    with open(filepath, "rb") as fh:
-        content = fh.read()
-
-    upload_args = models.api.ReleaseUploadArgs(
-        project=models.safe.ProjectKey(project),
-        version=models.safe.VersionKey(version),
-        relpath=models.safe.RelPath(path),
-        content=base64.b64encode(content).decode("utf-8"),
-    )
-
+    project_key = models.safe.ProjectKey(project)
+    version_key = models.safe.VersionKey(version)
+    relpath = models.safe.RelPath(path)
     revision_before = api.release_get(project, version).release.latest_revision_number
-    upload = api.release_upload(upload_args)
-    if upload is not None:
-        print(upload.revision.model_dump_json(indent=None))
+    stored = api.release_store(project_key, version_key, relpath, pathlib.Path(filepath))
+    if stored.revision is not None:
+        print(stored.revision.model_dump_json(indent=None))
         return
     revision = upload_quarantine_wait(project, version, revision_before)
     print(revision.model_dump_json(indent=None))

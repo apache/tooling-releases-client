@@ -26,6 +26,7 @@ import functools
 from typing import TYPE_CHECKING, TypeVar
 
 if TYPE_CHECKING:
+    import pathlib
     from collections.abc import Callable
 
 import aiohttp
@@ -240,15 +241,21 @@ def release_revisions(api: ApiGet, project: str, version: str) -> models.api.Rel
     return models.api.validate_release_revisions(response)
 
 
-def release_upload(args: models.api.ReleaseUploadArgs) -> models.api.ReleaseUploadResults | None:
-    # Not decorated with @post because a quarantined upload gives a 202 response
-    # Since the 202 has no corresponding Results model, the return here is None
-    api_instance = ApiPost("/release/upload")
+def release_store(
+    project: models.safe.ProjectKey,
+    version: models.safe.VersionKey,
+    relpath: models.safe.RelPath,
+    source: pathlib.Path,
+    expected_revision: models.safe.RevisionNumber | None = None,
+) -> models.api.ReleaseStoreResults:
+    api_instance = ApiCore("/release/store")
+    params = {"project": str(project), "version": str(version), "relpath": str(relpath)}
+    if expected_revision is not None:
+        params["expected_revision"] = str(expected_revision)
+    jwt_value = config.jwt_usable()
+    response = asyncio.run(web.post_file(api_instance.url, params, source, jwt_value, api_instance.verify_ssl))
     try:
-        response = api_instance.post(args)
-        if isinstance(response, dict) and (response.get("quarantined") is True):
-            return None
-        return models.api.validate_release_upload(response)
+        return models.api.validate_release_store(response)
     except (pydantic.ValidationError, models.api.ResultsTypeError) as e:
         show.error_and_exit(f"Unexpected API POST response: {e}")
 

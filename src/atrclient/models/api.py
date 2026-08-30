@@ -761,17 +761,10 @@ class ReleaseRevisionsResults(schema.Strict):
     revisions: Sequence[sql.Revision]
 
 
-class ReleaseUploadArgs(schema.Strict):
-    project: safe.ProjectKey = schema.example("example")
-    version: safe.VersionKey = schema.example("0.0.1")
-    relpath: safe.RelPath = schema.example("example/0.0.1/example-0.0.1-bin.tar.gz")
-    content: str = schema.example("This is the content of the file.")
-    expected_revision: safe.RevisionNumber | None = schema.default_example(None, "00003")
-
-
-class ReleaseUploadResults(schema.Strict):
-    endpoint: Literal["/release/upload"] = schema.alias("endpoint")
-    revision: sql.Revision
+class ReleaseStoreResults(schema.Strict):
+    endpoint: Literal["/release/store"] = schema.alias("endpoint")
+    quarantined: bool
+    revision: sql.Revision | None
 
 
 @dataclasses.dataclass
@@ -1008,7 +1001,7 @@ type Results = Annotated[
     | ReleaseGetResults
     | ReleasePathsResults
     | ReleaseRevisionsResults
-    | ReleaseUploadResults
+    | ReleaseStoreResults
     | ReleasesListResults
     | SbomGenerateResults
     | SignatureProvenanceResults
@@ -1071,7 +1064,7 @@ validate_release_draft_delete = validator(ReleaseDraftDeleteResults)
 validate_release_get = validator(ReleaseGetResults)
 validate_release_paths = validator(ReleasePathsResults)
 validate_release_revisions = validator(ReleaseRevisionsResults)
-validate_release_upload = validator(ReleaseUploadResults)
+validate_release_store = validator(ReleaseStoreResults)
 validate_releases_list = validator(ReleasesListResults)
 validate_sbom_generate = validator(SbomGenerateResults)
 validate_signature_provenance = validator(SignatureProvenanceResults)

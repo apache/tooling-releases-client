@@ -89,6 +89,19 @@ async def post(url: str, args: schema.Strict, jwt_token: str | None, verify_ssl:
     return await post_json(url, args.model_dump(mode="json"), jwt_token, verify_ssl)
 
 
+async def post_file(
+    url: str, params: dict[str, str], source: pathlib.Path, jwt_token: str | None, verify_ssl: bool = True
+) -> basic.JSON:
+    connector = None if verify_ssl else aiohttp.TCPConnector(ssl=False)
+    headers = {"Content-Type": "application/octet-stream"}
+    if jwt_token is not None:
+        headers["Authorization"] = f"Bearer {jwt_token}"
+    async with aiohttp.ClientSession(connector=connector, headers=headers) as session:
+        with source.open("rb") as fh:
+            async with session.post(url, params=params, data=fh) as resp:
+                return await response_json_read(resp, url)
+
+
 async def post_json(url: str, args: basic.JSON, jwt_token: str | None, verify_ssl: bool = True) -> basic.JSON:
     connector = None if verify_ssl else aiohttp.TCPConnector(ssl=False)
     headers = {}
@@ -96,14 +109,18 @@ async def post_json(url: str, args: basic.JSON, jwt_token: str | None, verify_ss
         headers["Authorization"] = f"Bearer {jwt_token}"
     async with aiohttp.ClientSession(connector=connector, headers=headers) as session:
         async with session.post(url, json=args) as resp:
-            if resp.status not in (200, 201, 202):
-                text = await resp.text()
-                show.error_and_exit(f"Error message from the API:\n{resp.status} {url}\n{text}")
+            return await response_json_read(resp, url)
 
-            try:
-                data = await resp.json()
-                if not basic.is_json(data):
-                    show.error_and_exit(f"Unexpected API response: {data}")
-                return data
-            except Exception as e:
-                show.error_and_exit(f"Python error getting API response:\n{resp.status} {url}\n{e}")
+
+async def response_json_read(resp: aiohttp.ClientResponse, url: str) -> basic.JSON:
+    if resp.status not in (200, 201, 202):
+        text = await resp.text()
+        show.error_and_exit(f"Error message from the API:\n{resp.status} {url}\n{text}")
+
+    try:
+        data = await resp.json()
+        if not basic.is_json(data):
+            show.error_and_exit(f"Unexpected API response: {data}")
+        return data
+    except Exception as e:
+        show.error_and_exit(f"Python error getting API response:\n{resp.status} {url}\n{e}")

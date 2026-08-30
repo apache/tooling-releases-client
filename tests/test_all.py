@@ -19,7 +19,6 @@
 
 from __future__ import annotations
 
-import base64
 import json
 import os
 import pathlib
@@ -720,15 +719,16 @@ def test_app_sign_uploads_detached_signature(
     committee_url = "https://example.invalid/api/committee/keys/test-committee"
     release_url = "https://example.invalid/api/release/get/test-project/2.3.0"
     download_url = "https://example.invalid/download/path/test-project/2.3.0/artifact.tar.gz.cdx.json"
-    upload_url = "https://example.invalid/api/release/upload"
-    uploaded: list[dict[str, Any]] = []
+    store_url = re.compile(r"https://example\.invalid/api/release/store\?.*")
+    stored: list[dict[str, Any]] = []
 
-    def capture_upload(_url: Any, **kwargs: Any) -> aioresponses.CallbackResult:
-        uploaded.append(kwargs["json"])
+    def capture_store(url: Any, **kwargs: Any) -> aioresponses.CallbackResult:
+        stored.append({"query": dict(url.query), "content": kwargs["data"].read()})
         return aioresponses.CallbackResult(
             status=201,
             payload={
-                "endpoint": "/release/upload",
+                "endpoint": "/release/store",
+                "quarantined": False,
                 "revision": {
                     "key": "test-project-2.3.0 00003",
                     "release_key": "test-project-2.3.0",
@@ -766,16 +766,16 @@ def test_app_sign_uploads_detached_signature(
             },
         )
         mock.get(download_url, status=200, body=b"sbom bytes", content_type="application/octet-stream")
-        mock.post(upload_url, callback=capture_upload)
+        mock.post(store_url, callback=capture_store)
         client.app_sign(
             "test-project", "2.3.0", "artifact.tar.gz.cdx.json", str(tmp_path), key=str(key_path), upload=True
         )
 
     record = json.loads(capsys.readouterr().out)
     assert record["number"] == "00003"
-    assert uploaded[0]["relpath"] == "artifact.tar.gz.cdx.json.asc"
-    assert uploaded[0]["expected_revision"] == "00002"
-    armored = base64.b64decode(uploaded[0]["content"]).decode("utf-8")
+    assert stored[0]["query"]["relpath"] == "artifact.tar.gz.cdx.json.asc"
+    assert stored[0]["query"]["expected_revision"] == "00002"
+    armored = stored[0]["content"].decode("utf-8")
     signature, _ = openpgp.DetachedSignature.from_armor(armored)
     signature.verify(key.to_public_key(), b"sbom bytes")
     assert (tmp_path / "artifact.tar.gz.cdx.json.asc").read_text(encoding="utf-8") == armored
