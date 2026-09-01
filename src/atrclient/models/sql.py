@@ -25,7 +25,9 @@ import copy
 import dataclasses
 import datetime
 import enum
+import hashlib
 import ipaddress
+import json
 from typing import TYPE_CHECKING, Any, Final, Literal, Optional, TypeVar, assert_never, overload
 
 import pydantic
@@ -171,6 +173,28 @@ class DistributionPlatform(enum.Enum):
     )
 
 
+class KeyOperation(enum.StrEnum):
+    DELETE = "delete"
+    RESTORE = "restore"
+    REVISE = "revise"
+
+
+class KeyRole(enum.StrEnum):
+    ADMIN = "admin"
+    SERVICE = "service"
+    USER = "user"
+
+
+class KeysMode(enum.StrEnum):
+    # How a committee's published KEYS file is kept in step with ATR. AUTOMATIC lets ATR
+    # own the file and push it to SVN whenever the keys change; MANUAL keeps the keys in
+    # ATR but leaves publication to a human; REFLECT treats SVN as the source of truth, so
+    # the dist watcher pulls external KEYS changes back into ATR and ATR never pushes.
+    AUTOMATIC = "automatic"
+    MANUAL = "manual"
+    REFLECT = "reflect"
+
+
 class LicenseCheckMode(enum.StrEnum):
     BOTH = "Both"
     LIGHTWEIGHT = "Lightweight"
@@ -227,11 +251,13 @@ class TaskStatus(enum.StrEnum):
     ACTIVE = "active"
     COMPLETED = "completed"
     FAILED = "failed"
+    BROKEN = "broken"
 
 
 class TaskType(enum.StrEnum):
     ARCHIVE_COMPARISON = "archive_comparison"
     CAP_APPROVAL_RESOLVE = "cap_approval_resolve"
+    CATALOG_SITE_GENERATE = "catalog_site_generate"
     COMPARE_SOURCE_TREES = "compare_source_trees"
     DISTRIBUTION_STATUS = "distribution_status"
     DISTRIBUTION_WORKFLOW = "distribution_workflow"
@@ -246,6 +272,7 @@ class TaskType(enum.StrEnum):
     PATHS_CHECK = "paths_check"
     QUARANTINE_VALIDATE = "quarantine_validate"
     RAT_CHECK = "rat_check"
+    RELEASE_FINALISE = "release_finalise"
     SBOM_AUGMENT = "sbom_augment"
     SBOM_CONVERT = "sbom_convert"
     SBOM_GENERATE = "sbom_generate"
@@ -256,6 +283,7 @@ class TaskType(enum.StrEnum):
     SIGNATURE_CHECK = "signature_check"
     SVN_IMPORT_FILES = "svn_import_files"
     SVN_PUBLISH = "svn_publish"
+    SYNC_KEYS_FROM_SVN = "sync_keys_from_svn"
     TARGZ_INTEGRITY = "targz_integrity"
     TARGZ_STRUCTURE = "targz_structure"
     VOTE_AUTO_RESOLVE = "vote_auto_resolve"
@@ -272,6 +300,8 @@ class TaskType(enum.StrEnum):
                 return "Archive comparison"
             case TaskType.CAP_APPROVAL_RESOLVE:
                 return "CAP approval resolution"
+            case TaskType.CATALOG_SITE_GENERATE:
+                return "Catalog site generation"
             case TaskType.COMPARE_SOURCE_TREES:
                 return "Compare source trees"
             case TaskType.DISTRIBUTION_STATUS:
@@ -300,6 +330,8 @@ class TaskType(enum.StrEnum):
                 return "Quarantine validation"
             case TaskType.RAT_CHECK:
                 return "Rat check"
+            case TaskType.RELEASE_FINALISE:
+                return "Release finalisation"
             case TaskType.SBOM_AUGMENT:
                 return "SBOM augmentation"
             case TaskType.SBOM_CONVERT:
@@ -320,6 +352,8 @@ class TaskType(enum.StrEnum):
                 return "SVN import"
             case TaskType.SVN_PUBLISH:
                 return "SVN publish"
+            case TaskType.SYNC_KEYS_FROM_SVN:
+                return "Sync keys from SVN"
             case TaskType.TARGZ_INTEGRITY:
                 return "Targz integrity"
             case TaskType.TARGZ_STRUCTURE:
@@ -568,6 +602,10 @@ class UserPreferencesJSON(sqlalchemy.types.TypeDecorator):
 # SQL models
 
 
+def _enum_values(enum_class: type[enum.Enum]) -> list[str]:
+    return [member.value for member in enum_class]
+
+
 def example(value: Any) -> dict[Literal["schema_extra"], dict[str, Any]]:
     return {"schema_extra": {"json_schema_extra": {"examples": [value]}}}
 
@@ -625,10 +663,36 @@ class Banner(sqlmodel.SQLModel, table=True):
     )
 
 
+# KeyAttestable:
+class KeyAttestable(sqlmodel.SQLModel, table=True):
+    fingerprint: str = sqlmodel.Field(primary_key=True)
+    seq: int = sqlmodel.Field(primary_key=True)
+    operation: KeyOperation = sqlmodel.Field(
+        sa_column=sqlalchemy.Column(sqlalchemy.Enum(KeyOperation, values_callable=_enum_values), nullable=False)
+    )
+    source: str = sqlmodel.Field()
+    input: bytes | None = sqlmodel.Field(default=None)
+    deletions: bytes | None = sqlmodel.Field(default=None)
+    additions: bytes | None = sqlmodel.Field(default=None)
+    updated: datetime.datetime = sqlmodel.Field(sa_column=sqlalchemy.Column(UTCDateTime, nullable=False))
+    actor: str = sqlmodel.Field()
+    role: KeyRole = sqlmodel.Field(
+        sa_column=sqlalchemy.Column(sqlalchemy.Enum(KeyRole, values_callable=_enum_values), nullable=False)
+    )
+
+
 # KeyLink:
 class KeyLink(sqlmodel.SQLModel, table=True):
     committee_key: str = sqlmodel.Field(foreign_key="committee.key", primary_key=True)
-    key_fingerprint: str = sqlmodel.Field(foreign_key="publicsigningkey.fingerprint", primary_key=True)
+    # Authorisation is granted to the certificate as a whole, never to an individual signing key
+    key_fingerprint: str = sqlmodel.Field(foreign_key="signingcertificate.fingerprint", primary_key=True)
+    # Set when a REFLECT-mode sync found this certificate gone from the committee's SVN KEYS file
+    # but couldn't drop it because the key had signed artifacts. It stays linked and flagged so the
+    # PMC can see the mismatch; cleared once the key reappears in SVN or someone resolves it by hand.
+    svn_removed_flagged: datetime.datetime | None = sqlmodel.Field(
+        default=None,
+        sa_column=sqlalchemy.Column(UTCDateTime),
+    )
 
 
 # Notification:
@@ -644,8 +708,12 @@ class Notification(sqlmodel.SQLModel, table=True):
     # An ATR path the notification acts on, built by the sender and never by a user
     link: str | None = sqlmodel.Field(default=None)
     link_text: str | None = sqlmodel.Field(default=None)
+    dedup_hash: str = sqlmodel.Field()
 
-    __table_args__ = (sqlalchemy.Index("ix_notification_asf_uid_created", "asf_uid", "created"),)
+    __table_args__ = (
+        sqlalchemy.Index("ix_notification_asf_uid_created", "asf_uid", "created"),
+        sqlalchemy.Index("ix_notification_asf_uid_dedup_hash", "asf_uid", "dedup_hash", unique=True),
+    )
 
 
 # PersonalAccessToken:
@@ -685,6 +753,20 @@ class PersonalAccessToken(sqlmodel.SQLModel, table=True):
             return ipaddress.ip_address(client_ip) in ipaddress.ip_network(self.allowed_ip, strict=False)
         except ValueError:
             return False
+
+
+# PubSubFailure:
+class PubSubFailure(sqlmodel.SQLModel, table=True):
+    id: int | None = sqlmodel.Field(default=None, primary_key=True)
+    created: datetime.datetime = sqlmodel.Field(
+        default_factory=lambda: datetime.datetime.now(datetime.UTC),
+        sa_column=sqlalchemy.Column(UTCDateTime, nullable=False),
+    )
+    cursor: str | None = sqlmodel.Field(default=None)
+    detail: str = sqlmodel.Field()
+    payload: dict[str, Any] = sqlmodel.Field(
+        default_factory=dict, sa_column=sqlalchemy.Column(sqlalchemy.JSON, nullable=False)
+    )
 
 
 # RevisionCounter:
@@ -734,6 +816,7 @@ class Task(sqlmodel.SQLModel, table=True):
         sa_column=sqlalchemy.Column(UTCDateTime),
     )
     pid: int | None = None
+    pid_created: float | None = None
     completed: datetime.datetime | None = sqlmodel.Field(
         default=None,
         sa_column=sqlalchemy.Column(UTCDateTime),
@@ -779,8 +862,8 @@ class Task(sqlmodel.SQLModel, table=True):
         sqlalchemy.Index("ix_task_status_added", "status", "added"),
         # Ensure valid status transitions:
         # - QUEUED can transition to ACTIVE
-        # - ACTIVE can transition to COMPLETED or FAILED
-        # - COMPLETED and FAILED are terminal states
+        # - ACTIVE can transition to COMPLETED, FAILED, or BROKEN
+        # - COMPLETED, FAILED, and BROKEN are terminal states
         sqlalchemy.CheckConstraint(
             """
             (
@@ -792,6 +875,8 @@ class Task(sqlmodel.SQLModel, table=True):
                 OR (status = 'COMPLETED' AND completed IS NOT NULL AND result IS NOT NULL)
                 -- ACTIVE -> FAILED requires setting completed time and error (result optional)
                 OR (status = 'FAILED' AND completed IS NOT NULL AND error IS NOT NULL)
+                -- ACTIVE -> BROKEN requires setting completed time and error (result optional)
+                OR (status = 'BROKEN' AND completed IS NOT NULL AND error IS NOT NULL)
             )
             """,
             name="valid_task_status_transitions",
@@ -879,14 +964,29 @@ class WorkflowSSHKey(sqlmodel.SQLModel, table=True):
 # SQL core models
 
 
-# Committee: Committee Project PublicSigningKey
+# Committee: Committee Project SigningCertificate
 class Committee(sqlmodel.SQLModel, table=True):
     key: str = sqlmodel.Field(unique=True, primary_key=True, **example("example"))
     name: str | None = sqlmodel.Field(default=None, **example("Example"))
     charter: str | None = sqlmodel.Field(default=None, **example("Example"))
     # True only if this is an incubator podling with a PPMC
     is_podling: bool = sqlmodel.Field(default=False)
-    automated_keys_file: bool = sqlmodel.Field(default=True)
+    keys_mode: KeysMode = sqlmodel.Field(default=KeysMode.REFLECT)
+
+    # The date the PMC itself retired, not the dates its projects did. Null when there's
+    # no such date, which includes a committee that's retired but undated (an older Attic
+    # entry we have no record for); is_archived carries the status
+    archived: datetime.datetime | None = sqlmodel.Field(
+        default=None,
+        sa_column=sqlalchemy.Column(UTCDateTime),
+        **example(datetime.datetime(2026, 1, 15, 1, 2, 3, tzinfo=datetime.UTC)),
+    )
+    # The archived status. The archived date above can be null while this is true,
+    # for a committee we know has retired but can't date
+    is_archived: bool = sqlmodel.Field(default=False)
+    # True once the PMC has been through the projects and releases we seeded for them.
+    # Until then the catalogue says as much, because nobody who would know has checked it
+    catalog_reviewed: bool = sqlmodel.Field(default=False)
 
     # 1-M: Committee -> [Committee]
     # M-1: Committee -> Committee
@@ -919,14 +1019,14 @@ class Committee(sqlmodel.SQLModel, table=True):
         default_factory=list, sa_column=sqlalchemy.Column(sqlalchemy.JSON, nullable=False), **example(["wave"])
     )
 
-    # M-M: Committee -> [PublicSigningKey]
-    # M-M: PublicSigningKey -> [Committee]
-    public_signing_keys: list["PublicSigningKey"] = sqlmodel.Relationship(
+    # M-M: Committee -> [SigningCertificate]
+    # M-M: SigningCertificate -> [Committee]
+    signing_certificates: list["SigningCertificate"] = sqlmodel.Relationship(
         back_populates="committees",
         link_model=KeyLink,
         sa_relationship_kwargs={
-            "secondaryjoin": "and_(PublicSigningKey.fingerprint == KeyLink.key_fingerprint,"
-            " PublicSigningKey.deleted.is_(None))",
+            "secondaryjoin": "and_(SigningCertificate.fingerprint == KeyLink.key_fingerprint,"
+            " SigningCertificate.deleted.is_(None))",
         },
     )
 
@@ -1089,7 +1189,7 @@ class Project(sqlmodel.SQLModel, table=True):
 
     @property
     def policy_announce_release_default(self) -> str:
-        return """\
+        template = """\
 The Apache {{COMMITTEE}} project team is pleased to announce the
 release of {{PROJECT_NAME}} {{VERSION}}.
 
@@ -1098,11 +1198,14 @@ This is a stable release available for production use.
 Downloads are available from the following URL:
 
 {{DOWNLOAD_URL}}
-{{DISCLAIMER}}
+{{PODLING_DISCLAIMER}}
 On behalf of the Apache {{COMMITTEE}} project team,
 
 {{YOUR_FULL_NAME}} ({{YOUR_ASF_ID}})
 """
+        if self.committee and self.committee.is_podling:
+            return template
+        return template.replace("{{PODLING_DISCLAIMER}}\n", "\n")
 
     @property
     def policy_announce_release_subject_default(self) -> str:
@@ -1315,12 +1418,6 @@ Sincerely,
         return policy.github_finish_workflow_path or []
 
     @property
-    def policy_preserve_download_files(self) -> bool:
-        if (policy := self.release_policy) is None:
-            return False
-        return policy.preserve_download_files
-
-    @property
     def policy_auto_archive_prior_release(self) -> bool:
         if (policy := self.release_policy) is None:
             return False
@@ -1430,6 +1527,16 @@ class Release(sqlmodel.SQLModel, table=True):
 
     check_cache_key: str | None = sqlmodel.Field(default=None, **example("ef0ccb0a-3514-4b65-abcd-879850349f74"))
 
+    # Per-release override for the SVN publication path suffix, chosen before the files
+    # are published. Null means we've not set one, so fall back to the project policy
+    # default; an empty string is a deliberate choice of the distribution root.
+    download_path_suffix: str | None = sqlmodel.Field(default=None, **example("incubator/example/0.0.1"))
+
+    # The source commit hash for this release. Auto-filled from the Trusted Publishing
+    # attestation when a workflow uploads, or recorded by hand otherwise. Null until we
+    # know it.
+    commit_hash: str | None = sqlmodel.Field(default=None, **example("1a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b"))
+
     # M-1: Release -> Project
     # 1-M: Project -> [Release]
     project_key: str = sqlmodel.Field(foreign_key="project.key", **example("example"))
@@ -1478,6 +1585,9 @@ class Release(sqlmodel.SQLModel, table=True):
         **example(datetime.datetime(2025, 5, 7, 1, 2, 3, tzinfo=datetime.UTC)),
     )
     podling_thread_id: str | None = sqlmodel.Field(default=None, **example("hmk1lpwnnxn5zsbp8gwh7115h2qm7jrh"))
+    vote_thread_url: str | None = sqlmodel.Field(
+        default=None, **example("https://lists.apache.org/thread/hmk1lpwnnxn5zsbp8gwh7115h2qm7jrh")
+    )
 
     # 1-M: Release -C-> [Revision]
     # M-1: Revision -> Release
@@ -1867,27 +1977,17 @@ class Distribution(sqlmodel.SQLModel, table=True):
 #     see_also(Project.distribution_channels)
 
 
-# PublicSigningKey: Committee
-class PublicSigningKey(sqlmodel.SQLModel, table=True):
-    # The fingerprint must be stored as lowercase hex
+# SigningCertificate: Committee SigningKey
+class SigningCertificate(sqlmodel.SQLModel, table=True):
+    # The fingerprint of the certificate's primary key, stored as lowercase hex. The keys which can
+    # actually sign, this primary among them, are the SigningKey rows hanging off this row
     fingerprint: str = sqlmodel.Field(
         primary_key=True, unique=True, **example("0123456789abcdef0123456789abcdef01234567")
-    )
-    # The algorithm is an RFC 4880 algorithm ID
-    algorithm: int = sqlmodel.Field(**example(1))
-    # Key length in bits
-    length: int = sqlmodel.Field(**example(4096))
-    # Creation date
-    created: datetime.datetime = sqlmodel.Field(
-        sa_column=sqlalchemy.Column(UTCDateTime, nullable=False),
-        **example(datetime.datetime(2025, 5, 1, 1, 2, 3, tzinfo=datetime.UTC)),
     )
     # Latest self signature
     latest_self_signature: datetime.datetime | None = sqlmodel.Field(
         default=None, sa_column=sqlalchemy.Column(UTCDateTime)
     )
-    # Expiration date
-    expires: datetime.datetime | None = sqlmodel.Field(default=None, sa_column=sqlalchemy.Column(UTCDateTime))
     # The primary UID declared in the key
     primary_declared_uid: str | None = sqlmodel.Field(**example("User <user@example.org>"))
     # The secondary UIDs declared in the key
@@ -1905,16 +2005,56 @@ class PublicSigningKey(sqlmodel.SQLModel, table=True):
     deleted: datetime.datetime | None = sqlmodel.Field(default=None, sa_column=sqlalchemy.Column(UTCDateTime))
     historic_use: bool = sqlmodel.Field(default=False)
 
-    # M-M: PublicSigningKey -> [Committee]
-    # M-M: Committee -> [PublicSigningKey]
-    committees: list[Committee] = sqlmodel.Relationship(back_populates="public_signing_keys", link_model=KeyLink)
+    # M-M: SigningCertificate -> [Committee]
+    # M-M: Committee -> [SigningCertificate]
+    committees: list[Committee] = sqlmodel.Relationship(back_populates="signing_certificates", link_model=KeyLink)
+
+    # 1-M: SigningCertificate -> [SigningKey]
+    signing_keys: list["SigningKey"] = sqlmodel.Relationship(back_populates="certificate")
+
+    def model_post_init(self, _context):
+        if isinstance(self.latest_self_signature, str):
+            self.latest_self_signature = datetime.datetime.fromisoformat(self.latest_self_signature.rstrip("Z"))
+
+
+# SigningKey: SigningCertificate
+class SigningKey(sqlmodel.SQLModel, table=True):
+    # A key which can carry a signature, being either a certificate's primary key or one of its
+    # subkeys. Its expiry, revocation and signing capability are its own, distinct from the primary's
+    fingerprint: str = sqlmodel.Field(
+        primary_key=True, unique=True, **example("0123456789abcdef0123456789abcdef01234567")
+    )
+    certificate_fingerprint: str = sqlmodel.Field(
+        foreign_key="signingcertificate.fingerprint",
+        ondelete="CASCADE",
+        index=True,
+        **example("0123456789abcdef0123456789abcdef01234567"),
+    )
+    # True for the certificate's own primary key, of which there is exactly one per certificate
+    is_primary: bool = sqlmodel.Field(default=False, index=True)
+    # The legacy 16 hex digit key identifier, which signatures may cite instead of a fingerprint
+    key_id: str = sqlmodel.Field(index=True, **example("0123456789abcdef"))
+    # The algorithm is an RFC 4880 algorithm ID
+    algorithm: int = sqlmodel.Field(**example(1))
+    # Key length in bits
+    length: int = sqlmodel.Field(**example(4096))
+    created: datetime.datetime = sqlmodel.Field(
+        sa_column=sqlalchemy.Column(UTCDateTime, nullable=False),
+        **example(datetime.datetime(2025, 5, 1, 1, 2, 3, tzinfo=datetime.UTC)),
+    )
+    # This key's own expiry, counted from its own creation
+    expires: datetime.datetime | None = sqlmodel.Field(default=None, sa_column=sqlalchemy.Column(UTCDateTime))
+    # True where this key carries a revocation, or hangs beneath a primary which does
+    revoked: bool = sqlmodel.Field(default=False)
+    # False only where the key declares capabilities which exclude signing
+    can_sign: bool = sqlmodel.Field(default=True)
+
+    # M-1: SigningKey -> SigningCertificate
+    certificate: SigningCertificate = sqlmodel.Relationship(back_populates="signing_keys")
 
     def model_post_init(self, _context):
         if isinstance(self.created, str):
             self.created = datetime.datetime.fromisoformat(self.created.rstrip("Z"))
-
-        if isinstance(self.latest_self_signature, str):
-            self.latest_self_signature = datetime.datetime.fromisoformat(self.latest_self_signature.rstrip("Z"))
 
         if isinstance(self.expires, str):
             self.expires = datetime.datetime.fromisoformat(self.expires.rstrip("Z"))
@@ -2009,16 +2149,21 @@ class Artifact(sqlmodel.SQLModel, table=True):
     release_key: str | None = sqlmodel.Field(
         default=None, foreign_key="release.key", ondelete="CASCADE", index=True, **example("example-0.0.1")
     )
-    # Fingerprint of the GPG public key used to sign the artifact
+    # Fingerprint of the key which signed the artifact, which is a subkey wherever one was used
     key_fingerprint: str | None = sqlmodel.Field(
         default=None,
-        foreign_key="publicsigningkey.fingerprint",
+        foreign_key="signingkey.fingerprint",
         ondelete="RESTRICT",
         index=True,
         **example("0123456789abcdef0123456789abcdef01234567"),
     )
     # Path to the .asc detached signature file
     signature_path: str | None = sqlmodel.Field(default=None, **example("apache-example-0.0.1.tar.gz.asc"))
+    signature_sha3_256: str | None = sqlmodel.Field(
+        default=None,
+        index=True,
+        **example("da43c7a4d3d1e8408d3f0ac0f624a1e1f6c0d1c1a4d1a3b31843b6d15c2f2f2f"),
+    )
     # Path to the strongest available checksum file (SHA-512 preferred over SHA-256 over MD5)
     checksum_path: str | None = sqlmodel.Field(default=None, **example("apache-example-0.0.1.tar.gz.sha512"))
     # Path to the paired CycloneDX SBOM, if one rides alongside the artifact (.cdx.json preferred over .cdx.xml)
@@ -2096,7 +2241,6 @@ class ReleasePolicy(sqlmodel.SQLModel, table=True):
         default_factory=list, sa_column=sqlalchemy.Column(sqlalchemy.JSON, nullable=False)
     )
     auto_archive_prior_release: bool = sqlmodel.Field(default=False)
-    preserve_download_files: bool = sqlmodel.Field(default=False)
     download_path_suffix: str = sqlmodel.Field(default="")
 
     # 1-1: ReleasePolicy -> Project
@@ -2128,7 +2272,6 @@ class ReleasePolicy(sqlmodel.SQLModel, table=True):
             github_vote_workflow_path=list(self.github_vote_workflow_path),
             github_finish_workflow_path=list(self.github_finish_workflow_path),
             auto_archive_prior_release=self.auto_archive_prior_release,
-            preserve_download_files=self.preserve_download_files,
             download_path_suffix=self.download_path_suffix,
         )
 
@@ -2216,6 +2359,33 @@ class WorkflowStatus(sqlmodel.SQLModel, table=True):
     task: Task = sqlmodel.Relationship(back_populates="workflow")
     status: str = sqlmodel.Field()
     message: str | None = sqlmodel.Field(default=None)
+
+
+def notification_dedup_hash(level: NotificationLevel, message: str, link: str | None, link_text: str | None) -> str:
+    encoded = json.dumps([level.value, message, link, link_text])
+    return hashlib.sha3_256(encoded.encode()).hexdigest()
+
+
+def notification_insert(
+    asf_uid: str,
+    message: str,
+    level: NotificationLevel,
+    link: str | None = None,
+    link_text: str | None = None,
+) -> sqlite.Insert:
+    return (
+        sqlite.insert(Notification)
+        .values(
+            asf_uid=asf_uid,
+            created=datetime.datetime.now(datetime.UTC),
+            level=level,
+            message=message,
+            link=link,
+            link_text=link_text,
+            dedup_hash=notification_dedup_hash(level, message, link, link_text),
+        )
+        .on_conflict_do_nothing(index_elements=["asf_uid", "dedup_hash"])
+    )
 
 
 def revision_key(release_key: safe.ReleaseKey | str, number: str) -> str:

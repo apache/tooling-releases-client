@@ -297,6 +297,7 @@ def test_app_checks_status_verbose(capsys: pytest.CaptureFixture[str], fixture_c
         "endpoint": "/checks/list",
         "checks_revision": "00003",
         "current_phase": "release_candidate_draft",
+        "count": 3,
         "checks": [
             {
                 "release_name": "test-project-2.3.1",
@@ -370,6 +371,7 @@ def test_app_check_bucket_commands_list_results(
         "endpoint": "/checks/list",
         "checks_revision": "00003",
         "current_phase": "release_candidate_draft",
+        "count": 5,
         "checks": [
             check("blocker", "rat", "blocker.txt", "A blocking problem"),
             check("concern", "rat", "concern.txt", "A concern"),
@@ -432,6 +434,7 @@ def test_app_check_concerns_group_summary(capsys: pytest.CaptureFixture[str], fi
         "endpoint": "/checks/list",
         "checks_revision": "00003",
         "current_phase": "release_candidate_draft",
+        "count": len(checks),
         "checks": checks,
     }
 
@@ -465,6 +468,7 @@ def test_app_check_bucket_commands_acknowledge_no_matching_results(
             "endpoint": "/checks/list",
             "checks_revision": "00003",
             "current_phase": "release_candidate_draft",
+            "count": 1,
             "checks": [
                 {
                     "release_name": "test-project-2.3.1",
@@ -499,6 +503,7 @@ def test_app_check_concerns_reports_no_check_results(
         "endpoint": "/checks/list",
         "checks_revision": "00003",
         "current_phase": "release_candidate_draft",
+        "count": 0,
         "checks": [],
     }
     with aioresponses.aioresponses() as mock:
@@ -519,6 +524,7 @@ def test_app_check_concerns_reports_hidden_member_results(
         "endpoint": "/checks/list",
         "checks_revision": "00003",
         "current_phase": "release_candidate_draft",
+        "count": 1,
         "checks": [
             {
                 "release_name": "test-project-2.3.1",
@@ -568,6 +574,7 @@ def test_app_check_concerns_displays_release_level_results(
         "endpoint": "/checks/list",
         "checks_revision": "00003",
         "current_phase": "release_candidate_draft",
+        "count": 2,
         "checks": [concern(None, "A release concern"), concern("source.tar.gz", "A file concern")],
     }
     with aioresponses.aioresponses() as mock:

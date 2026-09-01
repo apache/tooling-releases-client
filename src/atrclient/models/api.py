@@ -17,7 +17,6 @@
 
 import dataclasses
 import datetime
-import re
 from collections.abc import Callable, Sequence
 from typing import Annotated, Any, Literal, Self, TypeVar
 
@@ -69,6 +68,8 @@ class CatalogVersion(schema.Strict):
     cycle: str | None
     # The per-version CLE feed, or None when no released-phase record backs this version.
     cle_url: str | None = None
+    # The lists.apache.org vote thread, present only for releases voted through ATR.
+    vote_thread_url: str | None = None
     artifacts: Sequence[CatalogArtifact]
 
     @pydantic.field_validator("released", mode="before")
@@ -94,11 +95,18 @@ class CatalogProjectResults(schema.Strict):
     cycles: Sequence[CatalogCycle]
 
 
+@dataclasses.dataclass
+class ChecksListQuery:
+    offset: int = 0
+    limit: int = 1000
+
+
 class ChecksListResults(schema.Strict):
     endpoint: Literal["/checks/list"] = schema.alias("endpoint")
     checks: Sequence[sql.CheckResult]
     checks_revision: safe.RevisionNumber = schema.example("00005")
     current_phase: sql.ReleasePhase = schema.example(sql.ReleasePhase.RELEASE_CANDIDATE)
+    count: int
 
     @pydantic.field_validator("current_phase", mode="before")
     @classmethod
@@ -118,12 +126,17 @@ class CommitteeGetResults(schema.Strict):
 
 class CommitteeKeysResults(schema.Strict):
     endpoint: Literal["/committee/keys"] = schema.alias("endpoint")
-    keys: Sequence[sql.PublicSigningKey]
+    keys: Sequence[sql.SigningCertificate]
 
 
 class CommitteeProjectsResults(schema.Strict):
     endpoint: Literal["/committee/projects"] = schema.alias("endpoint")
     projects: Sequence[sql.Project]
+
+
+@dataclasses.dataclass
+class CommitteesListQuery:
+    retired: bool = False
 
 
 class CommitteesListResults(schema.Strict):
@@ -331,7 +344,7 @@ class KeyDeleteResults(schema.Strict):
 
 class KeyGetResults(schema.Strict):
     endpoint: Literal["/key/get"] = schema.alias("endpoint")
-    key: sql.PublicSigningKey
+    key: sql.SigningCertificate
 
 
 class KeysUploadArgs(schema.Strict):
@@ -341,14 +354,14 @@ class KeysUploadArgs(schema.Strict):
 
 class KeysUploadException(schema.Strict):
     status: Literal["error"] = schema.alias("status")
-    key: sql.PublicSigningKey | None
+    key: sql.SigningCertificate | None
     error: str = schema.example("Error message")
     error_type: str = schema.example("KeysUploadError")
 
 
 class KeysUploadResult(schema.Strict):
     status: Literal["success"] = schema.alias("status")
-    key: sql.PublicSigningKey
+    key: sql.SigningCertificate
 
 
 type KeysUploadOutcome = Annotated[
@@ -370,7 +383,7 @@ class KeysUploadResults(schema.Strict):
 
 class KeysUserResults(schema.Strict):
     endpoint: Literal["/keys/user"] = schema.alias("endpoint")
-    keys: Sequence[sql.PublicSigningKey]
+    keys: Sequence[sql.SigningCertificate]
 
 
 class ProjectGetResults(schema.Strict):
@@ -418,7 +431,6 @@ class PolicyGetResults(schema.Strict):
     policy_manual_vote: bool
     policy_min_hours: int
     policy_vote_mode: sql.VoteMode = schema.example(sql.VoteMode.EMAIL)
-    policy_preserve_download_files: bool
     policy_release_checklist: str
     policy_source_artifact_paths: list[str]
     policy_start_vote_subject: str
@@ -447,7 +459,6 @@ class PolicyArgsBase(schema.Strict):
     download_path_suffix: str | None = None
     manual_vote: bool | None = None
     min_hours: int | None = None
-    preserve_download_files: bool | None = None
     release_checklist: str | None = None
     source_artifact_paths: list[str] | None = None
     source_excludes_lightweight: list[str] | None = None
@@ -532,12 +543,27 @@ class ProjectConfigProjectArgs(schema.Strict):
     standards: list[str] | None = None
     categories: list[str] | None = None
     programming_languages: list[str] | None = None
-    # Changing any of these four reassigns existing releases to the cycle
-    # their version string now maps to.
+    # Changing any of these reassigns existing releases to the cycle their
+    # version string now maps to
     version_method: sql.VersionMethod | None = None
     version_pattern: str | None = None
     cycle_match: str | None = None
+    calver_format: str | None = None
     branch_template: str | None = None
+
+    @pydantic.field_validator("repositories")
+    @classmethod
+    def _validate_repository_uris(cls, v: list[str] | None) -> list[str] | None:
+        if v is not None:
+            validation.validate_uri_list(v, validation.REPOSITORY_URI_SCHEMES)
+        return v
+
+    @pydantic.field_validator("standards")
+    @classmethod
+    def _validate_standard_uris(cls, v: list[str] | None) -> list[str] | None:
+        if v is not None:
+            validation.validate_uri_list(v, validation.STANDARD_URI_SCHEMES)
+        return v
 
     @pydantic.field_validator("version_method", mode="before")
     @classmethod
@@ -550,6 +576,20 @@ class ProjectConfigProjectArgs(schema.Strict):
         return v
 
     @pydantic.model_validator(mode="after")
+    def _validate_calver_format(self) -> Self:
+        date_format = self.calver_format.strip() if self.calver_format else None
+        if date_format is None:
+            return self
+        if (self.version_method is not None) and (self.version_method is not sql.VersionMethod.CALVER):
+            raise ValueError("Field 'calver_format' applies only when version_method is 'calver'")
+        if self.cycle_match and self.cycle_match.strip():
+            raise ValueError("Set either 'calver_format' or 'cycle_match', not both")
+        from . import calver
+
+        calver.validate(date_format)
+        return self
+
+    @pydantic.model_validator(mode="after")
     def _validate_version_scheme(self) -> Self:
         if ("version_method" in self.model_fields_set) and (self.version_method is None):
             raise ValueError("Field 'version_method' does not accept null")
@@ -558,8 +598,8 @@ class ProjectConfigProjectArgs(schema.Strict):
             if not (isinstance(value, str) and value.strip()):
                 continue
             try:
-                compiled = re.compile(value.strip())
-            except re.error as exc:
+                compiled = validation.compile_project_pattern(value.strip(), captures=True)
+            except ValueError as exc:
                 raise ValueError(f"Invalid {field} regex: {exc}") from exc
             if (field == "cycle_match") and (compiled.groups < 1):
                 raise ValueError("cycle_match must contain at least one capture group")
@@ -751,9 +791,16 @@ class ReleaseGetResults(schema.Strict):
         return v
 
 
+@dataclasses.dataclass
+class ReleasePathsQuery:
+    offset: int = 0
+    limit: int = 1000
+
+
 class ReleasePathsResults(schema.Strict):
     endpoint: Literal["/release/paths"] = schema.alias("endpoint")
     rel_paths: Sequence[str] = schema.example(["example/0.0.1/example-0.0.1-bin.tar.gz"])
+    count: int
 
 
 class ReleaseRevisionsResults(schema.Strict):
@@ -761,10 +808,31 @@ class ReleaseRevisionsResults(schema.Strict):
     revisions: Sequence[sql.Revision]
 
 
+@dataclasses.dataclass
+class ReleaseStoreQuery:
+    project: str
+    version: str
+    relpath: str
+    expected_revision: str | None = None
+
+
 class ReleaseStoreResults(schema.Strict):
     endpoint: Literal["/release/store"] = schema.alias("endpoint")
     quarantined: bool
     revision: sql.Revision | None
+
+
+class ReleaseUploadArgs(schema.Strict):
+    project: safe.ProjectKey = schema.example("example")
+    version: safe.VersionKey = schema.example("0.0.1")
+    relpath: safe.RelPath = schema.example("example/0.0.1/example-0.0.1-bin.tar.gz")
+    content: str = schema.example("This is the content of the file.")
+    expected_revision: safe.RevisionNumber | None = schema.default_example(None, "00003")
+
+
+class ReleaseUploadResults(schema.Strict):
+    endpoint: Literal["/release/upload"] = schema.alias("endpoint")
+    revision: sql.Revision
 
 
 @dataclasses.dataclass
@@ -1002,6 +1070,7 @@ type Results = Annotated[
     | ReleasePathsResults
     | ReleaseRevisionsResults
     | ReleaseStoreResults
+    | ReleaseUploadResults
     | ReleasesListResults
     | SbomGenerateResults
     | SignatureProvenanceResults
@@ -1065,6 +1134,7 @@ validate_release_get = validator(ReleaseGetResults)
 validate_release_paths = validator(ReleasePathsResults)
 validate_release_revisions = validator(ReleaseRevisionsResults)
 validate_release_store = validator(ReleaseStoreResults)
+validate_release_upload = validator(ReleaseUploadResults)
 validate_releases_list = validator(ReleasesListResults)
 validate_sbom_generate = validator(SbomGenerateResults)
 validate_signature_provenance = validator(SignatureProvenanceResults)

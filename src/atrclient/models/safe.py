@@ -25,12 +25,15 @@ from typing import Annotated, Any, Final
 import pydantic
 
 _ALPHANUM: Final = frozenset(string.ascii_letters + string.digits + "-")
+_HEX_LOWER: Final = frozenset(string.hexdigits.lower())
 _PROJECT_CHARS: Final = _ALPHANUM
 _ASF_UID_CHARS: Final = frozenset(string.ascii_lowercase + string.digits + "-_")
 _NUMERIC: Final = frozenset(string.digits)
 _PATH_CHARS: Final = frozenset(string.ascii_letters + string.digits + "-._+~/()")
 _OWNER_NAMESPACE_CHARS: Final = _ALPHANUM | frozenset(".")
 _VERSION_CHARS: Final = _ALPHANUM | frozenset(".+")
+
+MAX_VERSION_LENGTH: Final[int] = 128
 
 
 class SafeType:
@@ -204,6 +207,19 @@ class AsfUid(SafeType):
             raise ValueError("ASF UID must start with a lowercase letter")
 
 
+class CommitHash(SafeType):
+    """A source commit hash, validated as lowercase hexadecimal of a git-like length."""
+
+    @classmethod
+    def _valid_chars(cls) -> frozenset[str]:
+        return _HEX_LOWER
+
+    def _additional_validations(self, value: str) -> None:
+        # Wide enough for a short hash through to a full SHA-256 object name
+        if not (7 <= len(value) <= 64):
+            raise ValueError("A commit hash must be between 7 and 64 hexadecimal characters")
+
+
 class CommitteeKey(Alphanumeric):
     pass
 
@@ -298,6 +314,13 @@ class RelPath(SafeType):
         return self.as_path() >= other.as_path()
 
 
+class RelDirPath(RelPath):
+    def _additional_validations(self, value: str) -> None:
+        if value == ".":
+            return
+        super()._additional_validations(value)
+
+
 class RevisionNumber(Numeric):
     """A revision number that has been validated for safety."""
 
@@ -310,6 +333,8 @@ class VersionKey(Alphanumeric):
         return _VERSION_CHARS
 
     def _additional_validations(self, value: str):
+        if len(value) > MAX_VERSION_LENGTH:
+            raise ValueError(f"A version should be at most {MAX_VERSION_LENGTH} characters")
         if value[0] not in _ALPHANUM:
             raise ValueError("A version should start with an alphanumeric character")
         if value[-1] not in _ALPHANUM:
@@ -319,6 +344,14 @@ class VersionKey(Alphanumeric):
 def _empty_to_none(v: object) -> object:
     if isinstance(v, str) and (not v):
         return None
+    return v
+
+
+def _lower_or_none(v: object) -> object:
+    """Fold a commit hash to lowercase, treating a blank string as absent."""
+    if isinstance(v, str):
+        stripped = v.strip().lower()
+        return stripped or None
     return v
 
 
@@ -335,6 +368,11 @@ def _strip_slashes_or_none(v: object) -> object:
 type OptionalAlphanumeric = Annotated[
     Alphanumeric | None,
     pydantic.BeforeValidator(_strip_slashes_or_none),
+]
+
+type OptionalCommitHash = Annotated[
+    CommitHash | None,
+    pydantic.BeforeValidator(_lower_or_none),
 ]
 
 type OptionalOwnerNamespace = Annotated[

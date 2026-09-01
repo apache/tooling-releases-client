@@ -108,7 +108,10 @@ def post(path: str) -> Callable[[Callable[[ApiPost, A], R]], Callable[[A], R]]:
 @get("/checks/list")
 def checks_list(api: ApiGet, project: str, version: str, revision: str | None = None) -> models.api.ChecksListResults:
     response = api.get(project, version, revision=revision)
-    return models.api.validate_checks_list(response)
+    results = models.api.validate_checks_list(response)
+    if len(results.checks) < results.count:
+        show.warning(f"showing {len(results.checks)} of {results.count} checks")
+    return results
 
 
 @get("/checks/ongoing")
@@ -226,7 +229,10 @@ def release_paths(
     api: ApiGet, project: str, version: str, revision: str | None = None
 ) -> models.api.ReleasePathsResults:
     response = api.get(project, version, revision=revision)
-    return models.api.validate_release_paths(response)
+    results = models.api.validate_release_paths(response)
+    if len(results.rel_paths) < results.count:
+        show.warning(f"showing {len(results.rel_paths)} of {results.count} paths")
+    return results
 
 
 @get("/release/get")

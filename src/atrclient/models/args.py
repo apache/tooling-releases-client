@@ -27,6 +27,15 @@ class CapApprovalResolveArgs(schema.Strict):
     attempt: int = pydantic.Field(default=0, description="The current resolve attempt count")
 
 
+class CatalogSiteGenerate(schema.Strict):
+    """Arguments for the task to regenerate the static release catalog site."""
+
+    asf_uid: str = schema.description("ASF UID on whose behalf the site is regenerated")
+    project_key: str | None = pydantic.Field(
+        default=None, description="Regenerate just this project's subtree; null rebuilds the whole site"
+    )
+
+
 class ConvertCycloneDX(schema.Strict):
     """Arguments for the task to convert an artifact to a CycloneDX SBOM."""
 
@@ -80,6 +89,12 @@ class GenerateCycloneDX(schema.Strict):
 
     artifact_path: safe.StatePath = schema.description("Absolute path to the artifact")
     output_path: safe.StatePath = schema.description("Absolute path where the generated SBOM JSON should be written")
+    source_name: safe.RelPath | None = schema.Field(
+        default=None, description="Path of the artifact within the revision, used to name the root component"
+    )
+    source_version: safe.VersionKey | None = schema.Field(
+        default=None, description="Release version of the artifact, used to version the root component"
+    )
 
 
 class ImportFile(schema.Strict):
@@ -159,6 +174,22 @@ def _ensure_footer_enum(value: Any) -> mail.MailFooterCategory | None:
         return None
 
 
+class ReleaseFinalise(schema.Strict):
+    asf_uid: str = schema.description("ASF UID of the user who announced the release")
+    project_key: safe.ProjectKey = schema.description("Project key in ATR")
+    version_key: safe.VersionKey = schema.description("Version key in ATR")
+    revision_number: safe.RevisionNumber = schema.description("Published preview revision number")
+    svn_revision: int = schema.description("The SVN revision number that the publish landed in")
+    download_path_suffix: safe.OptionalRelPath = pydantic.Field(
+        default=None,
+        description="Optional path suffix appended under the committee distribution path",
+    )
+    email_to: str | None = pydantic.Field(default=None, description="The announcement email To address")
+    email_cc: list[str] = schema.factory(list)
+    email_bcc: list[str] = schema.factory(list)
+    audit_until: str = schema.description("Inclusive audit log datetime boundary for the release log")
+
+
 class Send(schema.Strict):
     """Arguments for the task to send an email."""
 
@@ -209,8 +240,15 @@ class SvnPublish(schema.Strict):
     revision_number: safe.RevisionNumber = schema.description("Preview revision number to publish")
     download_path_suffix: safe.OptionalRelPath = pydantic.Field(
         default=None,
-        description="Optional path suffix appended under the committee downloads directory",
+        description="Optional path suffix appended under the committee distribution path",
     )
+
+
+class SyncKeysFromSvn(schema.Strict):
+    """Arguments for the task to reflect a committee's SVN KEYS file into ATR."""
+
+    asf_uid: str = schema.description("ASF UID on whose behalf the sync runs")
+    committee_key: str = schema.description("Committee whose KEYS file to reflect")
 
 
 class Update(schema.Strict):
