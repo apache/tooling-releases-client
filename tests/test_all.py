@@ -1035,6 +1035,7 @@ def test_app_release_list_success(capsys: pytest.CaptureFixture[str], fixture_co
 
     payload = {
         "endpoint": "/project/releases",
+        "count": 2,
         "releases": [
             {
                 "name": "test-project-2.3.1",

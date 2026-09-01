@@ -197,7 +197,10 @@ def project_get(api: ApiGet, project: str) -> models.api.ProjectGetResults:
 @get("/project/releases")
 def project_releases(api: ApiGet, project: str) -> models.api.ProjectReleasesResults:
     response = api.get(project)
-    return models.api.validate_project_releases(response)
+    results = models.api.validate_project_releases(response)
+    if len(results.releases) < results.count:
+        show.warning(f"showing {len(results.releases)} of {results.count} releases")
+    return results
 
 
 @post("/release/announce")

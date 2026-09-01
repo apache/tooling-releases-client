@@ -3,7 +3,7 @@ revision = 3
 requires-python = ">=3.12"
 
 [options]
-exclude-newer = "2026-09-01T14:14:00Z"
+exclude-newer = "2026-09-01T19:19:00Z"
 
 [[package]]
 name = "aiohappyeyeballs"
@@ -151,7 +151,7 @@ wheels = [
 
 [[package]]
 name = "apache-trusted-releases"
-version = "0.20260901.1414"
+version = "0.20260901.1919"
 source = { editable = "." }
 dependencies = [
     { name = "aiohttp" },
