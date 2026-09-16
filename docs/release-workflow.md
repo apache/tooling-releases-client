@@ -43,7 +43,7 @@ atr vote resolve your-project 0.1+test passed
 Your release is in the ③ FINISH phase.
 
 ```
-atr announce your-project 0.1+test 00003 -m "${ASF_UID}@apache.org"
+atr announce your-project 0.1+test 00002 -m "${ASF_UID}@apache.org"
 ```
 
 Your release is published and immutable.
@@ -144,10 +144,10 @@ atr vote resolve your-project 0.1+test passed
 Your release is in the ③ FINISH phase.
 
 ```
-atr announce your-project 0.1+test 00003 -m "${ASF_UID}@apache.org"
+atr announce your-project 0.1+test 00002 -m "${ASF_UID}@apache.org"
 ```
 
-Like with the vote you must know your revision to be able to announce your release. And again, instead of your ASF email address, you can also use `user-tests@tooling.apache.org` as the value here and then [consult the mailing list archives](https://lists.apache.org/list.html?user-tests@tooling.apache.org) to check that the thread was created.
+Passing the vote retains the voted revision, so the announcement above uses the same revision number. You can also omit the announcement revision to use the current one. For a release already in the finish phase on an older ATR version, check its current revision rather than calculating it from the voted number. And again, instead of your ASF email address, you can also use `user-tests@tooling.apache.org` as the value here and then [consult the mailing list archives](https://lists.apache.org/list.html?user-tests@tooling.apache.org) to check that the thread was created.
 
 ### Conclusion
 

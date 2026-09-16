@@ -1465,7 +1465,8 @@ def verify_summary(
     artifact_data: bytes,
     verbose: bool = False,
 ) -> None:
-    key, _ = ForceUnexpiredOpenPGPKey.from_blob(verify_provenance.key_asc_text)
+    key = ForceUnexpiredOpenPGPKey()
+    key.parse(bytearray(verify_provenance.key_asc_text, "latin-1"))
     sig = pgpy.PGPSignature.from_blob(signature_data)
     with quiet():
         verification_result = key.verify(artifact_data, sig)

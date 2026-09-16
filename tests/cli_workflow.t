@@ -71,7 +71,7 @@ $ atr distribution list test-client 0.3+cli
 <.skip.>react@18.2.0<.skip.>
 
 <# omit body to exercise the server-side announce template #>
-$ atr announce test-client 0.3+cli 00005 -m "<!user!>@apache.org"
+$ atr announce test-client 0.3+cli 00004 -m "<!user!>@apache.org"
 Announcement sent with a body rendered by the server from the project's announce email template.
 
 <# tidy up #>
