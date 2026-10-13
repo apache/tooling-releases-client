@@ -19,7 +19,11 @@ from typing import Annotated, Any
 
 import pydantic
 
-from . import mail, safe, schema
+from . import github, mail, safe, schema
+
+
+class AuditSealArgs(schema.Strict):
+    asf_uid: str
 
 
 class CapApprovalResolveArgs(schema.Strict):
@@ -68,6 +72,10 @@ class DistributionStatusCheckArgs(schema.Strict):
     asf_uid: str = schema.description("ASF UID of the user triggering the workflow")
 
 
+class DownloadsCheck(schema.Strict):
+    publish_task_id: int
+
+
 class FileArgs(schema.Strict):
     """Arguments for SBOM file processing tasks."""
 
@@ -97,14 +105,6 @@ class GenerateCycloneDX(schema.Strict):
     )
 
 
-class ImportFile(schema.Strict):
-    """Import a KEYS file from a draft release candidate revision."""
-
-    asf_uid: str
-    project_key: safe.ProjectKey
-    version_key: safe.VersionKey
-
-
 class Initiate(schema.Strict):
     """Arguments for the task to start a vote."""
 
@@ -132,7 +132,7 @@ class Initiate(schema.Strict):
     )
     automatic_publish_when_resolved: bool = pydantic.Field(
         default=False,
-        description="Publish the preview revision to SVN automatically when the final approving vote resolves",
+        description="Publish the approved revision to SVN automatically when the final approving vote resolves",
     )
     automatic_publish_asf_uid: str | None = pydantic.Field(
         default=None,
@@ -142,6 +142,11 @@ class Initiate(schema.Strict):
         default=None,
         description="Optional download path suffix carried to publish when automatic publish is selected",
     )
+
+
+class IntegrityCheckArgs(schema.Strict):
+    asf_uid: str
+    next_schedule_seconds: int = 0
 
 
 class MaintenanceArgs(schema.Strict):
@@ -163,6 +168,10 @@ class QuarantineValidate(schema.Strict):
 
     quarantined_id: int
     archives: list[QuarantineArchiveEntry]
+    github_payload: github.TrustedPublisherPayload | None = None
+    source_commit: safe.CommitHash | None = None
+    # Absent means leave the override alone, and None means clear it, so use model_fields_set to tell them apart
+    source_override: str | None = None
 
 
 def _ensure_footer_enum(value: Any) -> mail.MailFooterCategory | None:
@@ -178,7 +187,7 @@ class ReleaseFinalise(schema.Strict):
     asf_uid: str = schema.description("ASF UID of the user who announced the release")
     project_key: safe.ProjectKey = schema.description("Project key in ATR")
     version_key: safe.VersionKey = schema.description("Version key in ATR")
-    revision_number: safe.RevisionNumber = schema.description("Published preview revision number")
+    revision_number: safe.RevisionNumber = schema.description("Published ATR revision number")
     svn_revision: int = schema.description("The SVN revision number that the publish landed in")
     download_path_suffix: safe.OptionalRelPath = pydantic.Field(
         default=None,
@@ -190,9 +199,15 @@ class ReleaseFinalise(schema.Strict):
     audit_until: str = schema.description("Inclusive audit log datetime boundary for the release log")
 
 
+class SBOMHeatmap(schema.Strict):
+    project_key: safe.ProjectKey
+    version_key: safe.VersionKey
+
+
 class Send(schema.Strict):
     """Arguments for the task to send an email."""
 
+    pat_revocation_notice: bool = False
     email_sender: pydantic.EmailStr = schema.description("The email address of the sender")
     email_to: pydantic.EmailStr = schema.description("The email To address")
     subject: str = schema.description("The subject of the email")
@@ -217,6 +232,8 @@ class Send(schema.Strict):
         task_args = self.model_dump()
         if task_args.get("message_id") is None:
             task_args.pop("message_id", None)
+        if not self.pat_revocation_notice:
+            task_args.pop("pat_revocation_notice")
         return task_args
 
 
@@ -237,11 +254,20 @@ class SvnPublish(schema.Strict):
     asf_uid: str = schema.description("ASF UID of the user initiating publication")
     project_key: safe.ProjectKey = schema.description("Project key in ATR")
     version_key: safe.VersionKey = schema.description("Version key in ATR")
-    revision_number: safe.RevisionNumber = schema.description("Preview revision number to publish")
+    revision_number: safe.RevisionNumber = schema.description("Approved ATR revision number to publish")
+    vote_thread_url: str | None = pydantic.Field(default=None, description="Vote thread URL at publication request")
     download_path_suffix: safe.OptionalRelPath = pydantic.Field(
         default=None,
         description="Optional path suffix appended under the committee distribution path",
     )
+
+
+class SvnUnpublish(schema.Strict):
+    """Arguments for the task to remove an archived release from the SVN dist area."""
+
+    asf_uid: str = schema.description("ASF UID on whose behalf the removal is committed")
+    project_key: safe.ProjectKey = schema.description("Project key in ATR")
+    version_key: safe.VersionKey = schema.description("Version key in ATR")
 
 
 class SyncKeysFromSvn(schema.Strict):

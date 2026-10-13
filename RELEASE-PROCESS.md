@@ -72,7 +72,7 @@ atr vote start example 1.0.0 -m dev@example.apache.org \
 
 This specific command requires a committee member to run it, because automatic publishing requires it.
 
-The subject, body, and duration come from your project's templates and policy. Omit the revision only if you made the latest one yourself, otherwise find it with `atr revisions example 1.0.0` and supply it after the version.
+The subject, body, and duration come from your project's templates and policy, unless you supply your own with `--subject`, `--body-file`, and `--duration`. ATR fills in template variables such as `{{REVIEW_URL}}` only in your project's templates, never in your own text. Omit the revision only if you made the latest one yourself, otherwise find it with `atr revisions example 1.0.0` and supply it after the version.
 
 The vote then runs in the mailing list thread that ATR just started, and the voting procedure depends on the voting mode that you selected in ATR. When the voting period ends, if you did not select automatic vote resolution on the website:
 
@@ -90,6 +90,8 @@ Announce using the `atr announce` command:
 ```
 atr announce example 1.0.0 -m announce@example.apache.org
 ```
+
+The body comes from your project's announcement template, unless you supply your own with `--body-file`, which ATR again sends without filling in template variables.
 
 If ATR says the release is still publishing, or not yet on the download servers, wait a little and run the same command again. When it succeeds, ATR sends the announcement and the release process is finished.
 

@@ -1240,11 +1240,11 @@ def transcript_execute(
 ) -> list[str]:
     match line[:1]:
         case "$":
-            expected_code = 0
+            expected_success = True
         case "!":
-            expected_code = 1
+            expected_success = False
         case "*":
-            expected_code = None
+            expected_success = None
         case _:
             pytest.fail(f"Unknown line prefix: {line[:1]!r}")
     command = line[2:]
@@ -1252,8 +1252,8 @@ def transcript_execute(
         pytest.fail(f"Command does not start with 'atr': {command}")
     print(f"Running: {command}")
     result = script_runner.run(shlex.split(command), env=env)
-    if expected_code is not None:
-        assert result.returncode == expected_code, f"Command {command!r} returned {result.returncode}"
+    if expected_success is not None:
+        assert (result.returncode == 0) == expected_success, f"Command {command!r} returned {result.returncode}"
     actual_output[:] = result.stdout.splitlines()
     if result.stderr:
         actual_output.append("<.stderr.>")

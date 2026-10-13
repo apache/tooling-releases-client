@@ -73,7 +73,6 @@ class DistributionPlatformValue:
 
 class ApprovalAction(enum.StrEnum):
     ARCHIVE = "archive"
-    ARCHIVE_RELEASE = "archive_release"
     DELETE = "delete"
 
 
@@ -114,6 +113,14 @@ class CheckResultStatusIgnore(enum.StrEnum):
 
     def to_form_field(self) -> str:
         return f"CheckResultStatusIgnore.{self.value.upper()}"
+
+
+CHECK_RESULT_IGNORABLE_STATUSES: Final[tuple[CheckResultStatus, ...]] = tuple(
+    CheckResultStatus(status.value) for status in CheckResultStatusIgnore
+)
+CHECK_RESULT_NON_NOTE_STATUSES: Final[tuple[CheckResultStatus, ...]] = tuple(
+    status for status in CheckResultStatus if (status != CheckResultStatus.NOTE)
+)
 
 
 class DistributionPlatform(enum.Enum):
@@ -171,6 +178,17 @@ class DistributionPlatform(enum.Enum):
         template_url="https://pypi.org/pypi/{package}/{version}/json",
         template_staging_url="https://test.pypi.org/pypi/{package}/{version}/json",
     )
+
+
+class DistRuleKind(enum.StrEnum):
+    # How the dist watcher's decomposer reads a row. Each kind corresponds to a hard-coded
+    # table or frozenset previously held in svn/dist.py
+    PROJECT_REMAP = "project_remap"
+    GROUPING_BUCKET = "grouping_bucket"
+    COMMITTEE_BUCKET = "committee_bucket"
+    EXCLUDED_PART = "excluded_part"
+    NAME_BUILD_SUFFIX = "name_build_suffix"
+    AIRFLOW_PROVIDER_AREA = "airflow_provider_area"
 
 
 class KeyOperation(enum.StrEnum):
@@ -256,13 +274,16 @@ class TaskStatus(enum.StrEnum):
 
 class TaskType(enum.StrEnum):
     ARCHIVE_COMPARISON = "archive_comparison"
+    AUDIT_SEAL = "audit_seal"
     CAP_APPROVAL_RESOLVE = "cap_approval_resolve"
     CATALOG_SITE_GENERATE = "catalog_site_generate"
     COMPARE_SOURCE_TREES = "compare_source_trees"
     DISTRIBUTION_STATUS = "distribution_status"
     DISTRIBUTION_WORKFLOW = "distribution_workflow"
+    DOWNLOADS_CHECK = "downloads_check"
     HAS_SBOM = "has_sbom"
     HASHING_CHECK = "hashing_check"
+    INTEGRITY_CHECK = "integrity_check"
     KEYS_IMPORT_FILE = "keys_import_file"
     LICENSE_FILES = "license_files"
     LICENSE_HEADERS = "license_headers"
@@ -277,12 +298,15 @@ class TaskType(enum.StrEnum):
     SBOM_CONVERT = "sbom_convert"
     SBOM_GENERATE = "sbom_generate"
     SBOM_GENERATE_CYCLONEDX = "sbom_generate_cyclonedx"
+    SBOM_HEATMAP = "sbom_heatmap"
     SBOM_OSV_SCAN = "sbom_osv_scan"
     SBOM_QS_SCORE = "sbom_qs_score"
+    SBOM_REVIEW = "sbom_review"
     SBOM_TOOL_SCORE = "sbom_tool_score"
     SIGNATURE_CHECK = "signature_check"
     SVN_IMPORT_FILES = "svn_import_files"
     SVN_PUBLISH = "svn_publish"
+    SVN_UNPUBLISH = "svn_unpublish"
     SYNC_KEYS_FROM_SVN = "sync_keys_from_svn"
     TARGZ_INTEGRITY = "targz_integrity"
     TARGZ_STRUCTURE = "targz_structure"
@@ -298,6 +322,8 @@ class TaskType(enum.StrEnum):
         match self:
             case TaskType.ARCHIVE_COMPARISON:
                 return "Archive comparison"
+            case TaskType.AUDIT_SEAL:
+                return "Audit log sealing"
             case TaskType.CAP_APPROVAL_RESOLVE:
                 return "CAP approval resolution"
             case TaskType.CATALOG_SITE_GENERATE:
@@ -308,10 +334,14 @@ class TaskType(enum.StrEnum):
                 return "Distribution status"
             case TaskType.DISTRIBUTION_WORKFLOW:
                 return "Distribution workflow"
+            case TaskType.DOWNLOADS_CHECK:
+                return "Download availability"
             case TaskType.HAS_SBOM:
                 return "SBOM check"
             case TaskType.HASHING_CHECK:
                 return "Hashing check"
+            case TaskType.INTEGRITY_CHECK:
+                return "Integrity check"
             case TaskType.KEYS_IMPORT_FILE:
                 return "Key import"
             case TaskType.LICENSE_FILES:
@@ -329,7 +359,7 @@ class TaskType(enum.StrEnum):
             case TaskType.QUARANTINE_VALIDATE:
                 return "Quarantine validation"
             case TaskType.RAT_CHECK:
-                return "Rat check"
+                return "RAT check"
             case TaskType.RELEASE_FINALISE:
                 return "Release finalisation"
             case TaskType.SBOM_AUGMENT:
@@ -340,10 +370,14 @@ class TaskType(enum.StrEnum):
                 return "SBOM generation and augmentation"
             case TaskType.SBOM_GENERATE_CYCLONEDX:
                 return "SBOM generation"
+            case TaskType.SBOM_HEATMAP:
+                return "SBOM heatmap analysis"
             case TaskType.SBOM_OSV_SCAN:
                 return "SBOM vulnerability scan"
             case TaskType.SBOM_QS_SCORE:
                 return "SBOM QS score"
+            case TaskType.SBOM_REVIEW:
+                return "SBOM review"
             case TaskType.SBOM_TOOL_SCORE:
                 return "SBOM tool score"
             case TaskType.SIGNATURE_CHECK:
@@ -352,6 +386,8 @@ class TaskType(enum.StrEnum):
                 return "SVN import"
             case TaskType.SVN_PUBLISH:
                 return "SVN publish"
+            case TaskType.SVN_UNPUBLISH:
+                return "SVN unpublish"
             case TaskType.SYNC_KEYS_FROM_SVN:
                 return "Sync keys from SVN"
             case TaskType.TARGZ_INTEGRITY:
@@ -414,6 +450,14 @@ class LifecycleEventType(enum.StrEnum):
     EOD = "eod"
     EOS = "eos"
     EOL = "eol"
+
+
+class ArchiveSource(enum.StrEnum):
+    MANUAL = "manual"
+    CAP = "cap"
+    AUTO_PRIOR = "auto_prior"
+    DIST_WATCHER = "dist_watcher"
+    CATALOG_ADMIN = "catalog_admin"
 
 
 # Pydantic models
@@ -619,8 +663,6 @@ class ApprovalRequest(sqlmodel.SQLModel, table=True):
     project_key: str = sqlmodel.Field()
     committee_key: str = sqlmodel.Field()
     action: ApprovalAction = sqlmodel.Field()
-    # Only for release-scoped actions; project-scoped requests leave it null
-    release_version: str | None = sqlmodel.Field(default=None)
     cap_question_id: int = sqlmodel.Field(unique=True)
     status: ApprovalStatus = sqlmodel.Field(default=ApprovalStatus.PENDING, index=True)
     outcome: str | None = None
@@ -635,19 +677,11 @@ class ApprovalRequest(sqlmodel.SQLModel, table=True):
     error: str | None = None
 
     __table_args__ = (
-        # Project scoped actions stay one at a time; each release may carry its own vote
         sqlalchemy.Index(
             "ix_approvalrequest_active_project",
             "project_key",
             unique=True,
-            sqlite_where=sqlalchemy.text("status IN ('PENDING', 'APPROVED') AND release_version IS NULL"),
-        ),
-        sqlalchemy.Index(
-            "ix_approvalrequest_active_release",
-            "project_key",
-            "release_version",
-            unique=True,
-            sqlite_where=sqlalchemy.text("status IN ('PENDING', 'APPROVED') AND release_version IS NOT NULL"),
+            sqlite_where=sqlalchemy.text("status IN ('PENDING', 'APPROVED')"),
         ),
     )
 
@@ -661,6 +695,33 @@ class Banner(sqlmodel.SQLModel, table=True):
         default_factory=lambda: datetime.datetime.now(datetime.UTC),
         sa_column=sqlalchemy.Column(UTCDateTime, nullable=False),
     )
+
+
+# DistRule:
+class DistRule(sqlmodel.SQLModel, table=True):
+    # One tunable the dist watcher's decomposer reads. The kind says how to read the row;
+    # committee scopes project remaps and committee buckets, and the remaining columns carry
+    # whatever that kind needs - a bare token in pattern for the membership sets, or a
+    # committee/subproject match remapped to target for a project remap
+    id: int | None = sqlmodel.Field(default=None, primary_key=True)
+    kind: DistRuleKind = sqlmodel.Field(
+        sa_column=sqlalchemy.Column(sqlalchemy.Enum(DistRuleKind, values_callable=_enum_values), nullable=False)
+    )
+    # The match committee for project remaps and committee buckets; unused by the other kinds
+    committee: str | None = sqlmodel.Field(default=None)
+    # The remap's match subproject; null matches a committee-level dist layout
+    subproject: str | None = sqlmodel.Field(default=None)
+    # The matched token or directory name - the value the membership-set kinds test against
+    pattern: str | None = sqlmodel.Field(default=None)
+    # The remap's output project key; only a project remap uses it
+    target: str | None = sqlmodel.Field(default=None)
+    # Off keeps a row in the table and out of the loaded rule set, so a quirk can be
+    # parked without losing the note that explains it
+    enabled: bool = sqlmodel.Field(default=True)
+    # Why the rule exists - the reasoning that used to sit in an inline comment
+    note: str | None = sqlmodel.Field(default=None)
+
+    __table_args__ = (sqlalchemy.Index("ix_distrule_kind", "kind"),)
 
 
 # KeyAttestable:
@@ -683,7 +744,7 @@ class KeyAttestable(sqlmodel.SQLModel, table=True):
 
 # KeyLink:
 class KeyLink(sqlmodel.SQLModel, table=True):
-    committee_key: str = sqlmodel.Field(foreign_key="committee.key", primary_key=True)
+    committee_key: str = sqlmodel.Field(foreign_key="committee.key", primary_key=True, ondelete="CASCADE")
     # Authorisation is granted to the certificate as a whole, never to an individual signing key
     key_fingerprint: str = sqlmodel.Field(foreign_key="signingcertificate.fingerprint", primary_key=True)
     # Set when a REFLECT-mode sync found this certificate gone from the committee's SVN KEYS file
@@ -709,6 +770,7 @@ class Notification(sqlmodel.SQLModel, table=True):
     link: str | None = sqlmodel.Field(default=None)
     link_text: str | None = sqlmodel.Field(default=None)
     dedup_hash: str = sqlmodel.Field()
+    is_admin: bool = sqlmodel.Field(default=False)
 
     __table_args__ = (
         sqlalchemy.Index("ix_notification_asf_uid_created", "asf_uid", "created"),
@@ -841,13 +903,13 @@ class Task(sqlmodel.SQLModel, table=True):
             self.status = TaskStatus(self.status)
 
         if isinstance(self.added, str):
-            self.added = datetime.datetime.fromisoformat(self.added.rstrip("Z"))
+            self.added = datetime.datetime.fromisoformat(self.added)
 
         if isinstance(self.started, str):
-            self.started = datetime.datetime.fromisoformat(self.started.rstrip("Z"))
+            self.started = datetime.datetime.fromisoformat(self.started)
 
         if isinstance(self.completed, str):
-            self.completed = datetime.datetime.fromisoformat(self.completed.rstrip("Z"))
+            self.completed = datetime.datetime.fromisoformat(self.completed)
 
         if isinstance(self.result, dict):
             self.result = results.ResultsAdapter.validate_python(self.result)
@@ -957,6 +1019,8 @@ class WorkflowSSHKey(sqlmodel.SQLModel, table=True):
     github_payload: dict[str, Any] = sqlmodel.Field(
         default_factory=dict, sa_column=sqlalchemy.Column(sqlalchemy.JSON, nullable=False)
     )
+    # Declared by the workflow rather than signed by GitHub, so kept out of github_payload
+    source_commit: str | None = sqlmodel.Field(default=None)
     expires: int = sqlmodel.Field()
     revoked: bool = sqlmodel.Field(default=False)
 
@@ -972,6 +1036,9 @@ class Committee(sqlmodel.SQLModel, table=True):
     # True only if this is an incubator podling with a PPMC
     is_podling: bool = sqlmodel.Field(default=False)
     keys_mode: KeysMode = sqlmodel.Field(default=KeysMode.REFLECT)
+    mail_addresses: list[str] = sqlmodel.Field(
+        default_factory=list, sa_column=sqlalchemy.Column(sqlalchemy.JSON, nullable=False)
+    )
 
     # The date the PMC itself retired, not the dates its projects did. Null when there's
     # no such date, which includes a committee that's retired but undated (an older Attic
@@ -1216,18 +1283,24 @@ On behalf of the Apache {{COMMITTEE}} project team,
         return """Hello {{COMMITTEE}},
 
 I'd like to call a vote on releasing the following artifacts as
-Apache {{PROJECT_NAME}} {{VERSION}}. This vote is being conducted using an
-Alpha version of the Apache Trusted Releases (ATR) platform.
+Apache {{PROJECT_NAME}} {{VERSION}}. This vote is being conducted using a
+Beta version of the Apache Trusted Releases (ATR) platform.
 Please report any bugs or issues to the ASF Tooling team.
 
-The release candidate page, including downloads, can be found at:
+The page of the release candidate from ATR revision {{REVISION}},
+which includes downloads, can be found at:
 
   {{REVIEW_URL}}
+
+The file manifest for ATR revision {{REVISION}}, including file digests,
+can be found at:
+
+  {{MANIFEST_URL}}
 
 The release artifacts are signed with one or more OpenPGP keys from:
 
   {{KEYS_FILE}}
-
+{{COMMIT_PARAGRAPH}}{{FIRST_ROUND_THREAD}}
 Please review the release candidate and vote accordingly.
 
 [ ] +1 Release this package
@@ -1270,6 +1343,12 @@ Sincerely,
         if ((policy := self.release_policy) is None) or (policy.announce_release_subject == ""):
             return self.policy_announce_release_subject_default
         return policy.announce_release_subject
+
+    @property
+    def policy_announce_release_template_url(self) -> str:
+        if (policy := self.release_policy) is None:
+            return ""
+        return policy.announce_release_template_url
 
     @property
     def policy_announce_release_template(self) -> str:
@@ -1318,6 +1397,12 @@ Sincerely,
         return policy.release_checklist
 
     @property
+    def policy_vote_comment_template_url(self) -> str:
+        if (policy := self.release_policy) is None:
+            return ""
+        return policy.vote_comment_template_url
+
+    @property
     def policy_vote_comment_template(self) -> str:
         if ((policy := self.release_policy) is None) or (policy.vote_comment_template == ""):
             return ""
@@ -1330,10 +1415,22 @@ Sincerely,
         return policy.start_vote_subject
 
     @property
+    def policy_start_vote_template_url(self) -> str:
+        if (policy := self.release_policy) is None:
+            return ""
+        return policy.start_vote_template_url
+
+    @property
     def policy_start_vote_template(self) -> str:
         if ((policy := self.release_policy) is None) or (policy.start_vote_template == ""):
             return self.policy_start_vote_default
         return policy.start_vote_template
+
+    @property
+    def policy_finish_vote_template_url(self) -> str:
+        if (policy := self.release_policy) is None:
+            return ""
+        return policy.finish_vote_template_url
 
     @property
     def policy_finish_vote_template(self) -> str:
@@ -1374,6 +1471,12 @@ Sincerely,
         if (policy := self.release_policy) is None:
             return []
         return policy.source_excludes_rat or []
+
+    @property
+    def policy_rat_excludes_url(self) -> str:
+        if (policy := self.release_policy) is None:
+            return ""
+        return policy.rat_excludes_url or ""
 
     @property
     def policy_tagging_spec(self) -> dict[str, Any] | None:
@@ -1514,6 +1617,8 @@ class Release(sqlmodel.SQLModel, table=True):
     # The archived status. The archived date above can be null while this is true,
     # for a catalogued historical release we know is archived but can't date
     is_archived: bool = sqlmodel.Field(default=False)
+    # Why the release was archived, set alongside is_archived.
+    archive_source: ArchiveSource | None = sqlmodel.Field(default=None)
     activity_at: datetime.datetime = sqlmodel.Field(
         default_factory=lambda: datetime.datetime.now(datetime.UTC),
         sa_column=sqlalchemy.Column(UTCDateTime, nullable=False),
@@ -1573,6 +1678,7 @@ class Release(sqlmodel.SQLModel, table=True):
     )
 
     vote_mode: VoteMode | None = sqlmodel.Field(default=None, **example(VoteMode.EMAIL))
+    voted_revision_number: str | None = sqlmodel.Field(default=None, **example("00001"))
     current_vote_seq: int | None = sqlmodel.Field(default=None, index=True)
     vote_started: datetime.datetime | None = sqlmodel.Field(
         default=None,
@@ -1625,7 +1731,13 @@ class Release(sqlmodel.SQLModel, table=True):
     )
 
     # The combination of key and version must be unique
-    __table_args__ = (sqlmodel.UniqueConstraint("project_key", "version", name="unique_project_version"),)
+    __table_args__ = (
+        sqlmodel.UniqueConstraint("project_key", "version", name="unique_project_version"),
+        sqlalchemy.CheckConstraint(
+            "NOT expedited OR vote_mode IS NULL OR vote_mode = 'TRUSTED'",
+            name="expedited_vote_mode_trusted",
+        ),
+    )
 
     @property
     def committee(self) -> Committee | None:
@@ -1713,7 +1825,7 @@ class Release(sqlmodel.SQLModel, table=True):
         for name in ("activity_at", "archived", "created", "released", "vote_resolved", "vote_started"):
             value = getattr(self, name)
             if isinstance(value, str):
-                setattr(self, name, datetime.datetime.fromisoformat(value.rstrip("Z")))
+                setattr(self, name, datetime.datetime.fromisoformat(value))
 
         if isinstance(self.phase, str):
             self.phase = ReleasePhase(self.phase)
@@ -1796,6 +1908,30 @@ class LifecycleEvent(sqlmodel.SQLModel, table=True):
         sqlalchemy.Index("ix_lifecycleevent_version_event", "version_key", "event"),
     )
 
+    @classmethod
+    def withdrawing(
+        cls,
+        target_event_id: int,
+        *,
+        project_key: str,
+        cycle_key: str | None,
+        version_key: str | None,
+        when: datetime.datetime,
+    ) -> "LifecycleEvent":
+        # A withdraw row retracts an earlier event in the append-only trail, pointing back
+        # at it by id. effective and published share one instant, since a withdraw records
+        # itself rather than standing in for a planned date. The caller finds the prior
+        # event and hands its id in, keeping the differing lookups at the call sites.
+        return cls(
+            project_key=project_key,
+            cycle_key=cycle_key,
+            version_key=version_key,
+            event=LifecycleEventType.WITHDRAW,
+            effective=when,
+            published=when,
+            target_event_id=target_event_id,
+        )
+
 
 # BallotPaper: Release
 class BallotPaper(sqlmodel.SQLModel, table=True):
@@ -1825,7 +1961,7 @@ class BallotPaper(sqlmodel.SQLModel, table=True):
             self.choice = VoteChoice(self.choice)
 
         if isinstance(self.created, str):
-            self.created = datetime.datetime.fromisoformat(self.created.rstrip("Z"))
+            self.created = datetime.datetime.fromisoformat(self.created)
 
     @property
     def safe_revision_number_at_cast(self) -> safe.RevisionNumber:
@@ -1906,7 +2042,7 @@ class CheckResultIgnore(sqlmodel.SQLModel, table=True):
 
     def model_post_init(self, _context):
         if isinstance(self.created, str):
-            self.created = datetime.datetime.fromisoformat(self.created.rstrip("Z"))
+            self.created = datetime.datetime.fromisoformat(self.created)
 
 
 # Distribution: Release
@@ -2014,7 +2150,7 @@ class SigningCertificate(sqlmodel.SQLModel, table=True):
 
     def model_post_init(self, _context):
         if isinstance(self.latest_self_signature, str):
-            self.latest_self_signature = datetime.datetime.fromisoformat(self.latest_self_signature.rstrip("Z"))
+            self.latest_self_signature = datetime.datetime.fromisoformat(self.latest_self_signature)
 
 
 # SigningKey: SigningCertificate
@@ -2054,10 +2190,10 @@ class SigningKey(sqlmodel.SQLModel, table=True):
 
     def model_post_init(self, _context):
         if isinstance(self.created, str):
-            self.created = datetime.datetime.fromisoformat(self.created.rstrip("Z"))
+            self.created = datetime.datetime.fromisoformat(self.created)
 
         if isinstance(self.expires, str):
-            self.expires = datetime.datetime.fromisoformat(self.expires.rstrip("Z"))
+            self.expires = datetime.datetime.fromisoformat(self.expires)
 
 
 # Quarantined: Release
@@ -2098,10 +2234,10 @@ class Quarantined(sqlmodel.SQLModel, table=True):
 
     def model_post_init(self, _context):
         if isinstance(self.created, str):
-            self.created = datetime.datetime.fromisoformat(self.created.rstrip("Z"))
+            self.created = datetime.datetime.fromisoformat(self.created)
 
         if isinstance(self.completed, str):
-            self.completed = datetime.datetime.fromisoformat(self.completed.rstrip("Z"))
+            self.completed = datetime.datetime.fromisoformat(self.completed)
 
         if isinstance(self.status, str):
             self.status = QuarantineStatus(self.status)
@@ -2208,11 +2344,15 @@ class ReleasePolicy(sqlmodel.SQLModel, table=True):
     min_hours: int | None = sqlmodel.Field(default=None)
     release_checklist: str = sqlmodel.Field(default="")
     vote_comment_template: str = sqlmodel.Field(default="")
+    vote_comment_template_url: str = sqlmodel.Field(default="")
     start_vote_subject: str = sqlmodel.Field(default="")
     start_vote_template: str = sqlmodel.Field(default="")
+    start_vote_template_url: str = sqlmodel.Field(default="")
     finish_vote_template: str = sqlmodel.Field(default="")
+    finish_vote_template_url: str = sqlmodel.Field(default="")
     announce_release_subject: str = sqlmodel.Field(default="")
     announce_release_template: str = sqlmodel.Field(default="")
+    announce_release_template_url: str = sqlmodel.Field(default="")
     binary_artifact_paths: list[str] = sqlmodel.Field(
         default_factory=list, sa_column=sqlalchemy.Column(sqlalchemy.JSON, nullable=False)
     )
@@ -2226,6 +2366,7 @@ class ReleasePolicy(sqlmodel.SQLModel, table=True):
     source_excludes_rat: list[str] = sqlmodel.Field(
         default_factory=list, sa_column=sqlalchemy.Column(sqlalchemy.JSON, nullable=False)
     )
+    rat_excludes_url: str = sqlmodel.Field(default="")
     github_repository_name: str = sqlmodel.Field(default="")
     github_repository_branch: str = sqlmodel.Field(default="")
     github_compose_workflow_path: list[str] = sqlmodel.Field(
@@ -2255,16 +2396,21 @@ class ReleasePolicy(sqlmodel.SQLModel, table=True):
             min_hours=self.min_hours,
             release_checklist=self.release_checklist,
             vote_comment_template=self.vote_comment_template,
+            vote_comment_template_url=self.vote_comment_template_url,
             start_vote_subject=self.start_vote_subject,
             start_vote_template=self.start_vote_template,
+            start_vote_template_url=self.start_vote_template_url,
             finish_vote_template=self.finish_vote_template,
+            finish_vote_template_url=self.finish_vote_template_url,
             announce_release_subject=self.announce_release_subject,
             announce_release_template=self.announce_release_template,
+            announce_release_template_url=self.announce_release_template_url,
             binary_artifact_paths=list(self.binary_artifact_paths),
             source_artifact_paths=list(self.source_artifact_paths),
             license_check_mode=self.license_check_mode,
             source_excludes_lightweight=list(self.source_excludes_lightweight),
             source_excludes_rat=list(self.source_excludes_rat),
+            rat_excludes_url=self.rat_excludes_url,
             github_repository_name=self.github_repository_name,
             github_repository_branch=self.github_repository_branch,
             github_compose_workflow_path=list(self.github_compose_workflow_path),
@@ -2330,7 +2476,7 @@ class Revision(sqlmodel.SQLModel, table=True):
 
     def model_post_init(self, _context):
         if isinstance(self.created, str):
-            self.created = datetime.datetime.fromisoformat(self.created.rstrip("Z"))
+            self.created = datetime.datetime.fromisoformat(self.created)
 
         if isinstance(self.phase, str):
             self.phase = ReleasePhase(self.phase)
@@ -2372,6 +2518,7 @@ def notification_insert(
     level: NotificationLevel,
     link: str | None = None,
     link_text: str | None = None,
+    is_admin: bool = False,
 ) -> sqlite.Insert:
     return (
         sqlite.insert(Notification)
@@ -2383,8 +2530,14 @@ def notification_insert(
             link=link,
             link_text=link_text,
             dedup_hash=notification_dedup_hash(level, message, link, link_text),
+            is_admin=is_admin,
         )
-        .on_conflict_do_nothing(index_elements=["asf_uid", "dedup_hash"])
+        .on_conflict_do_update(
+            index_elements=["asf_uid", "dedup_hash"],
+            set_={"is_admin": is_admin},
+            where=validate_instrumented_attribute(Notification.is_admin) != is_admin,
+        )
+        .execution_options(populate_existing=True)
     )
 
 

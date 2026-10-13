@@ -47,6 +47,15 @@ class DistributionWorkflowStatus(schema.Strict):
     kind: Literal["distribution_workflow_status"] = schema.Field(alias="kind")
 
 
+class DownloadsCheck(schema.Strict):
+    kind: Literal["downloads_check"] = "downloads_check"
+    cursor: int = 0
+    waiting_for: str | None = None
+    total: int = 0
+    available: bool = False
+    message: str = "Waiting for downloads to become available."
+
+
 class HashingCheck(schema.Strict):
     """Result of the task to check the hash of a file."""
 
@@ -191,6 +200,56 @@ class SBOMGenerate(schema.Strict):
     )
 
 
+class SBOMHeatmapRow(schema.Strict):
+    key: str
+    purl: str
+    source_purls: list[str]
+    name: str
+    ecosystem: str
+    version: str | None
+    artifacts: list[str]
+    advisory_status: Literal["found", "none", "version_unknown", "unsupported", "not_found", "failed"]
+    advisories: list[str] = schema.factory(list)
+    published_at: str | None = None
+    repository_url: str | None = None
+    source_repo: str | None = None
+    repository_source: Literal["deps.dev", "ecosyste.ms", "gitbox_mirror"] | None = None
+    latest_release_at: str | None = None
+    latest_release_version: str | None = None
+    rankings_average: float | None = None
+    archived: bool | None = None
+    dds: float | None = None
+    active_maintainers: int | None = None
+    governance_files: int | None = None
+    maintained: int | None = None
+    scorecard_date: str | None = None
+    criticality: float | None = None
+    health: float | None = None
+    health_inputs: int = 0
+    risk: float | None = None
+
+
+class SBOMHeatmapSbom(schema.Strict):
+    artifact_path: str
+    sbom_url: str
+    sha256: str | None = None
+    retrieved_at: str | None = None
+    components: int = 0
+    files: int = 0
+    packages: int = 0
+    error: str | None = None
+
+
+class SBOMHeatmap(schema.Strict):
+    kind: Literal["sbom_heatmap"] = "sbom_heatmap"
+    analysis_version: int
+    generated_at: str
+    sboms: list[SBOMHeatmapSbom]
+    rows: list[SBOMHeatmapRow]
+    sources: dict[str, str]
+    attribution: str
+
+
 class SBOMQsScore(schema.Strict):
     kind: Literal["sbom_qs_score"] = schema.Field(alias="kind")
     project_key: safe.ProjectKey = schema.description("Project name")
@@ -255,6 +314,16 @@ class SvnPublish(schema.Strict):
     message: str = schema.description("A short status message describing the publish outcome")
 
 
+class SvnUnpublish(schema.Strict):
+    """Result of the task to remove an archived release from the SVN dist area."""
+
+    kind: Literal["svn_unpublish"] = schema.Field(alias="kind")
+    svn_revision: int | None = schema.description("The SVN revision the removal landed in, or None if nothing remained")
+    message: str = schema.description("A short status message describing the removal outcome")
+    # Files left in dist that may need manual cleanup.
+    leftover: list[str] = schema.factory(list)
+
+
 class VoteAutoResolve(schema.Strict):
     """Result of the task to automatically resolve a vote."""
 
@@ -307,6 +376,7 @@ Results = Annotated[
     | DistributionStatusCheck
     | DistributionWorkflow
     | DistributionWorkflowStatus
+    | DownloadsCheck
     | HashingCheck
     | Maintenance
     | MessageSend
@@ -316,11 +386,13 @@ Results = Annotated[
     | SBOMConvert
     | SBOMGenerate
     | SBOMGenerateCycloneDX
+    | SBOMHeatmap
     | SBOMOSVScan
     | SBOMQsScore
     | SBOMToolScore
     | SvnImportFiles
     | SvnPublish
+    | SvnUnpublish
     | VoteAutoResolve
     | VoteEndNotify
     | VoteInitiate,

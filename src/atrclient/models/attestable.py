@@ -50,6 +50,7 @@ class HashEntryV2(schema.Strict):
     size: int
     uploaders: list[Annotated[tuple[str, str], pydantic.BeforeValidator(tuple)]]
     basenames: list[str] = schema.factory(list)
+    sha3_256: str | None = None
     swhid_dir_inner: str | None = None
 
 
@@ -70,11 +71,23 @@ class PathEntryV2(schema.Strict):
     provenance: ProvenanceV2 | None = None
 
 
+class SourceV2(schema.Strict):
+    repository: str = ""
+    default: str | None = None
+    declared: str | None = None
+    override: str | None = None
+
+    @property
+    def sha(self) -> str:
+        return self.override or self.declared or self.default or ""
+
+
 class AttestableV2(schema.Strict):
     version: Literal[2] = 2
     hashes: dict[str, HashEntryV2] = schema.factory(dict)
     paths: dict[str, PathEntryV2] = schema.factory(dict)
     policy: dict[str, Any] = schema.factory(dict)
+    source: SourceV2 | None = None
 
 
 # Attestable, any version
@@ -94,9 +107,20 @@ class AttestableChecksV1(schema.Strict):
 # Attestable Checks, v2
 
 
+class RatExcludesRecordV2(schema.Strict):
+    # What we fed to RAT for one source artifact. content and content_hash are set when the fetch
+    # succeeded; error is set instead when the URL was configured but couldn't be honoured
+    url: str
+    content_hash: str | None = None
+    content: str | None = None
+    error: str | None = None
+
+
 class AttestableChecksV2(schema.Strict):
     version: Literal[2] = 2
     checks: dict[str, dict[str, str]] = schema.factory(dict)
+    # Keyed by the source artifact's rel_path
+    rat_excludes: dict[str, RatExcludesRecordV2] = schema.factory(dict)
 
 
 # Attestable Checks, any version

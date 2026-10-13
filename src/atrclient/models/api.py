@@ -419,6 +419,7 @@ class PolicyGetResults(schema.Strict):
     project_key: safe.ProjectKey
     policy_announce_release_subject: str
     policy_announce_release_template: str
+    policy_announce_release_template_url: str
     policy_binary_artifact_paths: list[str]
     policy_github_compose_workflow_path: list[str]
     policy_github_finish_workflow_path: list[str]
@@ -435,8 +436,11 @@ class PolicyGetResults(schema.Strict):
     policy_source_artifact_paths: list[str]
     policy_start_vote_subject: str
     policy_start_vote_template: str
+    policy_start_vote_template_url: str
     policy_finish_vote_template: str
+    policy_finish_vote_template_url: str
     policy_vote_comment_template: str
+    policy_vote_comment_template_url: str
 
 
 class PolicyArgsBase(schema.Strict):
@@ -446,6 +450,7 @@ class PolicyArgsBase(schema.Strict):
 
     announce_release_subject: str | None = None
     announce_release_template: str | None = None
+    announce_release_template_url: str | None = None
     binary_artifact_paths: list[str] | None = None
     file_tag_mappings: dict[str, list[str]] | None = None
     github_compose_workflow_path: list[str] | None = None
@@ -463,10 +468,14 @@ class PolicyArgsBase(schema.Strict):
     source_artifact_paths: list[str] | None = None
     source_excludes_lightweight: list[str] | None = None
     source_excludes_rat: list[str] | None = None
+    rat_excludes_url: str | None = None
     start_vote_subject: str | None = None
     start_vote_template: str | None = None
+    start_vote_template_url: str | None = None
     finish_vote_template: str | None = None
+    finish_vote_template_url: str | None = None
     vote_comment_template: str | None = None
+    vote_comment_template_url: str | None = None
     vote_mode: sql.VoteMode | None = None
 
     @pydantic.field_validator("license_check_mode", mode="before")
@@ -500,6 +509,18 @@ class PolicyArgsBase(schema.Strict):
         if self.download_path_suffix is not None:
             validation.validate_download_path_suffix(self.download_path_suffix)
 
+        if self.rat_excludes_url is not None:
+            validation.validate_fetch_url(self.rat_excludes_url)
+
+        for template_url in (
+            self.announce_release_template_url,
+            self.start_vote_template_url,
+            self.finish_vote_template_url,
+            self.vote_comment_template_url,
+        ):
+            if template_url is not None:
+                validation.validate_fetch_url(template_url)
+
         github_repository_name = self.github_repository_name
         if github_repository_name is not None:
             validation.validate_github_repository_name(github_repository_name.strip())
@@ -528,7 +549,14 @@ class PolicyUpdateResults(schema.Strict):
 
 
 class ProjectConfigProjectArgs(schema.Strict):
-    name: str | None = None
+    name: str | None = schema.Field(
+        default=None,
+        description=(
+            "Full project display name, including the 'Apache ' prefix. Required when creating a project; "
+            "omit when updating to preserve the current name. The prefix is not added automatically."
+        ),
+        json_schema_extra={"example": "Apache Maven Filtering"},
+    )
     description: str | None = None
     short_description: str | None = None
     homepage: pydantic.HttpUrl | None = None
@@ -713,6 +741,7 @@ class PublisherSshRegisterArgs(schema.Strict):
     publisher: str = schema.example("user")
     jwt: str = schema.example("eyJhbGciOiJIUzI1[...]mMjLiuyu5CSpyHI=")
     ssh_key: str = schema.example("ssh-ed25519 AAAAC3NzaC1lZDI1NTEgH5C9okWi0dh25AAAAIOMqqnkVzrm0SdG6UOoqKLsabl9GKJl")
+    source_commit: safe.OptionalCommitHash = schema.default_example(None, "0123456789abcdef0123456789abcdef01234567")
 
 
 class PublisherSshRegisterResults(schema.Strict):
@@ -796,6 +825,25 @@ class ReleaseGetResults(schema.Strict):
                 setattr(obj, "_latest_revision_number", lrn)
             return obj
         return v
+
+
+class ReleaseManifestFile(schema.Strict):
+    path: str
+    size: int | None = schema.description("File size in bytes, or null when unavailable in the retained manifest.")
+    digest: str | None = schema.description("SHA3-256 digest prefixed with sha3-256:, or null when not recorded.")
+    swhid_dir_inner: str | None = schema.description(
+        "SWHID of the archive's extracted inner directory, or null when not recorded."
+    )
+
+
+class ReleaseManifestResults(schema.Strict):
+    endpoint: Literal["/release/manifest"] = schema.alias("endpoint")
+    project: safe.ProjectKey
+    version: safe.VersionKey
+    revision: safe.RevisionNumber
+    files: Sequence[ReleaseManifestFile] = schema.description(
+        "All files in the requested revision, without pagination."
+    )
 
 
 @dataclasses.dataclass
