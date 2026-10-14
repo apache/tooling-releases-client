@@ -768,6 +768,8 @@ class ReleaseAnnounceArgs(schema.Strict):
     version: safe.VersionKey = schema.example("1.0.0")
     revision: safe.RevisionNumber | None = schema.default_example(None, "00005")
     email_to: str = schema.example("dev@example.apache.org")
+    email_cc: list[str] = schema.default_example([], ["announce@apache.org"])
+    email_bcc: list[str] = schema.default_example([], ["private@example.apache.org"])
     body: str | None = schema.default_example(
         None, "The Apache Example team is pleased to announce the release of Example 1.0.0..."
     )

@@ -93,6 +93,8 @@ atr announce example 1.0.0 -m announce@example.apache.org
 
 The body comes from your project's announcement template, unless you supply your own with `--body-file`, which ATR again sends without filling in template variables.
 
+Add `--cc` or `--bcc` once for each other permitted list that should get a copy, such as `--cc dev@example.apache.org --cc user@example.apache.org`.
+
 If ATR says the release is still publishing, or not yet on the download servers, wait a little and run the same command again. When it succeeds, ATR sends the announcement and the release process is finished.
 
 ## Afterwards

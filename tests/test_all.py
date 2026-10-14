@@ -231,11 +231,11 @@ def test_app_announce_serializes_template_default_and_bodies(
         mock.post(announce_url, callback=capture_request)
         client.app_announce("test-project", "2.3.1", mailing_list="announce@example.apache.org")
         default_record = json.loads(capsys.readouterr().out)
-        client.app_announce(
-            "test-project",
-            "2.3.1",
-            mailing_list="announce@example.apache.org",
-            body="Custom announcement body",
+        client.APP(
+            "announce test-project 2.3.1 -m announce@example.apache.org -b 'Custom announcement body' "
+            "--cc dev@example.apache.org --cc user@example.apache.org "
+            "--bcc private@example.apache.org --bcc announce@apache.org",
+            result_action="return_value",
         )
         custom_record = json.loads(capsys.readouterr().out)
         client.app_announce(
@@ -247,9 +247,12 @@ def test_app_announce_serializes_template_default_and_bodies(
         file_record = json.loads(capsys.readouterr().out)
 
     assert captured_requests[0]["body"] is None
+    assert (captured_requests[0]["email_cc"], captured_requests[0]["email_bcc"]) == ([], [])
     assert default_record["body"] is None
     assert default_record["body_rendered_by_server"] is True
     assert captured_requests[1]["body"] == "Custom announcement body"
+    assert captured_requests[1]["email_cc"] == ["dev@example.apache.org", "user@example.apache.org"]
+    assert captured_requests[1]["email_bcc"] == ["private@example.apache.org", "announce@apache.org"]
     assert custom_record["body"] == "Custom announcement body"
     assert "body_rendered_by_server" not in custom_record
     assert captured_requests[2]["body"] == "Announcement body from file\n"

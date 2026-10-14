@@ -103,6 +103,8 @@ def app_announce(
     revision: str | None = None,
     *,
     mailing_list: Annotated[str, cyclopts.Parameter(alias="-m", name="--mailing-list")],
+    cc: Annotated[list[str] | None, cyclopts.Parameter(negative="")] = None,
+    bcc: Annotated[list[str] | None, cyclopts.Parameter(negative="")] = None,
     body: Annotated[
         str | None,
         cyclopts.Parameter(
@@ -138,6 +140,8 @@ def app_announce(
         version=models.safe.VersionKey(version),
         revision=models.safe.RevisionNumber(revision) if revision else None,
         email_to=mailing_list,
+        email_cc=cc or [],
+        email_bcc=bcc or [],
         body=body_text,
         path_suffix=models.safe.RelPath(path_suffix) if path_suffix else None,
     )
