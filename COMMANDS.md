@@ -382,7 +382,7 @@ List recorded distributions for a release.
 
 ```
 Usage: atr distribution record PROJECT VERSION PLATFORM DISTRIBUTION-OWNER-NAMESPACE DISTRIBUTION-PACKAGE 
-DISTRIBUTION-VERSION STAGING DETAILS
+DISTRIBUTION-VERSION [ARGS]
 
 Record a distribution.
 
@@ -396,8 +396,7 @@ Record a distribution.
 │      --distribution-package                                                                                          │
 │ *  DISTRIBUTION-VERSION              [required]                                                                      │
 │      --distribution-version                                                                                          │
-│ *  STAGING --staging --no-staging    [required]                                                                      │
-│ *  DETAILS --details --no-details    [required]                                                                      │
+│    STAGING --staging --no-staging    [default: False]                                                                │
 ╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
 ```
 

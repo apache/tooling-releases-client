@@ -517,8 +517,7 @@ def app_distribution_record(
     distribution_owner_namespace: str | None,
     distribution_package: str,
     distribution_version: str,
-    staging: bool,
-    details: bool,
+    staging: bool = False,
 ) -> None:
     if not distribution_owner_namespace or distribution_owner_namespace == "None":
         distribution_owner_namespace = None
@@ -535,7 +534,7 @@ def app_distribution_record(
         distribution_package=models.safe.Alphanumeric(distribution_package),
         distribution_version=models.safe.VersionKey(distribution_version),
         staging=staging,
-        details=details,
+        details=False,
     )
     distribution_record = api.distribution_record(distribution_record_args)
     if not distribution_record.success:

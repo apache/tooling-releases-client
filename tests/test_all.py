@@ -1129,6 +1129,36 @@ def test_app_distribution_list_empty(capsys: pytest.CaptureFixture[str], fixture
         assert capsys.readouterr().out == ""
 
 
+@pytest.mark.parametrize(
+    ("staging_args", "staging"), [([], False), (["true"], True), (["false"], False), (["--staging"], True)]
+)
+def test_app_distribution_record_staging(
+    staging_args: list[str], staging: bool, fixture_config_env: pathlib.Path
+) -> None:
+    config.write({"atr": {"host": "example.invalid"}, "tokens": {"jwt": "dummy_jwt_token"}})
+    record_url = "https://example.invalid/api/distribution/record"
+    args = ["record", "test-project", "2.3.1", "NPM", "None", "react", "18.2.0", *staging_args]
+
+    with aioresponses.aioresponses() as mock:
+        mock.post(record_url, payload={"endpoint": "/distribution/record", "success": True})
+        client.APP_DISTRIBUTION(args, result_action="return_value")
+        mock.assert_called_once_with(
+            record_url,
+            method="POST",
+            args_to_match=["json"],
+            json={
+                "project": "test-project",
+                "version": "2.3.1",
+                "platform": "NPM",
+                "distribution_owner_namespace": None,
+                "distribution_package": "react",
+                "distribution_version": "18.2.0",
+                "staging": staging,
+                "details": False,
+            },
+        )
+
+
 def test_app_set_show(capsys: pytest.CaptureFixture[str], fixture_config_env: pathlib.Path) -> None:
     client.app_set("atr.host", "example.invalid")
     client.app_show("atr.host")

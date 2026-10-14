@@ -64,7 +64,7 @@ $ atr vote start test-client 0.3+cli 00004 -m "<!user!>@apache.org" --auto-publi
 $ atr vote resolve test-client 0.3+cli passed
 Vote marked as passed.
 
-$ atr distribution record test-client 0.3+cli NPM None react 18.2.0 False False
+$ atr distribution record test-client 0.3+cli NPM None react 18.2.0
 Distribution recorded.
 
 $ atr distribution list test-client 0.3+cli

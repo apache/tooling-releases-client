@@ -1021,6 +1021,7 @@ class VoteResolveArgs(schema.Strict):
     project: safe.ProjectKey = schema.example("example")
     version: safe.VersionKey = schema.example("0.0.1")
     resolution: Literal["passed", "failed", "cancelled"] = schema.example("passed")
+    early_reason: str = schema.default_example("", "Fix for a publicly known security issue")
 
 
 class VoteResolveResults(schema.Strict):
@@ -1045,6 +1046,13 @@ class VoteStartArgs(schema.Strict):
     automatic_resolve_when_finished: bool = schema.default_example(False, False)
     automatic_publish_when_resolved: bool = schema.default_example(False, False)
     concerns_noted: list[str] = schema.default_example([], ["atr.tasks.checks.license.headers"])
+
+    @pydantic.field_validator("vote_duration")
+    @classmethod
+    def validate_vote_duration(cls, v: int | None) -> int | None:
+        if v is not None:
+            validation.validate_policy_min_hours(v)
+        return v
 
 
 class VoteStartResults(schema.Strict):
