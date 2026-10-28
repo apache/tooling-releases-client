@@ -8,4 +8,5 @@
 - Keep functions very short, and avoid indentation
 - Always group binary subexpressions in boolean expressions
 - Never ignore or silence errors from linters or type checkers
+- Install the Git hook with `uv run --frozen prek install --force`
 - Do not add any comments, except for important TODO items

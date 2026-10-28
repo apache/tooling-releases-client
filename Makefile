@@ -1,4 +1,4 @@
-.PHONY: build bump check commit pre-commit sync sync-all
+.PHONY: build bump check commit pre-commit sync sync-all update-hooks
 
 build:
 	uv build --frozen
@@ -24,10 +24,13 @@ commit:
 
 pre-commit:
 	git add -A
-	uv run --frozen pre-commit run --all-files
+	uv run --frozen prek run --all-files
 
 sync:
 	uv sync --frozen --no-dev
 
 sync-all:
 	uv sync --frozen --all-groups
+
+update-hooks:
+	uv run --frozen prek update

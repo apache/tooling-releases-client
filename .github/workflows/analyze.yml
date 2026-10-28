@@ -34,12 +34,12 @@ jobs:
       - name: Install dependencies
         run: uv sync --frozen --all-groups
 
-      - name: Cache pre-commit data
+      - name: Cache prek data
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
-          path: ~/.cache/pre-commit
-          key: pre-commit-3|${{ env.pythonLocation }}|${{ hashFiles('.pre-commit-config.yaml') }}
+          path: ~/.cache/prek
+          key: prek-1|${{ env.pythonLocation }}|${{ hashFiles('.pre-commit-config.yaml') }}
 
-      - name: Run pre-commit
+      - name: Run prek
         run: |
-          uv run --frozen pre-commit run --show-diff-on-failure --color=always --all-files
+          uv run --frozen prek run --show-diff-on-failure --color=always --all-files

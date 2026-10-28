@@ -1,6 +1,16 @@
+minimum_prek_version: "0.5.7"
+default_env:
+  UV_EXCLUDE_NEWER: "5 days"
+update:
+  cooldown_days: 7
+  freeze: true
+  exclude_tags: "*-{alpha,beta,next,rc}*"
+  repos:
+    "https://github.com/woodruffw/zizmor-pre-commit":
+      exclude_tags: ["*-{alpha,beta,next,rc}*", "*rc*"]
 repos:
 - repo: https://github.com/woodruffw/zizmor-pre-commit
-  rev: v1.22.0
+  rev: b546b77c44c466a54a42af5499dcc0dcc1a3193f  # frozen: v1.22.0
   hooks:
     - id: zizmor
       args: [--min-severity, low]
@@ -9,19 +19,19 @@ repos:
   hooks:
     - id: ruff
       name: Ruff Linter
-      entry: ruff check --fix
+      entry: uv run --frozen ruff check --fix
       language: system
       types: [python]
 
     - id: ruff-format
       name: Ruff Formatter
-      entry: ruff format --force-exclude
+      entry: uv run --frozen ruff format --force-exclude
       language: system
       types: [python]
 
     - id: pyright
       name: Pyright Type Check
-      entry: pyright
+      entry: uv run --frozen pyright
       language: system
       require_serial: true
       types: [python]
