@@ -10,7 +10,7 @@ update:
       exclude_tags: ["*-{alpha,beta,next,rc}*", "*rc*"]
 repos:
 - repo: https://github.com/woodruffw/zizmor-pre-commit
-  rev: b546b77c44c466a54a42af5499dcc0dcc1a3193f  # frozen: v1.22.0
+  rev: c92afdf2c6ca336aaa8f39e2bd8d48f62dbd8e1f  # frozen: v1.31.1
   hooks:
     - id: zizmor
       args: [--min-severity, low]
