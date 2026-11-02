@@ -283,12 +283,6 @@ def signature_provenance(
     return models.api.validate_signature_provenance(response)
 
 
-@post("/ssh-key/add")
-def ssh_key_add(api: ApiPost, args: models.api.SshKeyAddArgs) -> models.api.SshKeyAddResults:
-    response = api.post(args)
-    return models.api.validate_ssh_key_add(response)
-
-
 @post("/ssh-key/delete")
 def ssh_key_delete(api: ApiPost, args: models.api.SshKeyDeleteArgs) -> models.api.SshKeyDeleteResults:
     response = api.post(args)

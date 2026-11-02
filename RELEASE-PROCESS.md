@@ -59,7 +59,7 @@ atr check status example 1.0.0
 
 Blockers must be fixed, and `atr check blockers` lists them. Upload corrected files and check again. Concerns need judgment rather than repair, and `atr check concerns` lists them with their group keys, which you acknowledge when you start the vote.
 
-If your candidate is a whole directory tree, register an SSH key with `atr ssh add "$(cat ~/.ssh/id_ed25519.pub)"` and upload it with `atr rsync example 1.0.0 ./candidate/`. If you keep an exported private signing key, `atr sign example 1.0.0 $FILE_PATH $DIRECTORY --key key.asc --upload` downloads ATR's copy of a file, signs it, and uploads the signature. Use an empty `$DIRECTORY`, because it refuses to overwrite.
+If your candidate is a whole directory tree, add an SSH key on the [keys page](https://releases.apache.org/keys) and upload it with `atr rsync example 1.0.0 ./candidate/`. If you keep an exported private signing key, `atr sign example 1.0.0 $FILE_PATH $DIRECTORY --key key.asc --upload` downloads ATR's copy of a file, signs it, and uploads the signature. Use an empty `$DIRECTORY`, because it refuses to overwrite.
 
 ## Vote
 
@@ -74,7 +74,7 @@ This specific command requires a committee member to run it, because automatic p
 
 The subject, body, and duration come from your project's templates and policy, unless you supply your own with `--subject`, `--body-file`, and `--duration`. ATR fills in template variables such as `{{REVIEW_URL}}` only in your project's templates, never in your own text. Omit the revision only if you made the latest one yourself, otherwise find it with `atr revisions example 1.0.0` and supply it after the version.
 
-The vote then runs in the mailing list thread that ATR just started, and the voting procedure depends on the voting mode that you selected in ATR. When the voting period ends, if you did not select automatic vote resolution on the website:
+The vote then runs in the mailing list thread that ATR just started, and the voting procedure depends on the voting mode that you selected in ATR. When the voting period ends, resolve an email vote on the website. If your project uses Trusted Voting, and you did not select automatic vote resolution on the website, you can use the client:
 
 ```
 atr vote tabulate example 1.0.0

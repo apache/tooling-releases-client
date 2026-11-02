@@ -913,13 +913,6 @@ def app_sign(
     print(stored.revision.model_dump_json(indent=None))
 
 
-@APP_SSH.command(name="add", help="Add an SSH key.")
-def app_ssh_add(text: str, /) -> None:
-    ssh_add_args = models.api.SshKeyAddArgs(text=text)
-    ssh_add = api.ssh_key_add(ssh_add_args)
-    print(ssh_add.fingerprint)
-
-
 @APP_SSH.command(name="delete", help="Delete an SSH key.")
 def app_ssh_delete(fingerprint: str, /) -> None:
     ssh_delete_args = models.api.SshKeyDeleteArgs(fingerprint=fingerprint)

@@ -34,7 +34,7 @@ atr check wait your-project 0.1+test
 atr vote start your-project 0.1+test 00002 -m "${ASF_UID}@apache.org"
 ```
 
-Your release is in the ② VOTE phase.
+Your release is in the ② VOTE phase. Resolve an email vote on the website. If your project uses Trusted Voting, you can use the client:
 
 ```
 atr vote resolve your-project 0.1+test passed
@@ -136,6 +136,8 @@ Your release is in the ② VOTE phase. You must use the revision number here. We
 Instead of your ASF email address, you can also use `user-tests@tooling.apache.org` as the value here and then [consult the mailing list archives](https://lists.apache.org/list.html?user-tests@tooling.apache.org) to check that the thread was created.
 
 ### Finish
+
+Resolve an email vote on the website. If your project uses Trusted Voting, you can use the client:
 
 ```
 atr vote resolve your-project 0.1+test passed
