@@ -279,7 +279,7 @@ Developer operations.
 │ key     Return a test OpenPGP key.                                                                                   │
 │ pat     Read a PAT from development configuration.                                                                   │
 │ pwd     Show the current working directory.                                                                          │
-│ stamp   Update version and exclude-newer in pyproject.toml.                                                          │
+│ stamp   Update version in pyproject.toml.                                                                            │
 │ token   Generate a random alphabetical token.                                                                        │
 │ user    Show the value of $USER.                                                                                     │
 ╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
@@ -335,7 +335,7 @@ Show the current working directory.
 ```
 Usage: atr dev stamp
 
-Update version and exclude-newer in pyproject.toml.
+Update version in pyproject.toml.
 ```
 
 ### atr dev token

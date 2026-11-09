@@ -451,7 +451,7 @@ def app_dev_pwd() -> None:
     print(os.getcwd())
 
 
-@APP_DEV.command(name="stamp", help="Update version and exclude-newer in pyproject.toml.")
+@APP_DEV.command(name="stamp", help="Update version in pyproject.toml.")
 def app_dev_stamp() -> None:
     path = pathlib.Path("pyproject.toml")
     if not path.exists():
@@ -463,13 +463,8 @@ def app_dev_stamp() -> None:
     text_v2 = re.sub(r"0\.\d{8}\.\d{4}", v, text_v1)
     version_updated = not (text_v1 == text_v2)
 
-    ts = datetime.datetime.now(datetime.UTC).strftime("%Y-%m-%dT%H:%M:00Z")
-    text_v3 = re.sub(r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z", ts, text_v2)
-    exclude_newer_updated = not (text_v2 == text_v3)
-
-    if version_updated or exclude_newer_updated:
-        path.write_text(text_v3, "utf-8")
-    print("Updated exclude-newer." if exclude_newer_updated else "Did not update exclude-newer.")
+    if version_updated:
+        path.write_text(text_v2, "utf-8")
     print("Updated version." if version_updated else "Did not update version.")
 
     path = pathlib.Path("tests/cli_version.t")
