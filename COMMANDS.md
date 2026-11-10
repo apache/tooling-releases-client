@@ -383,7 +383,7 @@ List recorded distributions for a release.
 ### atr distribution record
 
 ```
-Usage: atr distribution record PROJECT VERSION PLATFORM DISTRIBUTION-OWNER-NAMESPACE DISTRIBUTION-PACKAGE 
+Usage: atr distribution record PROJECT VERSION PLATFORM DISTRIBUTION-OWNER-NAMESPACE DISTRIBUTION-PACKAGE
 DISTRIBUTION-VERSION [ARGS]
 
 Record a distribution.

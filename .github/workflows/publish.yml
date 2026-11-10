@@ -66,7 +66,7 @@ jobs:
       - run: echo "127.0.0.1 localhost.apache.org" | sudo tee -a /etc/hosts
       - run: timeout 120 sh -c 'until curl -ksf https://localhost.apache.org:8080/ > /dev/null; do sleep 2; done'
       - run: curl -ksSf https://localhost.apache.org:8080/test/pat > ~/.atr-pat
-      - run: uv sync --locked --no-install-project
+      - run: uv sync --locked --no-install-project --no-default-groups --group test
       - run: uv pip install dist/*.whl
       - run: uv run --no-sync pytest tests
         env:

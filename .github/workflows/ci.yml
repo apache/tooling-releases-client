@@ -30,9 +30,26 @@ jobs:
       - run: echo "127.0.0.1 localhost.apache.org" | sudo tee -a /etc/hosts
       - run: timeout 120 sh -c 'until curl -ksf https://localhost.apache.org:8080/ > /dev/null; do sleep 2; done'
       - run: curl -ksSf https://localhost.apache.org:8080/test/pat > ~/.atr-pat
-      - run: uv run --locked pytest tests
+      - run: uv run --locked --no-default-groups --group test pytest tests
         env:
           USER: test
           UV_PYTHON: ${{ matrix.python }}
       - if: failure()
         run: docker logs atr; docker cp atr:/opt/atr/state/hypercorn/logs/hypercorn.log - | tar -xO | tail -n 200
+
+  lint:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+        with:
+          version: "latest-known"
+      - run: uv run --locked python -I scripts/check_uv_pins.py
+      - run: uv run --locked prek run --show-diff-on-failure --color=always --all-files
+      - run: uv run --locked pyright
+      - run: uv run --locked zizmor --min-severity low --offline .github

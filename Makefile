@@ -1,20 +1,20 @@
 .PHONY: build bump check commit pre-commit sync sync-all update-hooks
 
 build:
-	uv build --frozen
+	uv build
 
 bump:
 	@# This assumes that we have the latest version of "dev stamp"
 	@# If not, run "uv pip install -e ." first
 	@# The dev stamp command adds --exclude-newer to the uv.lock file
-	uv run --frozen atr dev stamp
+	uv run --locked atr dev stamp
 	uv lock --upgrade
-	uv sync --frozen --all-groups
+	uv sync --locked --all-groups
 
 check: pre-commit bump
 	@# We run lint modifications first, then update the version
 	@# We do not consider the following a lint as it runs all test cases always
-	uv run --frozen pytest -q
+	uv run --locked pytest -q
 
 commit:
 	git add -A
@@ -24,13 +24,13 @@ commit:
 
 pre-commit:
 	git add -A
-	uv run --frozen prek run --all-files
+	uv run --locked prek run --all-files
 
 sync:
-	uv sync --frozen --no-dev
+	uv sync --locked --no-dev
 
 sync-all:
-	uv sync --frozen --all-groups
+	uv sync --locked --all-groups
 
 update-hooks:
-	uv run --frozen prek update
+	uv run --locked prek update

@@ -11,7 +11,7 @@ build-backend = "uv_build"
 
 [project]
 name            = "apache-trusted-releases"
-version         = "0.20261110.1322"
+version         = "0.20261110.1402"
 description     = "ATR CLI and Python API"
 readme          = "README.md"
 requires-python = ">=3.12"
@@ -44,13 +44,17 @@ dependencies = [
 
 [dependency-groups]
 dev = [
-  "aioresponses",
+  {include-group = "test"},
   "prek>=0.5.7",
   "pyright",
+  "ruff",
+  "zizmor",
+]
+test = [
+  "aioresponses",
   "pytest-asyncio",
   "pytest-console-scripts",
   "pytest",
-  "ruff",
 ]
 
 [project.scripts]
