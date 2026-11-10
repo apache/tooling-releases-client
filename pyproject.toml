@@ -11,7 +11,7 @@ build-backend = "uv_build"
 
 [project]
 name            = "apache-trusted-releases"
-version         = "0.20261110.1402"
+version         = "0.20261110.1424"
 description     = "ATR CLI and Python API"
 readme          = "README.md"
 requires-python = ">=3.12"
@@ -56,6 +56,9 @@ test = [
   "pytest-console-scripts",
   "pytest",
 ]
+
+[project.urls]
+Source = "https://github.com/apache/tooling-releases-client"
 
 [project.scripts]
 atr = "atrclient.client:main"
