@@ -6,16 +6,17 @@
 # The uv build backend, uv_build, still has reproducibility issues
 # E.g. https://github.com/astral-sh/uv/issues/13139
 [build-system]
-requires      = ["hatchling"]
-build-backend = "hatchling.build"
+requires      = ["uv_build>=0.13.5,<0.14"]
+build-backend = "uv_build"
 
 [project]
 name            = "apache-trusted-releases"
-version         = "0.20261110.1256"
+version         = "0.20261110.1322"
 description     = "ATR CLI and Python API"
 readme          = "README.md"
 requires-python = ">=3.12"
 license         = "Apache-2.0"
+license-files   = ["LICENSE", "NOTICE"]
 authors         = [{name = "ASF Tooling", email = "dev@tooling.apache.org"}]
 classifiers     = [
   "Programming Language :: Python :: 3 :: Only",
@@ -55,9 +56,6 @@ dev = [
 [project.scripts]
 atr = "atrclient.client:main"
 
-[tool.hatch.build.targets.wheel]
-packages = ["src/atrclient"]
-
 [tool.ruff]
 line-length = 120
 extend-exclude = [
@@ -93,3 +91,6 @@ filterwarnings = [
 
 [tool.uv]
 exclude-newer = "5 days"
+
+[tool.uv.build-backend]
+module-name = "atrclient"

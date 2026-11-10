@@ -194,7 +194,7 @@ wheels = [
 
 [[package]]
 name = "apache-trusted-releases"
-version = "0.20261110.1256"
+version = "0.20261110.1322"
 source = { editable = "." }
 dependencies = [
     { name = "aiohttp" },

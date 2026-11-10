@@ -1,0 +1,93 @@
+name: publish
+on:
+  push:
+    tags: ["v*"]
+permissions: {}
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    outputs:
+      digests: ${{ steps.digests.outputs.digests }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+        with:
+          version: "latest-known"
+      - run: python3 -I scripts/check_github_settings.py
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+      - run: python3 -I scripts/check_version.py
+        env:
+          PRE_COMMIT_REMOTE_BRANCH: ${{ github.ref }}
+          PRE_COMMIT_TO_REF: ${{ github.sha }}
+      - run: uv build --offline
+      - run: python3 -I scripts/check_wheel.py dist/*.whl
+      - id: digests
+        run: |
+          {
+            echo "digests<<EOF"
+            sha256sum dist/*
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: dist
+          path: dist/
+
+  test:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+        with:
+          version: "latest-known"
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: dist
+          path: dist/
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: apache/tooling-trusted-releases
+          path: server
+          persist-credentials: false
+      - run: docker build -f server/Dockerfile.alpine -t atr server
+      - run: docker run -d --name atr -p 127.0.0.1:8080:8080 -e TESTS=1 -e APP_HOST=localhost.apache.org:8080 -e BIND=0.0.0.0:8080 atr
+      - run: echo "127.0.0.1 localhost.apache.org" | sudo tee -a /etc/hosts
+      - run: timeout 120 sh -c 'until curl -ksf https://localhost.apache.org:8080/ > /dev/null; do sleep 2; done'
+      - run: curl -ksSf https://localhost.apache.org:8080/test/pat > ~/.atr-pat
+      - run: uv sync --locked --no-install-project
+      - run: uv pip install dist/*.whl
+      - run: uv run --no-sync pytest tests
+        env:
+          USER: test
+      - run: test "$(uv run --no-sync atr --version)" = "${GITHUB_REF_NAME#v}"
+      - if: failure()
+        run: docker logs atr; docker cp atr:/opt/atr/state/hypercorn/logs/hypercorn.log - | tar -xO | tail -n 200
+
+  publish:
+    needs: [build, test]
+    runs-on: ubuntu-latest
+    environment: pypi
+    permissions:
+      id-token: write
+    steps:
+      - run: test "$(curl -fsS --retry 8 --retry-all-errors "https://releases.apache.org/gates/status/$GITHUB_REPOSITORY_ID/$GITHUB_RUN_ID/$GITHUB_RUN_ATTEMPT")" = APPROVED
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: dist
+          path: dist/
+      - run: diff <(printf '%s\n' "$DIGESTS") <(sha256sum dist/*)
+        env:
+          DIGESTS: ${{ needs.build.outputs.digests }}
+      - uses: pypa/gh-action-pypi-publish@7245906fb61fa33a13554f9d5fb856fe61758086 # v1.14.3

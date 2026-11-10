@@ -1,6 +1,41 @@
 github:
   description: "Apache Trusted Releases Client"
   homepage: https://tooling.apache.org/
+  dependabot_alerts: true
+  dependabot_updates: false
+  rulesets:
+    - name: "Main branch"
+      type: branch
+      branches:
+        includes:
+          - "main"
+    - name: "Release tags"
+      target: tag
+      enforcement: active
+      conditions:
+        ref_name:
+          include:
+            - "refs/tags/v*"
+          exclude: []
+      rules:
+        - type: update
+        - type: deletion
+  environments:
+    pypi:
+      required_reviewers:
+        - id: 184941 # sbp, Sean B. Palmer
+          type: User
+        - id: 450789 # alitheg, Alastair McFarlane
+          type: User
+        - id: 29803617 # dave2wave, Dave Fisher
+          type: User
+        - id: 692523 # andrewmusselman, Andrew Musselman
+          type: User
+      prevent_self_review: true
+      deployment_branch_policy:
+        policies:
+          - name: "v*"
+            type: tag
   del_branch_on_merge: true
   features:
     issues: true
