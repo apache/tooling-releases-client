@@ -1,0 +1,38 @@
+name: ci
+on:
+  push:
+    branches: [main]
+  pull_request:
+permissions: {}
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    strategy:
+      matrix:
+        python: ["3.12", "3.14"]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+        with:
+          version: "latest-known"
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: apache/tooling-trusted-releases
+          path: server
+          persist-credentials: false
+      - run: docker build -f server/Dockerfile.alpine -t atr server
+      - run: docker run -d --name atr -p 127.0.0.1:8080:8080 -e TESTS=1 -e APP_HOST=localhost.apache.org:8080 -e BIND=0.0.0.0:8080 atr
+      - run: echo "127.0.0.1 localhost.apache.org" | sudo tee -a /etc/hosts
+      - run: timeout 120 sh -c 'until curl -ksf https://localhost.apache.org:8080/ > /dev/null; do sleep 2; done'
+      - run: curl -ksSf https://localhost.apache.org:8080/test/pat > ~/.atr-pat
+      - run: uv run --locked pytest tests
+        env:
+          USER: test
+          UV_PYTHON: ${{ matrix.python }}
+      - if: failure()
+        run: docker logs atr; docker cp atr:/opt/atr/state/hypercorn/logs/hypercorn.log - | tar -xO | tail -n 200
