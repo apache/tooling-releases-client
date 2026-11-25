@@ -50,6 +50,8 @@ atr upload example 1.0.0 apache-example-1.0.0.tar.gz.sha512 apache-example-1.0.0
 
 Each `atr upload` command takes the release path, then the local path. Archive uploads pause briefly for validation, and the client waits.
 
+To record the commit that the source archive was built from, add `--source-commit COMMIT` to its upload, or set it later with `atr release commit example 1.0.0 COMMIT`. A project with more than one repository declares each archive with `atr release source example 1.0.0 PATH=OWNER/REPO@COMMIT` instead.
+
 After ATR has performed its checks, read the results:
 
 ```

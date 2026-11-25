@@ -209,6 +209,12 @@ def release_announce(api: ApiPost, args: models.api.ReleaseAnnounceArgs) -> mode
     return models.api.validate_release_announce(response)
 
 
+@post("/release/commit")
+def release_commit(api: ApiPost, args: models.api.ReleaseCommitArgs) -> models.api.ReleaseCommitResults:
+    response = api.post(args)
+    return models.api.validate_release_commit(response)
+
+
 @post("/release/create")
 def release_create(api: ApiPost, args: models.api.ReleaseCreateArgs) -> models.api.ReleaseCreateResults:
     response = api.post(args)
@@ -250,17 +256,26 @@ def release_revisions(api: ApiGet, project: str, version: str) -> models.api.Rel
     return models.api.validate_release_revisions(response)
 
 
+@post("/release/source")
+def release_source(api: ApiPost, args: models.api.ReleaseSourceArgs) -> models.api.ReleaseSourceResults:
+    response = api.post(args)
+    return models.api.validate_release_source(response)
+
+
 def release_store(
     project: models.safe.ProjectKey,
     version: models.safe.VersionKey,
     relpath: models.safe.RelPath,
     source: pathlib.Path,
     expected_revision: models.safe.RevisionNumber | None = None,
+    source_commit: models.safe.CommitHash | None = None,
 ) -> models.api.ReleaseStoreResults:
     api_instance = ApiCore("/release/store")
     params = {"project": str(project), "version": str(version), "relpath": str(relpath)}
     if expected_revision is not None:
         params["expected_revision"] = str(expected_revision)
+    if source_commit is not None:
+        params["source_commit"] = str(source_commit)
     jwt_value = config.jwt_usable()
     response = asyncio.run(web.post_file(api_instance.url, params, source, jwt_value, api_instance.verify_ssl))
     try:

@@ -43,3 +43,4 @@ class Rat(schema.Lax):
     unknown_license_files: list[RatFileEntry] = schema.factory(list)
     command: str = schema.default("")
     directory: str = schema.default("")
+    version: str = schema.default("")

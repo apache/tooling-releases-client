@@ -18,7 +18,7 @@
 import dataclasses
 import datetime
 from collections.abc import Callable, Sequence
-from typing import Annotated, Any, Literal, Self, TypeVar
+from typing import Annotated, Any, Final, Literal, Self, TypeVar
 
 import pydantic
 
@@ -27,6 +27,17 @@ from . import safe, schema, sql, tabulate, validation
 T = TypeVar("T")
 
 type TrustedWorkflowPhase = Literal["compose", "vote", "finish"]
+
+# The policy fields that no route writes, refused by name so the error can say why
+_TRUSTED_PUBLISHING_FIELDS: Final[frozenset[str]] = frozenset(
+    {
+        "github_compose_workflow_path",
+        "github_finish_workflow_path",
+        "github_repository_branch",
+        "github_repository_name",
+        "github_vote_workflow_path",
+    }
+)
 
 
 class ResultsTypeError(TypeError):
@@ -58,8 +69,18 @@ class CatalogArtifact(schema.Strict):
         return datetime.datetime.fromisoformat(v) if isinstance(v, str) else v
 
 
+class CatalogDistribution(schema.Strict):
+    # The platform's display name, such as "Maven Central"
+    platform: str
+    # The package in the platform's own Package URL type, or None where the platform has none
+    purl: str | None
+    web_url: str | None
+
+
 class CatalogVersion(schema.Strict):
     version: safe.VersionKey
+    # The release's own Package URL, pkg:software-id/apache.org/<project_key>@<version>
+    purl: str
     status: Literal["released", "archived"]
     released: datetime.datetime | None
     svn_revision: int | None
@@ -70,6 +91,8 @@ class CatalogVersion(schema.Strict):
     cle_url: str | None = None
     # The lists.apache.org vote thread, present only for releases voted through ATR.
     vote_thread_url: str | None = None
+    # The packages the release was published as elsewhere, as declared to ATR
+    distributions: Sequence[CatalogDistribution] = ()
     artifacts: Sequence[CatalogArtifact]
 
     @pydantic.field_validator("released", mode="before")
@@ -264,6 +287,35 @@ class DistributionRecordResults(schema.Strict):
     success: Literal[True] = schema.example(True)
 
 
+class DistributionStageArgs(schema.Strict):
+    project: safe.ProjectKey = schema.example("example")
+    version: safe.VersionKey = schema.example("0.0.1")
+    platform: sql.DistributionPlatform = schema.example(sql.DistributionPlatform.ARTIFACT_HUB)
+    distribution_owner_namespace: safe.OwnerNamespace | None = schema.default_example(None, "example")
+    distribution_package: safe.Alphanumeric = schema.example("example")
+    distribution_version: safe.VersionKey = schema.example("0.0.1")
+    details: bool = schema.example(False)
+
+    @pydantic.field_validator("platform", mode="before")
+    @classmethod
+    def platform_to_enum(cls, v):
+        if isinstance(v, str):
+            try:
+                return sql.DistributionPlatform.__members__[v]
+            except KeyError:
+                raise ValueError(f"'{v}' is not a valid DistributionPlatform")
+        return v
+
+    @pydantic.field_serializer("platform")
+    def serialise_platform(self, v):
+        return v.name if isinstance(v, sql.DistributionPlatform) else v
+
+
+class DistributionStageResults(schema.Strict):
+    endpoint: Literal["/distribution/stage"] = schema.alias("endpoint")
+    success: Literal[True] = schema.example(True)
+
+
 class IgnoreAddArgs(schema.Strict):
     project_key: safe.ProjectKey = schema.example("example")
     release_glob: str | None = schema.default_example(None, "example-0.0.*")
@@ -429,7 +481,6 @@ class PolicyGetResults(schema.Strict):
     policy_license_check_mode: sql.LicenseCheckMode
     policy_vote_recipients: RecipientDefaults
     policy_announce_recipients: RecipientDefaults
-    policy_manual_vote: bool
     policy_min_hours: int
     policy_vote_mode: sql.VoteMode = schema.example(sql.VoteMode.EMAIL)
     policy_release_checklist: str
@@ -446,25 +497,24 @@ class PolicyGetResults(schema.Strict):
 class PolicyArgsBase(schema.Strict):
     """
     Base class to allow one endpoint to take a project key and another not
+
+    The workflow settings on a release policy are not here on purpose. No route
+    writes them, and both subclasses refuse them with an error that lists them.
     """
 
     announce_release_subject: str | None = None
     announce_release_template: str | None = None
     announce_release_template_url: str | None = None
+    auto_archive_prior_release: bool | None = None
     binary_artifact_paths: list[str] | None = None
     file_tag_mappings: dict[str, list[str]] | None = None
-    github_compose_workflow_path: list[str] | None = None
-    github_finish_workflow_path: list[str] | None = None
-    github_repository_branch: str | None = None
-    github_repository_name: str | None = None
-    github_vote_workflow_path: list[str] | None = None
     license_check_mode: sql.LicenseCheckMode | None = None
     vote_recipients: RecipientDefaults | None = None
     announce_recipients: RecipientDefaults | None = None
     download_path_suffix: str | None = None
-    manual_vote: bool | None = None
     min_hours: int | None = None
     release_checklist: str | None = None
+    require_version_in_filenames: bool | None = None
     source_artifact_paths: list[str] | None = None
     source_excludes_lightweight: list[str] | None = None
     source_excludes_rat: list[str] | None = None
@@ -500,9 +550,10 @@ class PolicyArgsBase(schema.Strict):
 
     @pydantic.model_validator(mode="after")
     def validate_policy_fields(self) -> Self:
-        if ("manual_vote" in self.model_fields_set) and ("vote_mode" in self.model_fields_set):
-            raise ValueError("Specify either 'manual_vote' or 'vote_mode', not both")
-
+        if self.vote_mode == sql.VoteMode.TRUSTED:
+            raise ValueError(
+                "Streamlined voting (vote mode trusted) is turned on for the whole committee, on its committee page"
+            )
         if self.min_hours is not None:
             validation.validate_policy_min_hours(self.min_hours)
 
@@ -521,26 +572,27 @@ class PolicyArgsBase(schema.Strict):
             if template_url is not None:
                 validation.validate_fetch_url(template_url)
 
-        github_repository_name = self.github_repository_name
-        if github_repository_name is not None:
-            validation.validate_github_repository_name(github_repository_name.strip())
-
-        workflow_paths: list[str] = []
-        for paths in (
-            self.github_compose_workflow_path,
-            self.github_vote_workflow_path,
-            self.github_finish_workflow_path,
-        ):
-            if paths is None:
-                continue
-            workflow_paths.extend(path.strip() for path in paths if path.strip())
-        validation.validate_trusted_publishing_workflow_paths(workflow_paths)
-
         return self
 
 
 class PolicyUpdateArgs(PolicyArgsBase):
     project: safe.ProjectKey = schema.example("example")
+
+    @pydantic.model_validator(mode="before")
+    @classmethod
+    def _refuse_workflow_fields(cls, data: Any) -> Any:
+        # Strict would refuse these as unknown keys anyway, but this way the error says
+        # where uploads from GitHub Actions are set up
+        if not isinstance(data, dict):
+            return data
+        named = sorted(_TRUSTED_PUBLISHING_FIELDS & set(data))
+        if named:
+            raise ValueError(
+                f"These settings are not accepted: {', '.join(named)}. Uploads from GitHub Actions are"
+                " allowed by the project's PMC on its committee page, for workflows in the repositories the"
+                " project lists"
+            )
+        return data
 
 
 class PolicyUpdateResults(schema.Strict):
@@ -608,7 +660,8 @@ class ProjectConfigProjectArgs(schema.Strict):
         date_format = self.calver_format.strip() if self.calver_format else None
         if date_format is None:
             return self
-        if (self.version_method is not None) and (self.version_method is not sql.VersionMethod.CALVER):
+        # The method must travel with the format, so a file never relies on what ATR already holds
+        if self.version_method is not sql.VersionMethod.CALVER:
             raise ValueError("Field 'calver_format' applies only when version_method is 'calver'")
         if self.cycle_match and self.cycle_match.strip():
             raise ValueError("Set either 'calver_format' or 'cycle_match', not both")
@@ -635,7 +688,41 @@ class ProjectConfigProjectArgs(schema.Strict):
 
 
 class ProjectConfigPolicyArgs(PolicyArgsBase):
-    pass
+    @pydantic.model_validator(mode="before")
+    @classmethod
+    def _refuse_trusted_publishing_fields(cls, data: Any) -> Any:
+        # Strict would refuse these as unknown keys anyway, but the reason deserves
+        # saying: a file that anyone with push access can edit is no place to keep
+        # what amounts to a credential
+        if not isinstance(data, dict):
+            return data
+        named = sorted(_TRUSTED_PUBLISHING_FIELDS & set(data))
+        if named:
+            raise ValueError(f"These fields are not accepted through .asf.yaml: {', '.join(named)}")
+        return data
+
+
+class ProjectConfigDistributionArgs(schema.Strict):
+    platform: sql.DistributionPlatform = schema.example(sql.DistributionPlatform.MAVEN)
+    owner_namespace: safe.OwnerNamespace | None = schema.default_example(None, "org.apache.example")
+    packages: list[safe.Alphanumeric] = schema.Field(
+        min_length=1, json_schema_extra={"example": ["example-core", "example-api"]}
+    )
+    version: str = schema.default_example("{{VERSION}}", "{{VERSION}}")
+
+    @pydantic.field_validator("platform", mode="before")
+    @classmethod
+    def platform_to_enum(cls, v):
+        if isinstance(v, str):
+            try:
+                return sql.DistributionPlatform.__members__[v.upper()]
+            except KeyError:
+                raise ValueError(f"'{v}' is not a valid DistributionPlatform")
+        return v
+
+    @pydantic.field_serializer("platform")
+    def serialise_platform(self, v):
+        return v.name if isinstance(v, sql.DistributionPlatform) else v
 
 
 class ProjectConfigArgs(schema.Strict):
@@ -643,6 +730,9 @@ class ProjectConfigArgs(schema.Strict):
     committee_key: safe.CommitteeKey = schema.example("example")
     project: ProjectConfigProjectArgs | None = None
     policy: ProjectConfigPolicyArgs | None = None
+    # The project's expected distributions, replaced as a whole when given
+    distributions: list[ProjectConfigDistributionArgs] | None = None
+    sync_mode: Literal["merge", "full"] = "merge"
 
     @pydantic.model_validator(mode="after")
     def _validate_recipient_domains(self) -> Self:
@@ -722,6 +812,12 @@ class PublisherDistributionRecordResults(schema.Strict):
     success: Literal[True] = schema.example(True)
 
 
+class SourceDeclaration(schema.Strict):
+    relpath: safe.RelPath = schema.example("example-0.0.1-src.tar.gz")
+    repository: str = schema.example("apache/example")
+    commit: safe.CommitHash = schema.example("0123456789abcdef0123456789abcdef01234567")
+
+
 class PublisherReleaseAnnounceArgs(schema.Strict):
     publisher: str = schema.example("user")
     jwt: str = schema.example("eyJhbGciOiJIUzI1[...]mMjLiuyu5CSpyHI=")
@@ -737,11 +833,54 @@ class PublisherReleaseAnnounceResults(schema.Strict):
     success: Literal[True] = schema.example(True)
 
 
+class PublisherJwtCreateArgs(schema.Strict):
+    publisher: str = schema.example("user")
+    jwt: str = schema.example("eyJhbGciOiJIUzI1[...]mMjLiuyu5CSpyHI=")
+    # The project the workflow is uploading to. Without it the project is found from the workflow path
+    project: safe.ProjectKey | None = schema.default_example(None, "example")
+    source_commit: safe.OptionalCommitHash = schema.default_example(None, "0123456789abcdef0123456789abcdef01234567")
+    # False when the workflow builds from more than one repository, and declares each archive itself
+    declare_sources: bool = schema.default_example(True, True)
+
+
+class PublisherJwtCreateResults(schema.Strict):
+    endpoint: Literal["/publisher/jwt/create"] = schema.alias("endpoint")
+    asfuid: str = schema.example("user")
+    project: safe.ProjectKey = schema.example("example")
+    jwt: str = schema.example("eyJhbGciOiJIUzI1[...]mMjLiuyu5CSpyHI=")
+    expires: int = schema.example(1713547200)
+
+
+class PublisherReleaseSourceArgs(schema.Strict):
+    publisher: str = schema.example("user")
+    jwt: str = schema.example("eyJhbGciOiJIUzI1[...]mMjLiuyu5CSpyHI=")
+    project: safe.ProjectKey | None = schema.default_example(None, "example")
+    version: safe.VersionKey = schema.example("0.0.1")
+    sources: list[SourceDeclaration] = schema.example(
+        [
+            {
+                "relpath": "example-0.0.1-src.tar.gz",
+                "repository": "apache/example",
+                "commit": "0123456789abcdef0123456789abcdef01234567",
+            }
+        ]
+    )
+    expected_revision: safe.RevisionNumber | None = schema.default_example(None, "00003")
+
+
+class PublisherReleaseSourceResults(schema.Strict):
+    endpoint: Literal["/publisher/release/source"] = schema.alias("endpoint")
+    revision: sql.Revision
+
+
 class PublisherSshRegisterArgs(schema.Strict):
     publisher: str = schema.example("user")
     jwt: str = schema.example("eyJhbGciOiJIUzI1[...]mMjLiuyu5CSpyHI=")
+    project: safe.ProjectKey | None = schema.default_example(None, "example")
     ssh_key: str = schema.example("ssh-ed25519 AAAAC3NzaC1lZDI1NTEgH5C9okWi0dh25AAAAIOMqqnkVzrm0SdG6UOoqKLsabl9GKJl")
     source_commit: safe.OptionalCommitHash = schema.default_example(None, "0123456789abcdef0123456789abcdef01234567")
+    # False when the workflow builds from more than one repository, and declares each archive itself
+    declare_sources: bool = schema.default_example(True, True)
 
 
 class PublisherSshRegisterResults(schema.Strict):
@@ -789,6 +928,18 @@ class ReleaseDraftDeleteArgs(schema.Strict):
 class ReleaseDraftDeleteResults(schema.Strict):
     endpoint: Literal["/release/draft/delete"] = schema.alias("endpoint")
     success: Literal[True] = schema.example(True)
+
+
+class ReleaseCommitArgs(schema.Strict):
+    project: safe.ProjectKey = schema.example("example")
+    version: safe.VersionKey = schema.example("0.0.1")
+    # None clears a commit that was given earlier
+    commit: safe.OptionalCommitHash = schema.default_example(None, "0123456789abcdef0123456789abcdef01234567")
+
+
+class ReleaseCommitResults(schema.Strict):
+    endpoint: Literal["/release/commit"] = schema.alias("endpoint")
+    release: sql.Release
 
 
 class ReleaseCreateArgs(schema.Strict):
@@ -865,12 +1016,33 @@ class ReleaseRevisionsResults(schema.Strict):
     revisions: Sequence[sql.Revision]
 
 
+class ReleaseSourceArgs(schema.Strict):
+    project: safe.ProjectKey = schema.example("example")
+    version: safe.VersionKey = schema.example("0.0.1")
+    sources: list[SourceDeclaration] = schema.example(
+        [
+            {
+                "relpath": "example-0.0.1-src.tar.gz",
+                "repository": "apache/example",
+                "commit": "0123456789abcdef0123456789abcdef01234567",
+            }
+        ]
+    )
+    expected_revision: safe.RevisionNumber | None = schema.default_example(None, "00003")
+
+
+class ReleaseSourceResults(schema.Strict):
+    endpoint: Literal["/release/source"] = schema.alias("endpoint")
+    revision: sql.Revision
+
+
 @dataclasses.dataclass
 class ReleaseStoreQuery:
     project: str
     version: str
     relpath: str
     expected_revision: str | None = None
+    source_commit: str | None = None
 
 
 class ReleaseStoreResults(schema.Strict):
@@ -885,6 +1057,7 @@ class ReleaseUploadArgs(schema.Strict):
     relpath: safe.RelPath = schema.example("example/0.0.1/example-0.0.1-bin.tar.gz")
     content: str = schema.example("This is the content of the file.")
     expected_revision: safe.RevisionNumber | None = schema.default_example(None, "00003")
+    source_commit: safe.OptionalCommitHash = schema.default_example(None, "0123456789abcdef0123456789abcdef01234567")
 
 
 class ReleaseUploadResults(schema.Strict):
@@ -1003,6 +1176,12 @@ class VoteCastArgs(schema.Strict):
                 raise ValueError(f"'{v}' is not a valid VoteChoice")
         return v
 
+    @pydantic.model_validator(mode="after")
+    def comment_required_unless_yes(self) -> Self:
+        if (self.choice != sql.VoteChoice.YES) and (not self.comment.strip()):
+            raise ValueError("A comment is required when voting 0 or -1")
+        return self
+
 
 class VoteCastResults(schema.Strict):
     endpoint: Literal["/vote/cast"] = schema.alias("endpoint")
@@ -1116,15 +1295,18 @@ type Results = Annotated[
     | ProjectsListResults
     | PublisherDistributionRecordResults
     | PublisherReleaseAnnounceResults
+    | PublisherReleaseSourceResults
     | PublisherSshRegisterResults
     | PublisherVoteResolveResults
     | ReleaseAnnounceResults
+    | ReleaseCommitResults
     | ReleaseCreateResults
     | ReleaseDeleteResults
     | ReleaseDraftDeleteResults
     | ReleaseGetResults
     | ReleasePathsResults
     | ReleaseRevisionsResults
+    | ReleaseSourceResults
     | ReleaseStoreResults
     | ReleaseUploadResults
     | ReleasesListResults
@@ -1179,15 +1361,18 @@ validate_project_releases = validator(ProjectReleasesResults)
 validate_projects_list = validator(ProjectsListResults)
 validate_publisher_distribution_record = validator(PublisherDistributionRecordResults)
 validate_publisher_release_announce = validator(PublisherReleaseAnnounceResults)
+validate_publisher_release_source = validator(PublisherReleaseSourceResults)
 validate_publisher_ssh_register = validator(PublisherSshRegisterResults)
 validate_publisher_vote_resolve = validator(PublisherVoteResolveResults)
 validate_release_announce = validator(ReleaseAnnounceResults)
+validate_release_commit = validator(ReleaseCommitResults)
 validate_release_create = validator(ReleaseCreateResults)
 validate_release_delete = validator(ReleaseDeleteResults)
 validate_release_draft_delete = validator(ReleaseDraftDeleteResults)
 validate_release_get = validator(ReleaseGetResults)
 validate_release_paths = validator(ReleasePathsResults)
 validate_release_revisions = validator(ReleaseRevisionsResults)
+validate_release_source = validator(ReleaseSourceResults)
 validate_release_store = validator(ReleaseStoreResults)
 validate_release_upload = validator(ReleaseUploadResults)
 validate_releases_list = validator(ReleasesListResults)

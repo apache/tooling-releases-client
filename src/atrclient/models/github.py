@@ -48,6 +48,7 @@ class TrustedPublisherPayload(schema.Subset):
     repository_owner: str
     repository_visibility: str
     run_attempt: str
+    run_id: str | None = None
     run_number: str
     runner_environment: str
     sha: str

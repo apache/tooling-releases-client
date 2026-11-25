@@ -116,6 +116,15 @@ oNN5UgD7By/sRoo0u9VDkQgUEvFj+GoL2QJ0s2PrR6IWwtnKJAQ=
 -----END PGP PRIVATE KEY BLOCK-----
 """
 
+REVISION_00004: Final[dict[str, str | int]] = {
+    "key": "test-project-2.3.1 00004",
+    "release_key": "test-project-2.3.1",
+    "seq": 4,
+    "number": "00004",
+    "asfuid": "test_asf_uid",
+    "phase": "release_candidate_draft",
+}
+
 REVOKED_PRIMARY_UID_SECRET_KEY_ASC: Final[str] = """\
 -----BEGIN PGP PRIVATE KEY BLOCK-----
 
@@ -1162,10 +1171,141 @@ def test_app_distribution_record_staging(
         )
 
 
+@pytest.mark.parametrize(
+    ("commit_args", "commit"),
+    [(["0123456789ABCDEF0123456789ABCDEF01234567"], "0123456789abcdef0123456789abcdef01234567"), (["--clear"], None)],
+)
+def test_app_release_commit(
+    commit_args: list[str],
+    commit: str | None,
+    capsys: pytest.CaptureFixture[str],
+    fixture_config_env: pathlib.Path,
+) -> None:
+    config.write({"atr": {"host": "example.invalid"}, "tokens": {"jwt": "dummy_jwt_token"}})
+    commit_url = "https://example.invalid/api/release/commit"
+    release = {"key": "test-project-2.3.1", "project_key": "test-project", "version": "2.3.1"}
+
+    with aioresponses.aioresponses() as mock:
+        mock.post(commit_url, payload={"endpoint": "/release/commit", "release": release})
+        client.APP_RELEASE(["commit", "test-project", "2.3.1", *commit_args], result_action="return_value")
+        mock.assert_called_once_with(
+            commit_url,
+            method="POST",
+            args_to_match=["json"],
+            json={"project": "test-project", "version": "2.3.1", "commit": commit},
+        )
+
+    assert json.loads(capsys.readouterr().out)["key"] == "test-project-2.3.1"
+
+
+@pytest.mark.parametrize(
+    ("commit_args", "error"),
+    [
+        ([], "Give a commit, or --clear to remove one."),
+        (["0123456789abcdef0123456789abcdef01234567", "--clear"], "Give a commit or --clear, not both."),
+    ],
+)
+def test_app_release_commit_needs_commit_or_clear(
+    commit_args: list[str], error: str, capsys: pytest.CaptureFixture[str], fixture_config_env: pathlib.Path
+) -> None:
+    with pytest.raises(SystemExit):
+        client.APP_RELEASE(["commit", "test-project", "2.3.1", *commit_args], result_action="return_value")
+    assert error in capsys.readouterr().err
+
+
+def test_app_release_source(capsys: pytest.CaptureFixture[str], fixture_config_env: pathlib.Path) -> None:
+    config.write({"atr": {"host": "example.invalid"}, "tokens": {"jwt": "dummy_jwt_token"}})
+    source_url = "https://example.invalid/api/release/source"
+    args = [
+        "source",
+        "test-project",
+        "2.3.1",
+        "test-project-2.3.1-src.tar.gz=apache/test-project@0123456789ABCDEF0123456789ABCDEF01234567",
+        "test-project-ui-2.3.1-src.tar.gz=apache/test-project-ui@89abcdef0123456789abcdef0123456789abcdef",
+        "--revision",
+        "00003",
+    ]
+
+    with aioresponses.aioresponses() as mock:
+        mock.post(source_url, status=201, payload={"endpoint": "/release/source", "revision": REVISION_00004})
+        client.APP_RELEASE(args, result_action="return_value")
+        mock.assert_called_once_with(
+            source_url,
+            method="POST",
+            args_to_match=["json"],
+            json={
+                "project": "test-project",
+                "version": "2.3.1",
+                "sources": [
+                    {
+                        "relpath": "test-project-2.3.1-src.tar.gz",
+                        "repository": "apache/test-project",
+                        "commit": "0123456789abcdef0123456789abcdef01234567",
+                    },
+                    {
+                        "relpath": "test-project-ui-2.3.1-src.tar.gz",
+                        "repository": "apache/test-project-ui",
+                        "commit": "89abcdef0123456789abcdef0123456789abcdef",
+                    },
+                ],
+                "expected_revision": "00003",
+            },
+        )
+
+    assert json.loads(capsys.readouterr().out)["number"] == "00004"
+
+
+@pytest.mark.parametrize("source", ["test-project-2.3.1-src.tar.gz", "test-project-2.3.1-src.tar.gz=apache/test"])
+def test_app_release_source_rejects_malformed_source(
+    source: str, capsys: pytest.CaptureFixture[str], fixture_config_env: pathlib.Path
+) -> None:
+    with pytest.raises(SystemExit):
+        client.APP_RELEASE(["source", "test-project", "2.3.1", source], result_action="return_value")
+    assert "PATH=OWNER/REPO@COMMIT" in capsys.readouterr().err
+
+
 def test_app_set_show(capsys: pytest.CaptureFixture[str], fixture_config_env: pathlib.Path) -> None:
     client.app_set("atr.host", "example.invalid")
     client.app_show("atr.host")
     assert capsys.readouterr().out == 'Set atr.host to "example.invalid".\nexample.invalid\n'
+
+
+def test_app_upload_sends_source_commit(
+    capsys: pytest.CaptureFixture[str], fixture_config_env: pathlib.Path, tmp_path: pathlib.Path
+) -> None:
+    config.write({"atr": {"host": "example.invalid"}, "tokens": {"jwt": "dummy_jwt_token"}})
+    release_url = "https://example.invalid/api/release/get/test-project/2.3.1"
+    store_url = re.compile(r"https://example\.invalid/api/release/store\?.*")
+    queries: list[dict[str, str]] = []
+
+    def capture_store(url: Any, **kwargs: Any) -> aioresponses.CallbackResult:
+        queries.append(dict(url.query))
+        return aioresponses.CallbackResult(
+            status=201,
+            payload={"endpoint": "/release/store", "quarantined": False, "revision": REVISION_00004},
+        )
+
+    artifact = tmp_path / "test-project-2.3.1-src.tar.gz"
+    artifact.write_bytes(b"source bytes")
+    release = {"key": "test-project-2.3.1", "project_key": "test-project", "version": "2.3.1"}
+    with aioresponses.aioresponses() as mock:
+        mock.get(release_url, payload={"endpoint": "/release/get", "release": release})
+        mock.post(store_url, callback=capture_store)
+        client.APP(
+            [
+                "upload",
+                "test-project",
+                "2.3.1",
+                "test-project-2.3.1-src.tar.gz",
+                str(artifact),
+                "--source-commit",
+                "0123456789ABCDEF0123456789ABCDEF01234567",
+            ],
+            result_action="return_value",
+        )
+
+    assert queries[0]["source_commit"] == "0123456789abcdef0123456789abcdef01234567"
+    assert json.loads(capsys.readouterr().out)["number"] == "00004"
 
 
 def test_cli_version(script_runner: pytest_console_scripts.ScriptRunner) -> None:

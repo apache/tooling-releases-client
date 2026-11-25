@@ -22,6 +22,22 @@ import pydantic
 from . import github, mail, safe, schema
 
 
+class AnnounceWhenReady(schema.Strict):
+    """Arguments for the task to announce a release once it can be announced."""
+
+    asf_uid: str = schema.description("ASF UID of the user who queued the announcement")
+    fullname: str = schema.description("Full name of the user who queued the announcement")
+    project_key: safe.ProjectKey = schema.description("Project key in ATR")
+    version_key: safe.VersionKey = schema.description("Version key in ATR")
+    revision_number: safe.RevisionNumber = schema.description("Revision the announcement was written for")
+    email_to: str = schema.description("To address for the announcement")
+    email_cc: list[str] = schema.factory(list)
+    email_bcc: list[str] = schema.factory(list)
+    body: str = schema.description("Body of the announcement")
+    subject_template_hash: str = schema.description("Hash of the subject template when the announcement was queued")
+    auto_archive_prior: bool = False
+
+
 class AuditSealArgs(schema.Strict):
     asf_uid: str
 
@@ -36,7 +52,10 @@ class CatalogSiteGenerate(schema.Strict):
 
     asf_uid: str = schema.description("ASF UID on whose behalf the site is regenerated")
     project_key: str | None = pydantic.Field(
-        default=None, description="Regenerate just this project's subtree; null rebuilds the whole site"
+        default=None, description="Regenerate just this project's subtree; null rebuilds the committee or whole site"
+    )
+    committee_key: str | None = pydantic.Field(
+        default=None, description="Regenerate just this committee and its projects; null rebuilds the whole site"
     )
 
 
@@ -90,6 +109,10 @@ class ScoreArgs(FileArgs):
     """Arguments for SBOM file scoring tasks."""
 
     previous_release_version: safe.VersionKey | None = schema.description("Previous release version")
+
+
+class GateDecision(schema.Strict):
+    request_id: int = schema.description("The GateRequest row whose decision to send to GitHub")
 
 
 class GenerateCycloneDX(schema.Strict):
@@ -170,6 +193,7 @@ class QuarantineValidate(schema.Strict):
     archives: list[QuarantineArchiveEntry]
     github_payload: github.TrustedPublisherPayload | None = None
     source_commit: safe.CommitHash | None = None
+    declare_sources: bool = True
     # Absent means leave the override alone, and None means clear it, so use model_fields_set to tell them apart
     source_override: str | None = None
 
@@ -282,9 +306,6 @@ class Update(schema.Strict):
 
     asf_uid: str = schema.description("The ASF UID of the user triggering the update")
     next_schedule_seconds: int = pydantic.Field(default=0, description="The next scheduled time")
-    include_projects: bool = pydantic.Field(
-        default=False, description="Whether to also refresh the project catalogue from projects.a.o (admin-triggered)"
-    )
 
 
 class VoteAutoResolve(schema.Strict):

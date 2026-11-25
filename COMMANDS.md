@@ -673,9 +673,28 @@ Usage: atr release COMMAND
 Release operations.
 
 ╭─ Commands ───────────────────────────────────────────────────────────────────────────────────────────────────────────╮
-│ info   Show information about a release.                                                                             │
-│ list   List releases for a project.                                                                                  │
-│ start  Start a release.                                                                                              │
+│ commit  Set the commit that the source archives of a draft were built from.                                          │
+│ info    Show information about a release.                                                                            │
+│ list    List releases for a project.                                                                                 │
+│ source  Declare the repository and commit of each source archive in a draft.                                         │
+│ start   Start a release.                                                                                             │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+```
+
+### atr release commit
+
+```
+Usage: atr release commit PROJECT VERSION [ARGS]
+
+Set the commit that the source archives of a draft were built from.
+
+╭─ Arguments ──────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│ *  PROJECT  [required]                                                                                               │
+│ *  VERSION  [required]                                                                                               │
+│    COMMIT                                                                                                            │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+╭─ Parameters ─────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│ CLEAR --clear  Remove a commit that was set earlier. [default: False]                                                │
 ╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
 ```
 
@@ -701,6 +720,23 @@ List releases for a project.
 
 ╭─ Arguments ──────────────────────────────────────────────────────────────────────────────────────────────────────────╮
 │ *  PROJECT  [required]                                                                                               │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+```
+
+### atr release source
+
+```
+Usage: atr release source [OPTIONS] PROJECT VERSION [ARGS...]
+
+Declare the repository and commit of each source archive in a draft.
+
+╭─ Arguments ──────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│ *  PROJECT  [required]                                                                                               │
+│ *  VERSION  [required]                                                                                               │
+│    SOURCES  Each in the form PATH=OWNER/REPO@COMMIT.                                                                 │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+╭─ Parameters ─────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│ --revision STR  Refuse if the draft has moved past this revision.                                                    │
 ╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
 ```
 
@@ -862,7 +898,7 @@ List SSH keys.
 ## atr upload
 
 ```
-Usage: atr upload PROJECT VERSION PATH FILEPATH
+Usage: atr upload PROJECT VERSION PATH FILEPATH [ARGS]
 
 Upload a file to a release.
 
@@ -871,6 +907,9 @@ Upload a file to a release.
 │ *  VERSION   [required]                                                                                              │
 │ *  PATH      [required]                                                                                              │
 │ *  FILEPATH  [required]                                                                                              │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+╭─ Parameters ─────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│ SOURCE-COMMIT --source-commit  Commit the source archives were built from.                                           │
 ╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
 ```
 

@@ -741,6 +741,32 @@ def app_list(project: str, version: str, revision: str | None = None, /) -> None
         print(rel_path)
 
 
+@APP_RELEASE.command(name="commit", help="Set the commit that the source archives of a draft were built from.")
+def app_release_commit(
+    project: str,
+    version: str,
+    commit: str | None = None,
+    /,
+    clear: Annotated[
+        bool, cyclopts.Parameter(name="--clear", negative="", help="Remove a commit that was set earlier.")
+    ] = False,
+) -> None:
+    if (commit is None) and (not clear):
+        show.error_and_exit("Give a commit, or --clear to remove one.")
+    if (commit is not None) and clear:
+        show.error_and_exit("Give a commit or --clear, not both.")
+    try:
+        release_commit_args = models.api.ReleaseCommitArgs(
+            project=models.safe.ProjectKey(project),
+            version=models.safe.VersionKey(version),
+            commit=commit_hash(commit) if (commit is not None) else None,
+        )
+    except ValueError as e:
+        show.error_and_exit(str(e))
+    release_commit = api.release_commit(release_commit_args)
+    print(release_commit.release.model_dump_json(indent=None))
+
+
 @APP_RELEASE.command(name="info", help="Show information about a release.")
 def app_release_info(project: str, version: str, /) -> None:
     releases_version = api.release_get(project, version)
@@ -752,6 +778,31 @@ def app_release_list(project: str, /) -> None:
     # TODO: Support showing all of a user's releases if no project is provided
     releases_project = api.project_releases(project)
     releases_display(releases_project.releases)
+
+
+@APP_RELEASE.command(name="source", help="Declare the repository and commit of each source archive in a draft.")
+def app_release_source(
+    project: str,
+    version: str,
+    /,
+    *sources: Annotated[str, cyclopts.Parameter(help="Each in the form PATH=OWNER/REPO@COMMIT.")],
+    revision: Annotated[
+        str | None, cyclopts.Parameter(name="--revision", help="Refuse if the draft has moved past this revision.")
+    ] = None,
+) -> None:
+    if not sources:
+        show.error_and_exit("Give at least one source, as PATH=OWNER/REPO@COMMIT.")
+    try:
+        release_source_args = models.api.ReleaseSourceArgs(
+            project=models.safe.ProjectKey(project),
+            version=models.safe.VersionKey(version),
+            sources=[source_declaration(source) for source in sources],
+            expected_revision=models.safe.RevisionNumber(revision) if (revision is not None) else None,
+        )
+    except ValueError as e:
+        show.error_and_exit(str(e))
+    release_source = api.release_source(release_source_args)
+    print(release_source.revision.model_dump_json(indent=None))
 
 
 @APP_RELEASE.command(name="start", help="Start a release.")
@@ -927,12 +978,25 @@ def app_ssh_list(asf_uid: str | None = None) -> None:
 
 
 @APP.command(name="upload", help="Upload a file to a release.")
-def app_upload(project: str, version: str, path: str, filepath: str, /) -> None:
+def app_upload(
+    project: str,
+    version: str,
+    path: str,
+    filepath: str,
+    /,
+    source_commit: Annotated[
+        str | None, cyclopts.Parameter(name="--source-commit", help="Commit the source archives were built from.")
+    ] = None,
+) -> None:
     project_key = models.safe.ProjectKey(project)
     version_key = models.safe.VersionKey(version)
     relpath = models.safe.RelPath(path)
+    try:
+        commit = commit_hash(source_commit) if (source_commit is not None) else None
+    except ValueError as e:
+        show.error_and_exit(str(e))
     revision_before = api.release_get(project, version).release.latest_revision_number
-    stored = api.release_store(project_key, version_key, relpath, pathlib.Path(filepath))
+    stored = api.release_store(project_key, version_key, relpath, pathlib.Path(filepath), source_commit=commit)
     if stored.revision is not None:
         print(stored.revision.model_dump_json(indent=None))
         return
@@ -1229,6 +1293,11 @@ def committee_key_check(project: str, fingerprint: str) -> None:
         )
 
 
+def commit_hash(commit: str) -> models.safe.CommitHash:
+    # The server only accepts lowercase hex
+    return models.safe.CommitHash(commit.strip().lower())
+
+
 def documentation_to_markdown(
     app: cyclopts.App,
     subcommands: list[str] | None = None,
@@ -1375,6 +1444,18 @@ def signing_password_read(
             return password
         show.warning("Invalid passphrase.")
     show.error_and_exit("Invalid passphrase.")
+
+
+def source_declaration(source: str) -> models.api.SourceDeclaration:
+    relpath, equals, location = source.partition("=")
+    repository, at, commit = location.rpartition("@")
+    if (not equals) or (not at):
+        raise ValueError(f"Source {source!r} is not in the form PATH=OWNER/REPO@COMMIT")
+    return models.api.SourceDeclaration(
+        relpath=models.safe.RelPath(relpath),
+        repository=repository,
+        commit=commit_hash(commit),
+    )
 
 
 def subcommands_register(app: cyclopts.App) -> None:

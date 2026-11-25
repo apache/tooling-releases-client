@@ -65,10 +65,17 @@ class ProvenanceV2(schema.Strict):
     metadata: dict[str, Any] = schema.factory(dict)
 
 
+class ArchiveSourceV2(schema.Strict):
+    repository: str
+    commit: str
+
+
 class PathEntryV2(schema.Strict):
     content_hash: str
     classification: str
     provenance: ProvenanceV2 | None = None
+    # Where a source archive was built from, declared per archive when the project has several repositories
+    source: ArchiveSourceV2 | None = None
 
 
 class SourceV2(schema.Strict):
@@ -76,6 +83,8 @@ class SourceV2(schema.Strict):
     default: str | None = None
     declared: str | None = None
     override: str | None = None
+    # Every GitHub repository in the project metadata when the revision was made
+    candidates: list[str] = schema.factory(list)
 
     @property
     def sha(self) -> str:
